@@ -153,7 +153,7 @@ describe('MatterbridgeVideoCameraAvStreamManagementServer', () => {
   it('should reject setStreamPriorities while video streams are allocated', async () => {
     await expect(
       device.invokeBehaviorCommand(CameraAvStreamManagement, 'setStreamPriorities', { streamPriorities: [StreamUsage.LiveView, StreamUsage.Recording] }),
-    ).rejects.toThrow('setStreamPriorities cannot be invoked while video streams are allocated');
+    ).rejects.toThrow('setStreamPriorities cannot be invoked while video or audio streams are allocated');
   });
 
   it('should reject videoStreamDeallocate for an unknown video stream identifier', async () => {
@@ -167,5 +167,82 @@ describe('MatterbridgeVideoCameraAvStreamManagementServer', () => {
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Deallocated video stream 0'));
     expect(device.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toHaveLength(1);
+  });
+
+  it('should reject audioStreamAllocate with an unsupported stream usage', async () => {
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.Analysis,
+        audioCodec: CameraAvStreamManagement.AudioCodec.Opus,
+        channelCount: 1,
+        sampleRate: 48000,
+        bitRate: 32000,
+        bitDepth: 16,
+      }),
+    ).rejects.toThrow('Stream usage 2 is not present in supportedStreamUsages');
+  });
+
+  it('should allocate an audio stream', async () => {
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        audioCodec: CameraAvStreamManagement.AudioCodec.Opus,
+        channelCount: 1,
+        sampleRate: 48000,
+        bitRate: 32000,
+        bitDepth: 16,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Allocated audio stream 0 for usage 3'));
+    const allocatedAudioStreams = device.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams') ?? [];
+    expect(allocatedAudioStreams).toHaveLength(1);
+    expect(allocatedAudioStreams[0].audioStreamId).toBe(0);
+  });
+
+  it('should allocate a second audio stream with an incremented identifier', async () => {
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.Recording,
+        audioCodec: CameraAvStreamManagement.AudioCodec.Opus,
+        channelCount: 1,
+        sampleRate: 48000,
+        bitRate: 32000,
+        bitDepth: 16,
+      }),
+    ).resolves.toBeUndefined();
+
+    const allocatedAudioStreams = device.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams') ?? [];
+    expect(allocatedAudioStreams).toHaveLength(2);
+    expect(allocatedAudioStreams[1].audioStreamId).toBe(1);
+  });
+
+  it('should reject setStreamPriorities while audio streams are allocated', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamDeallocate', { videoStreamId: 1 })).resolves.toBeUndefined();
+
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'setStreamPriorities', { streamPriorities: [StreamUsage.LiveView, StreamUsage.Recording] }),
+    ).rejects.toThrow('setStreamPriorities cannot be invoked while video or audio streams are allocated');
+  });
+
+  it('should reject audioStreamDeallocate for an unknown audio stream identifier', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamDeallocate', { audioStreamId: 99 })).rejects.toThrow(
+      'Audio stream 99 is not present in allocatedAudioStreams',
+    );
+  });
+
+  it('should deallocate an audio stream', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamDeallocate', { audioStreamId: 0 })).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Deallocated audio stream 0'));
+    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams')).toHaveLength(1);
+  });
+
+  it('should set the stream priorities once no video or audio streams remain allocated', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamDeallocate', { audioStreamId: 1 })).resolves.toBeUndefined();
+
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'setStreamPriorities', { streamPriorities: [StreamUsage.LiveView, StreamUsage.Recording] }),
+    ).resolves.toBeUndefined();
   });
 });

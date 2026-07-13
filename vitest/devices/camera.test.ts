@@ -116,6 +116,7 @@ describe('Camera', () => {
         imageRotation: 0,
         imageFlipHorizontal: false,
         imageFlipVertical: false,
+        microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
       }),
     ).toBe(device);
   });

@@ -33,10 +33,10 @@ import { addWebRtcTransportRequestorClient, createDefaultWebRtcTransportProvider
 /**
  * Options for configuring a {@link Camera} instance.
  *
- * Only the CameraAvStreamManagement Video and ImageControl features, the WebRtcTransportProvider cluster, and the
- * WebRtcTransportRequestor client (Offer invocation only) are implemented: the CameraAvStreamManagement Audio and
- * Snapshot features, and the Answer/End invocations on the WebRtcTransportRequestor client, required by the Matter
- * specification for a fully compliant Camera device type, are not part of this example.
+ * Only the CameraAvStreamManagement Video, Audio and ImageControl features, the WebRtcTransportProvider cluster, and the
+ * WebRtcTransportRequestor client (Offer invocation only) are implemented: the CameraAvStreamManagement Snapshot feature,
+ * and the Answer/End invocations on the WebRtcTransportRequestor client, required by the Matter specification for a fully
+ * compliant Camera device type, are not part of this example.
  */
 export interface CameraOptions {
   /** Identify time in seconds */
@@ -72,6 +72,8 @@ export interface CameraOptions {
   imageFlipHorizontal?: boolean;
   /** Indicates whether the image has been flipped vertically */
   imageFlipVertical?: boolean;
+  /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
+  microphoneCapabilities?: CameraAvStreamManagement.AudioCapabilities;
 }
 
 /**
@@ -82,7 +84,7 @@ export class Camera extends MatterbridgeEndpoint {
    * Creates an instance of the Camera class.
    *
    * A Camera device provides interfaces for controlling and transporting captured media. This example only implements the
-   * CameraAvStreamManagement cluster with the Video and ImageControl features enabled, and the WebRtcTransportProvider cluster.
+   * CameraAvStreamManagement cluster with the Video, Audio and ImageControl features enabled, and the WebRtcTransportProvider cluster.
    *
    * @param {string} name - The name of the camera.
    * @param {string} serial - The serial number of the camera.
@@ -106,6 +108,7 @@ export class Camera extends MatterbridgeEndpoint {
    *  - imageRotation: 0
    *  - imageFlipHorizontal: false
    *  - imageFlipVertical: false
+   *  - microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
    *
    * @returns {Camera} The Camera instance.
    */
@@ -127,6 +130,7 @@ export class Camera extends MatterbridgeEndpoint {
       imageRotation = 0,
       imageFlipHorizontal = false,
       imageFlipVertical = false,
+      microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
     } = options;
     super([camera], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
     if (identifyType !== Identify.IdentifyType.None) {
@@ -148,6 +152,7 @@ export class Camera extends MatterbridgeEndpoint {
       imageRotation,
       imageFlipHorizontal,
       imageFlipVertical,
+      microphoneCapabilities,
     });
     createDefaultWebRtcTransportProviderClusterServer(this);
     addWebRtcTransportRequestorClient(this);

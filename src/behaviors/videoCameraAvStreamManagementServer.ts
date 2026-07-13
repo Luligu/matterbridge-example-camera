@@ -29,11 +29,11 @@ import { Status, StatusResponseError, ThreeLevelAuto } from 'matterbridge/matter
 import type { StreamUsage, Viewport } from 'matterbridge/matter/types';
 
 /**
- * CameraAvStreamManagement server that implements the Video and ImageControl features: video stream allocation/deallocation,
- * stream priority management, and image orientation control.
+ * CameraAvStreamManagement server that implements the Video, Audio and ImageControl features: video/audio stream
+ * allocation/deallocation, stream priority management, and image orientation control.
  *
- * Only the Video and ImageControl features are enabled: the Audio, Snapshot and other optional features are not supported by this
- * implementation. ImageControl is enabled alongside Video because the Matter specification ties the
+ * Only the Video, Audio and ImageControl features are enabled: the Snapshot and other optional features are not supported by
+ * this implementation. ImageControl is enabled alongside Video because the Matter specification ties the
  * ImageRotation/ImageFlipHorizontal/ImageFlipVertical attributes to an "at least one" choice constraint that matter.js validates
  * against the full cluster schema regardless of the selected feature set, so ImageControl must be enabled and one of its
  * attributes set for the cluster to validate.
@@ -43,19 +43,19 @@ import type { StreamUsage, Viewport } from 'matterbridge/matter/types';
  * is consumed via npm link, as CI does. {@link MatterbridgeVideoCameraAvStreamManagementServer} exports the same class typed as
  * the already-portable unspecialized CameraAvStreamManagementServer instead.
  */
-class MatterbridgeVideoCameraAvStreamManagementServerImpl extends CameraAvStreamManagementServer.with('Video', 'ImageControl') {
+class MatterbridgeVideoCameraAvStreamManagementServerImpl extends CameraAvStreamManagementServer.with('Video', 'Audio', 'ImageControl') {
   /**
    * Handles the SetStreamPriorities command.
    * Sets the relative priorities of the various stream usages on the camera.
    *
    * @param {CameraAvStreamManagement.SetStreamPrioritiesRequest} request - SetStreamPriorities request payload.
-   * @throws {StatusResponseError} With status InvalidInState if a video stream is currently allocated.
+   * @throws {StatusResponseError} With status InvalidInState if a video or audio stream is currently allocated.
    * @throws {StatusResponseError} With status ConstraintError if streamPriorities contains a duplicate or unsupported stream usage.
    */
   override setStreamPriorities(request: CameraAvStreamManagement.SetStreamPrioritiesRequest): void {
     const device = this.endpoint.stateOf(MatterbridgeServer);
-    if (this.state.allocatedVideoStreams.length > 0) {
-      throw new StatusResponseError('setStreamPriorities cannot be invoked while video streams are allocated', Status.InvalidInState);
+    if (this.state.allocatedVideoStreams.length > 0 || this.state.allocatedAudioStreams.length > 0) {
+      throw new StatusResponseError('setStreamPriorities cannot be invoked while video or audio streams are allocated', Status.InvalidInState);
     }
     if (new Set(request.streamPriorities).size !== request.streamPriorities.length) {
       throw new StatusResponseError('streamPriorities shall not contain duplicate values', Status.ConstraintError);
@@ -121,11 +121,62 @@ class MatterbridgeVideoCameraAvStreamManagementServerImpl extends CameraAvStream
     this.state.allocatedVideoStreams = this.state.allocatedVideoStreams.filter((stream) => stream.videoStreamId !== request.videoStreamId);
     device.log.info(`Deallocated video stream ${request.videoStreamId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
   }
+
+  /**
+   * Handles the AudioStreamAllocate command.
+   * Allocates an audio stream on the camera and returns the newly allocated audio stream identifier.
+   *
+   * @param {CameraAvStreamManagement.AudioStreamAllocateRequest} request - AudioStreamAllocate request payload.
+   * @returns {CameraAvStreamManagement.AudioStreamAllocateResponse} The newly allocated audio stream identifier.
+   * @throws {StatusResponseError} With status ConstraintError if the requested stream usage is not present in supportedStreamUsages.
+   */
+  override audioStreamAllocate(request: CameraAvStreamManagement.AudioStreamAllocateRequest): CameraAvStreamManagement.AudioStreamAllocateResponse {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (!this.state.supportedStreamUsages.includes(request.streamUsage)) {
+      throw new StatusResponseError(`Stream usage ${request.streamUsage} is not present in supportedStreamUsages`, Status.ConstraintError);
+    }
+    let audioStreamId = 0;
+    for (const stream of this.state.allocatedAudioStreams) {
+      audioStreamId = Math.max(audioStreamId, stream.audioStreamId + 1);
+    }
+    this.state.allocatedAudioStreams = [
+      ...this.state.allocatedAudioStreams,
+      {
+        audioStreamId,
+        streamUsage: request.streamUsage,
+        audioCodec: request.audioCodec,
+        channelCount: request.channelCount,
+        sampleRate: request.sampleRate,
+        bitRate: request.bitRate,
+        bitDepth: request.bitDepth,
+        referenceCount: 0,
+      },
+    ];
+    device.log.info(`Allocated audio stream ${audioStreamId} for usage ${request.streamUsage} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    return { audioStreamId };
+  }
+
+  /**
+   * Handles the AudioStreamDeallocate command.
+   * Deallocates the audio stream on the camera corresponding to the given audio stream identifier.
+   *
+   * @param {CameraAvStreamManagement.AudioStreamDeallocateRequest} request - AudioStreamDeallocate request payload.
+   * @throws {StatusResponseError} With status NotFound if the requested audioStreamId is not present in allocatedAudioStreams.
+   */
+  override audioStreamDeallocate(request: CameraAvStreamManagement.AudioStreamDeallocateRequest): void {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (!this.state.allocatedAudioStreams.some((stream) => stream.audioStreamId === request.audioStreamId)) {
+      throw new StatusResponseError(`Audio stream ${request.audioStreamId} is not present in allocatedAudioStreams`, Status.NotFound);
+    }
+    this.state.allocatedAudioStreams = this.state.allocatedAudioStreams.filter((stream) => stream.audioStreamId !== request.audioStreamId);
+    device.log.info(`Deallocated audio stream ${request.audioStreamId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+  }
 }
 
 /**
- * CameraAvStreamManagement server that implements the Video and ImageControl features: video stream allocation/deallocation,
- * stream priority management, and image orientation control. See {@link MatterbridgeVideoCameraAvStreamManagementServerImpl}.
+ * CameraAvStreamManagement server that implements the Video, Audio and ImageControl features: video/audio stream
+ * allocation/deallocation, stream priority management, and image orientation control. See
+ * {@link MatterbridgeVideoCameraAvStreamManagementServerImpl}.
  */
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see MatterbridgeVideoCameraAvStreamManagementServerImpl's doc comment above for why this narrowing cast is required.
 export const MatterbridgeVideoCameraAvStreamManagementServer = MatterbridgeVideoCameraAvStreamManagementServerImpl as unknown as typeof CameraAvStreamManagementServer;
@@ -162,10 +213,13 @@ export interface CameraAvStreamManagementClusterOptions {
   imageFlipHorizontal: boolean;
   /** Indicates whether the image has been flipped vertically */
   imageFlipVertical: boolean;
+  /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
+  microphoneCapabilities: CameraAvStreamManagement.AudioCapabilities;
 }
 
 /**
- * Creates a default CameraAvStreamManagement cluster server, with the Video and ImageControl features enabled, on the given endpoint.
+ * Creates a default CameraAvStreamManagement cluster server, with the Video, Audio and ImageControl features enabled, on
+ * the given endpoint.
  *
  * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
  * @param {CameraAvStreamManagementClusterOptions} options - The initial state of the CameraAvStreamManagement cluster server.
@@ -178,6 +232,12 @@ export function createDefaultCameraAvStreamManagementClusterServer(endpoint: Mat
     statusLightEnabled: false,
     statusLightBrightness: ThreeLevelAuto.Auto,
     allocatedVideoStreams: [],
+    allocatedAudioStreams: [],
+    microphoneMuted: false,
+    microphoneVolumeLevel: 128,
+    microphoneMaxLevel: 254,
+    microphoneMinLevel: 0,
+    microphoneAgcEnabled: false,
   });
   return endpoint;
 }
