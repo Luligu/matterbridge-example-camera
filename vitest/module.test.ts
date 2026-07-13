@@ -21,6 +21,7 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
+import { Chime } from '../src/devices/chime.js';
 import initializePlugin, { ExampleMatterbridgeCameraPlatform } from '../src/module.js';
 
 await setupTest(NAME);
@@ -90,6 +91,17 @@ describe('TestPlatform', () => {
     await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Chime device not found. Please ensure the device is registered before configuration.');
   });
 
+  it('should throw error in onConfigure when the snapshot camera device is not registered', async () => {
+    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
+    const chime = new Chime('Chime', 'CHIME-001');
+    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
+    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
+    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) => (id === 'Chime-CHIME-001' ? chime : undefined));
+    addMatterbridge(unconfiguredPlatform);
+
+    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Snapshot camera device not found. Please ensure the device is registered before configuration.');
+  });
+
   it('should call onStart with reason', async () => {
     await platform.onStart('Test reason');
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Starting platform ${config.name} with reason: Test reason...`);
@@ -125,6 +137,7 @@ describe('TestPlatform', () => {
     platform.config.unregisterOnShutdown = true;
     await platform.onShutdown();
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Shutting down platform ${config.name} with reason: No reason provided...`);
+
     // The device re-registered above was assigned a new endpoint number, so onShutdown's checkEndpointNumbers() warns about the change
     expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Endpoint number for device'));
     loggerWarnSpy.mockClear();

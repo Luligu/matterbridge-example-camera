@@ -113,7 +113,8 @@
   },
   "dependencies": {
     "node-ansi-logger": "3.3.0",
-    "node-persist-manager": "2.1.0"
+    "node-persist-manager": "2.1.0",
+    "werift": "0.23.0"
   },
   "devDependencies": {
     "@types/node": "26.1.1",

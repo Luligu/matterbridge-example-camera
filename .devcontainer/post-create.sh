@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# postCreateCommand.sh v. 1.0.1
+# .devcontainer/post-create.sh v.1.1.0
 
 # This script runs after the Dev Container is created to set up the dev container environment.
 
@@ -29,17 +29,21 @@ sudo chmod +x .devcontainer/install-matterbridge-*.sh
 
 echo "2 - Creating directories..."
 sudo mkdir -p /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
-sudo mkdir -p /home/node/.claude /home/node/.codex
+sudo mkdir -p /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm
 
 echo "3 - Setting permissions..."
 sudo chown -R node:node . /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
-sudo chown -R node:node /home/node/.claude /home/node/.codex
+sudo chown -R node:node /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm
 
 echo "4 - Installing the plugin dependencies..."
 npm install --no-fund --no-audit
 
 echo "5 - Linking Matterbridge..."
-npm link matterbridge --no-fund --no-audit
+if ! npm link matterbridge --no-fund --no-audit; then
+	echo "Retrying link with elevated permissions..."
+	sudo npm link matterbridge --no-fund --no-audit
+	sudo chown -R node:node ./node_modules
+fi
 
 echo "6 - Building the plugin..."
 npm run build
