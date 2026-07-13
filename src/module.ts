@@ -26,6 +26,7 @@ import type { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import type { AnsiLogger } from 'matterbridge/logger';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 
+import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
@@ -79,6 +80,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       powerSourceType: 'Wired',
     });
     await this.registerDevice(exampleSnapshotCamera);
+
+    const exampleCamera = new Camera('Camera', 'CAMERA-001');
+    await this.registerDevice(exampleCamera);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
   }

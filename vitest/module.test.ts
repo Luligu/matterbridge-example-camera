@@ -106,6 +106,7 @@ describe('TestPlatform', () => {
     await platform.onStart('Test reason');
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Starting platform ${config.name} with reason: Test reason...`);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} started successfully`);
+    expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
   });
 
   it('should call onConfigure', async () => {
