@@ -1,27 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Claude settings v. 1.0.5",
   "permissions": {
-    "allow": [
-      "Bash(npm run)",
-      "Bash(npm run typecheck:*)",
-      "Bash(npm run build:*)",
-      "Bash(npm run test:*)",
-      "Bash(npm run lint:*)",
-      "Bash(npm run format:*)",
-      "Bash(bun test:*)",
-      "Bash(npx vitest:*)",
-      "Bash(vitest:*)",
-      "Bash(npx oxfmt:*)",
-      "Bash(oxfmt:*)",
-      "Bash(npx oxlint:*)",
-      "Bash(oxlint:*)",
-      "Bash(npx tsc:*)",
-      "Bash(tsc:*)",
-      "Bash(cd:*)",
-      "Bash(tail:*)",
-      "Bash(python3 -)",
-      "Bash(npx vitest *)"
-    ],
     "deny": [
       "Read(.env)",
       "Read(.env.*)",
@@ -51,7 +31,26 @@
       "Bash(bun uninstall:*)",
       "Bash(bun add:*)",
       "Bash(bun remove:*)"
+    ],
+    "allow": [
+      "Bash(npm run)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run format:*)",
+      "Bash(bun test:*)",
+      "Bash(npx vitest:*)",
+      "Bash(vitest:*)",
+      "Bash(npx oxfmt:*)",
+      "Bash(oxfmt:*)",
+      "Bash(npx oxlint:*)",
+      "Bash(oxlint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(tsc:*)",
+      "Bash(grep:*)",
+      "Bash(cd:*)",
+      "Bash(tail:*)"
     ]
-  },
-  "_comment": "Claude settings v. 1.0.4"
+  }
 }

@@ -89,7 +89,7 @@ export class Chime extends MatterbridgeEndpoint {
       selectedChime = 0,
       enabled = true,
     } = options;
-    super([chime, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    super(powerSourceType === 'None' ? [chime] : [chime, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }

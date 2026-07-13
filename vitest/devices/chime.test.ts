@@ -105,13 +105,11 @@ describe('Chime', () => {
     expect(device.getAttribute(PowerSource, 'batChargeLevel')).toBe(PowerSource.BatChargeLevel.Ok);
   });
 
-  it('should create a chime device with no explicit power source (defaults to wired)', async () => {
+  it('should create a chime device with no power source', async () => {
     const device = new Chime('Chime None', 'CHIME-NONE', { powerSourceType: 'None' });
-    // The powerSource device type always requires the PowerSource cluster, so addRequiredClusters() adds the default wired cluster server.
-    expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
+    expect(device.hasClusterServer(PowerSource.id)).toBeFalsy();
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
-    expect(device.getAttribute(PowerSource, 'wiredCurrentType')).toBe(PowerSource.WiredCurrentType.Ac);
   });
 
   it('should create a chime device with custom chime sounds', async () => {
