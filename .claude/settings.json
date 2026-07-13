@@ -50,7 +50,8 @@
       "Bash(tsc:*)",
       "Bash(grep:*)",
       "Bash(cd:*)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Read(//matterbridge:*)"
     ]
   }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# postStartCommand.sh v. 1.0.1
+# .devcontainer/post-start.sh v.1.1.0
 
 # This script runs after the Dev Container is started to set up the dev container environment.
 
@@ -20,11 +20,18 @@ echo "Node.js version: $(node -v)"
 echo "Npm version: $(npm -v)"
 echo ""
 
+sudo mkdir -p /home/node/.npm
+sudo chown -R node:node /home/node/.npm
+
 echo "1 - Installing the plugin dependencies..."
 npm install --no-fund --no-audit
 
 echo "2 - Linking Matterbridge..."
-npm link matterbridge --no-fund --no-audit
+if ! npm link matterbridge --no-fund --no-audit; then
+	echo "Retrying link with elevated permissions..."
+	sudo npm link matterbridge --no-fund --no-audit
+	sudo chown -R node:node ./node_modules
+fi
 
 echo "3 - Building the plugin..."
 npm run build

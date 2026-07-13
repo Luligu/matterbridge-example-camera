@@ -29,6 +29,10 @@ If you like this project and find it useful, please consider giving it a star on
 
 ## [0.0.2] - Dev branch
 
+### Breaking changes
+
+- [DevContainer]: Bump DevContainer config v.1.1.0. Rebuild the container.
+
 ### Added
 
 - [chime]: Added validation in `MatterbridgeChimeServer.playChimeSound` to reject a `chimeId` that is not present in `installedChimeSounds` with a `NotFound` status response.

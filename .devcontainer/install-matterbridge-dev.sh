@@ -1,17 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# install-matterbridge-dev.sh
+# .devcontainer/install-matterbridge-dev.sh v.1.1.0
 
 # This script globally installs Matterbridge from the dev branch.
 # To be used only inside the Dev Container with the mounted matterbridge volume.
 
+set -euo pipefail
+
 echo "Installing Matterbridge from the dev branch..."
-set -e
 cd /
 if [ ! -d "/workspaces" ]; then
   echo "Directory /workspaces does not exist. Exiting."
   exit 1
 fi
+sudo mkdir -p /home/node/.npm
+sudo chown -R node:node /home/node/.npm
 sudo chown -R node:node matterbridge
 sudo chmod g+s matterbridge
 sudo rm -rf matterbridge/* matterbridge/.[!.]* matterbridge/..?*
@@ -21,6 +24,6 @@ cd matterbridge
 SHA7=$(git rev-parse --short=7 HEAD) && BASE_VERSION=$(node -p "require('./package.json').version.split('-')[0]") && npm pkg set version="${BASE_VERSION}-git-${SHA7}"
 npm ci --no-fund --no-audit && npm run build
 cd apps/frontend && npm ci --no-fund --no-audit && npm run build && cd ../..
-npm install . --global --no-fund --no-audit
-rm -rf .cache .devcontainer .git .github .vscode docker docs reflector screenshots systemd
+sudo npm install . --global --no-fund --no-audit
+sudo rm -rf .agents .cache .claude .codex .devcontainer .git .github .vscode docker docs reflector screenshots scripts systemd
 echo "Matterbridge has been installed from the dev branch."
