@@ -28,12 +28,14 @@ import { StreamUsage } from 'matterbridge/matter/types';
 import type { Viewport } from 'matterbridge/matter/types';
 
 import { createDefaultCameraAvStreamManagementClusterServer } from '../behaviors/videoCameraAvStreamManagementServer.js';
+import { createDefaultWebRtcTransportProviderClusterServer } from '../behaviors/webRtcTransportProviderServer.js';
 
 /**
  * Options for configuring a {@link Camera} instance.
  *
- * Only the CameraAvStreamManagement Video and ImageControl features are implemented: the Audio, Snapshot and WebRTC transport
- * clusters required by the Matter specification for a fully compliant Camera device type are not part of this example.
+ * Only the CameraAvStreamManagement Video and ImageControl features, and the WebRtcTransportProvider cluster, are implemented:
+ * the CameraAvStreamManagement Audio and Snapshot features, and the WebRtcTransportRequestor client cluster required by the
+ * Matter specification for a fully compliant Camera device type, are not part of this example.
  */
 export interface CameraOptions {
   /** Identify time in seconds */
@@ -79,7 +81,7 @@ export class Camera extends MatterbridgeEndpoint {
    * Creates an instance of the Camera class.
    *
    * A Camera device provides interfaces for controlling and transporting captured media. This example only implements the
-   * CameraAvStreamManagement cluster with the Video and ImageControl features enabled.
+   * CameraAvStreamManagement cluster with the Video and ImageControl features enabled, and the WebRtcTransportProvider cluster.
    *
    * @param {string} name - The name of the camera.
    * @param {string} serial - The serial number of the camera.
@@ -146,8 +148,9 @@ export class Camera extends MatterbridgeEndpoint {
       imageFlipHorizontal,
       imageFlipVertical,
     });
-    // Only the required server clusters are added: WebRtcTransportProvider and the WebRtcTransportRequestor client cluster,
-    // both required by the Camera device type, are not implemented by this example.
+    createDefaultWebRtcTransportProviderClusterServer(this);
+    // Only the required server clusters are added: the WebRtcTransportRequestor client cluster required by the Camera
+    // device type is not implemented by this example.
     this.addRequiredClusterServers();
   }
 }
