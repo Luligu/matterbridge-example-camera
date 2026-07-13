@@ -22,10 +22,17 @@
  */
 
 import type { MatterbridgeEndpoint } from 'matterbridge';
-import { MatterbridgeServer } from 'matterbridge/behaviors';
-import { WebRtcTransportProviderServer } from 'matterbridge/matter/behaviors';
+import { MatterbridgeBindingServer, MatterbridgeServer } from 'matterbridge/behaviors';
+import { WebRtcTransportProviderServer, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
+import { WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import type { WebRtcTransportProvider } from 'matterbridge/matter/clusters';
 import { EndpointNumber, FabricIndex, NodeId, StreamUsage, Status, StatusResponseError } from 'matterbridge/matter/types';
+
+/**
+ * Placeholder SDP offer sent to a bound WebRtcTransportRequestor after SolicitOffer. This implementation has no real
+ * WebRTC peer connection to generate an actual offer from; the session is signaling-only (see the class doc comment).
+ */
+const MOCK_SDP_OFFER = 'v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\n';
 
 /**
  * The subset of a remote command context's session used by {@link MatterbridgeWebRtcTransportProviderServer.#getPeerInfo}.
@@ -43,8 +50,9 @@ interface RemoteActorSessionContext {
  *
  * This is a signaling-only mock implementation: it records session state and logs the received SDP offers/answers and
  * ICE candidates, but does not establish a real WebRTC peer connection (no media negotiation, STUN/TURN, or RTP flow).
- * SolicitOffer and ProvideOffer always report a deferred offer / new session rather than actively invoking the Offer or
- * Answer command on a remote WebRtcTransportRequestor client, since that client-side invocation is not implemented.
+ * SolicitOffer invokes Offer (with a placeholder SDP) on a bound WebRtcTransportRequestor client, if one is bound;
+ * otherwise the Offer is silently skipped. ProvideOffer, in contrast, never invokes Answer on the requestor that sent
+ * it — completing that side of the Offer/Answer flow is not implemented.
  *
  * Known upstream limitation: matter.js's fabric-index injection for fabric-scoped command invokes
  * (CommandInvokeResponse#decodeWithSchema) recurses into every nested struct field of the request when decoding, including
@@ -94,13 +102,15 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
 
   /**
    * Handles the SolicitOffer command.
-   * Records a new WebRTC session and reports a deferred offer, since this implementation does not proactively invoke the Offer command.
+   * Records a new WebRTC session and, if a WebRtcTransportRequestor is bound to this endpoint, invokes Offer on it
+   * with a placeholder SDP (see {@link MOCK_SDP_OFFER}). If no requestor is bound yet, the Offer is silently skipped;
+   * this implementation has no mechanism to send it later once a binding is established.
    *
    * @param {WebRtcTransportProvider.SolicitOfferRequest} request - SolicitOffer request payload.
-   * @returns {WebRtcTransportProvider.SolicitOfferResponse} The newly allocated session identifier, with deferredOffer set to true.
+   * @returns {Promise<WebRtcTransportProvider.SolicitOfferResponse>} The newly allocated session identifier, with deferredOffer set to true.
    * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided; automatic stream assignment is not implemented.
    */
-  override solicitOffer(request: WebRtcTransportProvider.SolicitOfferRequest): WebRtcTransportProvider.SolicitOfferResponse {
+  override async solicitOffer(request: WebRtcTransportProvider.SolicitOfferRequest): Promise<WebRtcTransportProvider.SolicitOfferResponse> {
     const { videoStreams, audioStreams } = this.#resolveStreamLists(request);
     if (!videoStreams?.length && !audioStreams?.length) {
       throw new StatusResponseError('solicitOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented', Status.ConstraintError);
@@ -127,6 +137,21 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     device.log.info(
       `Solicited a WebRTC offer for session ${webRtcSessionId} (stream usage ${request.streamUsage}) (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
+
+    const requestorEndpoint = this.endpoint.behaviors.has(MatterbridgeBindingServer)
+      ? this.agent.get(MatterbridgeBindingServer).getEndpoint(WebRtcTransportRequestor.id)
+      : undefined;
+    /* v8 ignore next 3 -- requires a real established Matter binding to a WebRtcTransportRequestor peer, which this
+     * project's vitest harness has no infrastructure to set up (no binding test helpers exist). */
+    if (requestorEndpoint) {
+      await requestorEndpoint.act((agent) => agent.get(WebRtcTransportRequestorClient).offer({ webRtcSessionId, sdp: MOCK_SDP_OFFER }));
+      device.log.info(`Invoked Offer on the bound WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    } else {
+      device.log.info(
+        `No WebRtcTransportRequestor is bound yet; the Offer for session ${webRtcSessionId} was not sent (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
+    }
+
     return { webRtcSessionId, deferredOffer: true };
   }
 
@@ -231,5 +256,37 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
  */
 export function createDefaultWebRtcTransportProviderClusterServer(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
   endpoint.behaviors.require(MatterbridgeWebRtcTransportProviderServer, { currentSessions: [] });
+  return endpoint;
+}
+
+/**
+ * Registers the WebRtcTransportRequestor client cluster on the given endpoint, so MatterbridgeBindingServer can
+ * resolve a bound requestor and {@link MatterbridgeWebRtcTransportProviderServer.solicitOffer} can invoke Offer on it.
+ *
+ * Matterbridge core does not map WebRtcTransportRequestor's client behavior type yet (see
+ * getBehaviourTypeFromClusterClientId in matterbridgeEndpointHelpers.ts), so the generic addRequiredClusterClients()
+ * only records the cluster id in MatterbridgeBindingServer's clientList without wiring the actual
+ * WebRtcTransportRequestorClient behavior type into the endpoint, which MatterbridgeBindingServer needs to resolve
+ * bindings for this cluster. This helper does that wiring directly, mirroring what addClusterClients does internally
+ * for clusters Matterbridge core already maps.
+ *
+ * @param {MatterbridgeEndpoint} endpoint - The endpoint to register the WebRtcTransportRequestor client cluster on.
+ * @returns {MatterbridgeEndpoint} The endpoint with the WebRtcTransportRequestor client cluster registered.
+ */
+export function addWebRtcTransportRequestorClient(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
+  if (endpoint.behaviors.has(MatterbridgeBindingServer)) {
+    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
+    const existing = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] } | undefined)?.clientList ?? [];
+    if (!existing.includes(WebRtcTransportRequestor.id)) {
+      endpoint.behaviors.inject(MatterbridgeBindingServer, { clientList: [...existing, WebRtcTransportRequestor.id] });
+    }
+  } else {
+    endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [WebRtcTransportRequestor.id] });
+  }
+  // intentional any: endpoint.type.clientClusters is a plain writable {} on the underlying matter.js MutableEndpoint,
+  // not exposed with a public TypeScript type; see this function's doc comment above.
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-type-assertion
+  const clientClusters = (endpoint.type as any).clientClusters;
+  clientClusters.webRtcTransportRequestor ??= WebRtcTransportRequestorClient;
   return endpoint;
 }

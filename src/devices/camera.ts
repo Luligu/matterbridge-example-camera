@@ -28,14 +28,15 @@ import { StreamUsage } from 'matterbridge/matter/types';
 import type { Viewport } from 'matterbridge/matter/types';
 
 import { createDefaultCameraAvStreamManagementClusterServer } from '../behaviors/videoCameraAvStreamManagementServer.js';
-import { createDefaultWebRtcTransportProviderClusterServer } from '../behaviors/webRtcTransportProviderServer.js';
+import { addWebRtcTransportRequestorClient, createDefaultWebRtcTransportProviderClusterServer } from '../behaviors/webRtcTransportProviderServer.js';
 
 /**
  * Options for configuring a {@link Camera} instance.
  *
- * Only the CameraAvStreamManagement Video and ImageControl features, and the WebRtcTransportProvider cluster, are implemented:
- * the CameraAvStreamManagement Audio and Snapshot features, and the WebRtcTransportRequestor client cluster required by the
- * Matter specification for a fully compliant Camera device type, are not part of this example.
+ * Only the CameraAvStreamManagement Video and ImageControl features, the WebRtcTransportProvider cluster, and the
+ * WebRtcTransportRequestor client (Offer invocation only) are implemented: the CameraAvStreamManagement Audio and
+ * Snapshot features, and the Answer/End invocations on the WebRtcTransportRequestor client, required by the Matter
+ * specification for a fully compliant Camera device type, are not part of this example.
  */
 export interface CameraOptions {
   /** Identify time in seconds */
@@ -149,8 +150,7 @@ export class Camera extends MatterbridgeEndpoint {
       imageFlipVertical,
     });
     createDefaultWebRtcTransportProviderClusterServer(this);
-    // Only the required server clusters are added: the WebRtcTransportRequestor client cluster required by the Camera
-    // device type is not implemented by this example.
+    addWebRtcTransportRequestorClient(this);
     this.addRequiredClusterServers();
   }
 }
