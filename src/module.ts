@@ -21,6 +21,10 @@
  * limitations under the License.
  */
 
+// Side effect import: works around https://github.com/matter-js/matter.js/issues/4083 until it is fixed upstream.
+// oxlint-disable-next-line import/no-unassigned-import
+import './patches/objectSchemaInjectFieldFix.js';
+
 import { MatterbridgeDynamicPlatform } from 'matterbridge';
 import type { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import type { AnsiLogger } from 'matterbridge/logger';
