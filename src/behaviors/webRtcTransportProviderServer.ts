@@ -75,6 +75,24 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   }
 
   /**
+   * Resolves the effective video/audio stream lists for a SolicitOffer/ProvideOffer request, folding the deprecated
+   * cluster revision 1 `videoStreamId`/`audioStreamId` fields into the `videoStreams`/`audioStreams` lists when the
+   * modern list fields are not provided, per the Matter specification's backwards-compatibility rules.
+   *
+   * @param {{ videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null }} request - The relevant fields of the SolicitOffer/ProvideOffer request.
+   * @returns {{ videoStreams?: number[]; audioStreams?: number[] }} The resolved stream lists.
+   */
+  #resolveStreamLists(request: { videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null }): {
+    videoStreams?: number[];
+    audioStreams?: number[];
+  } {
+    return {
+      videoStreams: request.videoStreams ?? (request.videoStreamId !== undefined && request.videoStreamId !== null ? [request.videoStreamId] : undefined),
+      audioStreams: request.audioStreams ?? (request.audioStreamId !== undefined && request.audioStreamId !== null ? [request.audioStreamId] : undefined),
+    };
+  }
+
+  /**
    * Handles the SolicitOffer command.
    * Records a new WebRTC session and reports a deferred offer, since this implementation does not proactively invoke the Offer command.
    *
@@ -83,7 +101,8 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided; automatic stream assignment is not implemented.
    */
   override solicitOffer(request: WebRtcTransportProvider.SolicitOfferRequest): WebRtcTransportProvider.SolicitOfferResponse {
-    if (!request.videoStreams?.length && !request.audioStreams?.length) {
+    const { videoStreams, audioStreams } = this.#resolveStreamLists(request);
+    if (!videoStreams?.length && !audioStreams?.length) {
       throw new StatusResponseError('solicitOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented', Status.ConstraintError);
     }
     const device = this.endpoint.stateOf(MatterbridgeServer);
@@ -100,8 +119,8 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
         peerEndpointId: request.originatingEndpointId,
         streamUsage: request.streamUsage,
         metadataEnabled: request.metadataEnabled ?? false,
-        videoStreams: request.videoStreams,
-        audioStreams: request.audioStreams,
+        videoStreams,
+        audioStreams,
         fabricIndex,
       },
     ];
@@ -124,7 +143,8 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     const device = this.endpoint.stateOf(MatterbridgeServer);
     let webRtcSessionId = request.webRtcSessionId;
     if (webRtcSessionId === null) {
-      if (!request.videoStreams?.length && !request.audioStreams?.length) {
+      const { videoStreams, audioStreams } = this.#resolveStreamLists(request);
+      if (!videoStreams?.length && !audioStreams?.length) {
         throw new StatusResponseError('provideOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented', Status.ConstraintError);
       }
       webRtcSessionId = 0;
@@ -140,8 +160,8 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
           peerEndpointId: request.originatingEndpointId ?? EndpointNumber(0),
           streamUsage: request.streamUsage ?? StreamUsage.LiveView,
           metadataEnabled: request.metadataEnabled ?? false,
-          videoStreams: request.videoStreams,
-          audioStreams: request.audioStreams,
+          videoStreams,
+          audioStreams,
           fabricIndex,
         },
       ];

@@ -158,6 +158,51 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(currentSessions).toHaveLength(2);
   });
 
+  it('should provide an offer for a new session using the deprecated videoStreamId field', async () => {
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', videoStreamId: 0, audioStreamId: null }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 2'));
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    expect(currentSessions).toHaveLength(3);
+    expect(currentSessions[2].videoStreams).toEqual([0]);
+    expect(currentSessions[2].audioStreams).toBeUndefined();
+  });
+
+  it('should end the session created with the deprecated videoStreamId field', async () => {
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 2, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+    ).resolves.toBeUndefined();
+
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    expect(currentSessions).toHaveLength(2);
+  });
+
+  it('should provide an offer for a new session using the deprecated audioStreamId field', async () => {
+    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', audioStreamId: 1 })).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 2'));
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    expect(currentSessions).toHaveLength(3);
+    expect(currentSessions[2].audioStreams).toEqual([1]);
+  });
+
+  it('should end the session created with the deprecated audioStreamId field', async () => {
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 2, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+    ).resolves.toBeUndefined();
+
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    expect(currentSessions).toHaveLength(2);
+  });
+
+  it('should reject solicitOffer with only the deprecated audioStreamId field set to null', async () => {
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), audioStreamId: null }),
+    ).rejects.toThrow('solicitOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented');
+  });
+
   it('should provide an offer for an existing session', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', {
