@@ -77,6 +77,9 @@ Dev containers have networking limitations depending on the host OS and Docker s
       "label": "Matterbridge frontend"
     }
   },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
   "customizations": {
     "vscode": {
       // Extensions to install in the dev container
