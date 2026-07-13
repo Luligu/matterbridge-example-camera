@@ -6,6 +6,7 @@
 
 const NAME = 'Platform';
 const MATTER_PORT = 6000;
+const MATTER_CREATE_ONLY = true;
 
 import type { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { log, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setDebug, setupTest } from 'matterbridge/vitest-utils';
@@ -14,6 +15,7 @@ import {
   createServerNode,
   createTestEnvironment,
   destroyTestEnvironment,
+  flushServerNode,
   getMatterbridge,
   startServerNode,
   stopServerNode,
@@ -39,7 +41,8 @@ describe('TestPlatform', () => {
     // Create Matterbridge environment
     await createTestEnvironment();
     await createServerNode(MATTER_PORT);
-    await startServerNode();
+    // Start the server node if not in create-only mode
+    if (!MATTER_CREATE_ONLY) await startServerNode();
     matterbridge = getMatterbridge();
   });
 
@@ -59,7 +62,9 @@ describe('TestPlatform', () => {
 
   afterAll(async () => {
     // Destroy Matterbridge environment
-    await stopServerNode();
+    // Stop or flush the server node depending on the create-only mode
+    if (MATTER_CREATE_ONLY) await flushServerNode();
+    else await stopServerNode();
     await destroyTestEnvironment();
     // Restore all mocks
     vi.restoreAllMocks();
@@ -76,6 +81,13 @@ describe('TestPlatform', () => {
     addMatterbridge(platform);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Initializing platform ${config.name}...`);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} initialized successfully`);
+  });
+
+  it('should throw error in onConfigure when the chime device is not registered', async () => {
+    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
+    addMatterbridge(unconfiguredPlatform);
+
+    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Chime device not found. Please ensure the device is registered before configuration.');
   });
 
   it('should call onStart with reason', async () => {
@@ -97,6 +109,10 @@ describe('TestPlatform', () => {
   });
 
   it('should restart and unregister devices if configured', async () => {
+    // Remove the device left behind by the previous onShutdown (unregisterOnShutdown was false) before restarting
+    await platform.unregisterAllDevices();
+    loggerWarnSpy.mockClear();
+
     platform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
     addMatterbridge(platform);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Initializing platform ${config.name}...`);
@@ -109,6 +125,9 @@ describe('TestPlatform', () => {
     platform.config.unregisterOnShutdown = true;
     await platform.onShutdown();
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Shutting down platform ${config.name} with reason: No reason provided...`);
+    // The device re-registered above was assigned a new endpoint number, so onShutdown's checkEndpointNumbers() warns about the change
+    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Endpoint number for device'));
+    loggerWarnSpy.mockClear();
     expect(unregisterSpy).toHaveBeenCalled();
   });
 });

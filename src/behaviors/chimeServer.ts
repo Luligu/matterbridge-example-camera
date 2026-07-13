@@ -54,6 +54,7 @@ export class MatterbridgeChimeServer extends ChimeServer {
     });
     */
     device.log.debug(`MatterbridgeChimeServer: playChimeSound called with chimeId ${chimeId}`);
-    this.events.chimeStartedPlaying.emit({ chimeId }, this.context);
+    // ChimeStartedPlaying is provisional in the Matter spec, so matter.js does not instantiate an emitter for it; guard against that.
+    this.events.chimeStartedPlaying?.emit({ chimeId }, this.context);
   }
 }
