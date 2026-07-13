@@ -28,3 +28,17 @@ This repository is used to create all Camera Device Types in chapter 16 of Matte
 - `src/module.ts` will create all device types for easy testing;
 - `src/devices/` contains all single class device types (it will be moved directly in matterbridge core package).
 - `src/behaviors/` contains all required behaviors (it will be moved directly in matterbridge core package).
+
+## Supported device types
+
+### Chime
+
+Features:
+
+- Exposes the Chime cluster with a configurable list of installed chime sounds, playable via the PlayChimeSound command.
+- Supports selecting a chime sound with the SelectedChime attribute or by passing a chimeId to the PlayChimeSound command.
+- Validates the requested chimeId against the InstalledChimeSounds list and rejects unknown ids with a NotFound response.
+- Emits the ChimeStartedPlaying event when a chime sound starts playing.
+- Chime sounds can be enabled or disabled with the Enabled attribute.
+- Optional Identify cluster support, with configurable identify time and type.
+- Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.

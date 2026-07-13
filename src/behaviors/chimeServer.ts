@@ -25,6 +25,7 @@
 import { MatterbridgeServer } from 'matterbridge/behaviors';
 import { ChimeServer } from 'matterbridge/matter/behaviors';
 import type { Chime } from 'matterbridge/matter/clusters';
+import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
 /**
  * Chime server that forwards the PlayChimeSound command to the Matterbridge command handler and generates the ChimeStartedPlaying event.
@@ -35,11 +36,15 @@ export class MatterbridgeChimeServer extends ChimeServer {
    * Plays the chime sound passed in the request or, if none is passed, the currently selected chime, and generates the ChimeStartedPlaying event.
    *
    * @param {Chime.PlayChimeSoundRequest} request - PlayChimeSound request payload.
+   * @throws {StatusResponseError} With status NotFound if the requested chimeId is not present in installedChimeSounds.
    */
   // oxlint-disable-next-line typescript/require-await
   override async playChimeSound(request: Chime.PlayChimeSoundRequest): Promise<void> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     const chimeId = request.chimeId ?? this.state.selectedChime;
+    if (!this.state.installedChimeSounds.some((chimeSound) => chimeSound.chimeId === chimeId)) {
+      throw new StatusResponseError(`Chime sound ${chimeId} is not present in installedChimeSounds`, Status.NotFound);
+    }
     device.log.info(`Playing chime sound ${chimeId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     // TODO: Add Chime.playChimeSound in matterbridge
     /*

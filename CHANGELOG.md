@@ -27,6 +27,20 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.0.2] - Dev branch
+
+### Added
+
+- [chime]: Added validation in `MatterbridgeChimeServer.playChimeSound` to reject a `chimeId` that is not present in `installedChimeSounds` with a `NotFound` status response.
+
+### Changed
+
+- [chime]: Documented the Chime device features in the README.
+
+### Fixed
+
+- [chime]: Fixed `Chime` to omit the `powerSource` device type when `powerSourceType` is `'None'`.
+
 ## [0.0.1] - 2026-07-13
 
 - First published release.

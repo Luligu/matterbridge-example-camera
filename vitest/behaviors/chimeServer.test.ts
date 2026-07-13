@@ -88,4 +88,10 @@ describe('MatterbridgeChimeServer', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Playing chime sound 1'));
     expect(loggerDebugSpy).toHaveBeenCalledWith('MatterbridgeChimeServer: playChimeSound called with chimeId 1');
   });
+
+  it('should reject with NotFound when the requested chimeId is not in installedChimeSounds', async () => {
+    await expect(device.invokeBehaviorCommand(ChimeCluster, 'playChimeSound', { chimeId: 99 })).rejects.toThrow('Chime sound 99 is not present in installedChimeSounds');
+
+    expect(loggerInfoSpy).not.toHaveBeenCalledWith(expect.stringContaining('Playing chime sound 99'));
+  });
 });
