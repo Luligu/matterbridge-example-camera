@@ -44,6 +44,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [chime]: Document the Chime device features in the README.
 - [snapshot camera]: Document the Snapshot Camera device features in the README.
+- [agents]: Update agents instructions.
 
 ### Fixed
 
