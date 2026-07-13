@@ -51,6 +51,8 @@
       "Bash(grep:*)",
       "Bash(cd:*)",
       "Bash(tail:*)",
+      "Bash(find:*)",
+      "Bash(echo:*)",
       "Read(//matterbridge:*)"
     ]
   }
