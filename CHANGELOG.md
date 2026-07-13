@@ -31,15 +31,19 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Breaking changes
 
+- [matterbridge]: Require Matterbrdige 3.9.5 (from 3.9.5-git-438aa9a).
 - [DevContainer]: Bump DevContainer config v.1.1.0. Rebuild the container.
 
 ### Added
 
-- [chime]: Added validation in `MatterbridgeChimeServer.playChimeSound` to reject a `chimeId` that is not present in `installedChimeSounds` with a `NotFound` status response.
+- [chime]: Add validation in `MatterbridgeChimeServer.playChimeSound` to reject a `chimeId` that is not present in `installedChimeSounds` with a `NotFound` status response.
+- [snapshot camera]: Add the Snapshot Camera device with configurable snapshot capabilities, stream allocation, stream priorities, snapshot capture, Identify, and Power Source support.
+- [snapshot camera]: Add `MatterbridgeCameraAvStreamManagementServer` with the Snapshot and Image Control features.
 
 ### Changed
 
-- [chime]: Documented the Chime device features in the README.
+- [chime]: Document the Chime device features in the README.
+- [snapshot camera]: Document the Snapshot Camera device features in the README.
 
 ### Fixed
 

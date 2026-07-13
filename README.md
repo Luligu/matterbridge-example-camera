@@ -40,5 +40,17 @@ Features:
 - Validates the requested chimeId against the InstalledChimeSounds list and rejects unknown ids with a NotFound response.
 - Emits the ChimeStartedPlaying event when a chime sound starts playing.
 - Chime sounds can be enabled or disabled with the Enabled attribute.
-- Optional Identify cluster support, with configurable identify time and type.
+- Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
+- Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+
+### Snapshot Camera
+
+Features:
+
+- Exposes the Camera AV Stream Management cluster with the Snapshot and Image Control features.
+- Supports configurable snapshot capabilities, encoder limits, content buffer size, and network bandwidth.
+- Supports configuring stream usages and their priority order with the SetStreamPriorities command.
+- Allocates and deallocates snapshot streams with generated stream identifiers.
+- Captures snapshots using a requested stream or automatic stream selection and returns the requested resolution as JPEG data.
+- Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.

@@ -27,6 +27,7 @@ import type { AnsiLogger } from 'matterbridge/logger';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 
 import { Chime } from './devices/chime.js';
+import { SnapshotCamera } from './devices/snapshotCamera.js';
 
 /**
  * This is the standard interface for Matterbridge plugins.
@@ -72,6 +73,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.registerDevice(exampleChime);
 
+    const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'CAMERA-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Wired',
+    });
+    await this.registerDevice(exampleSnapshotCamera);
+
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
 
@@ -87,6 +95,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       exampleChime.log,
     );
     await exampleChime.setAttribute(ChimeCluster, 'enabled', true, exampleChime.log);
+
+    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-CAMERA-001');
+    if (!exampleSnapshotCamera) throw new Error(`Snapshot camera device not found. Please ensure the device is registered before configuration.`);
 
     this.log.info(`Platform ${this.config.name} configured successfully`);
   }

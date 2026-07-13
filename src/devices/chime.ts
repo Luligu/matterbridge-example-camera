@@ -53,6 +53,7 @@ export interface ChimeOptions {
 
 /**
  * Matterbridge endpoint representing a chime device.
+ * Matter specs 1.6.0 chapter 16.7.
  */
 export class Chime extends MatterbridgeEndpoint {
   /**
