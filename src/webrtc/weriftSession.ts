@@ -75,6 +75,12 @@ export class WeriftWebRtcSession {
    */
   async createAnswer(offerSdp: string): Promise<string> {
     await this.peerConnection.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+    // Transceivers werift auto-creates from the remote offer default to a direction that answers "inactive" with
+    // port 0 when no local track is attached; a port-0 m-section is still listed in a=group:BUNDLE, which peers
+    // (e.g. Firefox) reject as invalid. Answering "sendonly" keeps the m-section active even with no track yet.
+    for (const transceiver of this.peerConnection.getTransceivers()) {
+      transceiver.setDirection('sendonly');
+    }
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
     // See the matching comment in createOffer above: localDescription (not answer.sdp) carries the gathered candidates.
