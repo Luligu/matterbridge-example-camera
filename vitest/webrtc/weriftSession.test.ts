@@ -115,6 +115,7 @@ describe('WeriftWebRtcSession', () => {
     await session.applyAnswer(answerSdp);
 
     await expect(session.addIceCandidate('candidate:1 1 UDP 1 127.0.0.1 1 typ host', null, 0)).resolves.toBeUndefined();
+    await expect(session.addIceCandidate('candidate:1 1 UDP 1 127.0.0.1 1 typ host', '0', null)).resolves.toBeUndefined();
 
     await session.close();
   });

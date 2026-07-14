@@ -61,7 +61,10 @@ export class WeriftWebRtcSession {
     if (options.audio) this.peerConnection.addTransceiver('audio', { direction: 'sendonly' });
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
-    return this.peerConnection.localDescription?.sdp ?? offer.sdp;
+    // setLocalDescription gathers ICE candidates into the SDP it stores as localDescription; offer.sdp itself
+    // predates that gathering, so localDescription (always set once setLocalDescription above resolves) is returned.
+    // oxlint-disable-next-line typescript-eslint/no-non-null-assertion
+    return this.peerConnection.localDescription!.sdp;
   }
 
   /**
@@ -74,7 +77,9 @@ export class WeriftWebRtcSession {
     await this.peerConnection.setRemoteDescription({ type: 'offer', sdp: offerSdp });
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
-    return this.peerConnection.localDescription?.sdp ?? answer.sdp;
+    // See the matching comment in createOffer above: localDescription (not answer.sdp) carries the gathered candidates.
+    // oxlint-disable-next-line typescript-eslint/no-non-null-assertion
+    return this.peerConnection.localDescription!.sdp;
   }
 
   /**

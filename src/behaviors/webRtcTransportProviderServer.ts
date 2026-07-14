@@ -31,6 +31,14 @@ import { EndpointNumber, FabricIndex, NodeId, StreamUsage, Status, StatusRespons
 import { WeriftWebRtcSession } from '../webrtc/weriftSession.js';
 
 /**
+ * Delay before firing a deferred Offer/Answer invoke on a bound WebRtcTransportRequestor (see
+ * {@link MatterbridgeWebRtcTransportProviderServer.#invokeDeferred}). The peer needs to receive and process our own
+ * SolicitOffer/ProvideOffer response first, since that response is what tells it the session id this invoke is for;
+ * without this delay, an invoke to a peer with an already-established Matter session can outrace our own response.
+ */
+const DEFERRED_INVOKE_DELAY_MS = 250;
+
+/**
  * The subset of a remote command context's session used by {@link MatterbridgeWebRtcTransportProviderServer.#getPeerInfo}.
  */
 interface RemoteActorSessionContext {
@@ -67,10 +75,12 @@ interface RemoteActorSessionContext {
  */
 export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportProviderServer {
   /**
-   * The real werift peer connection wrappers backing each session in {@link WebRtcTransportProvider.State.currentSessions},
-   * keyed by WebRTC session id.
+   * Behaviors are ephemeral (matter.js constructs a new instance per Agent), so the werift peer connection wrappers
+   * must live in `internal` state, which is backed by the endpoint rather than the instance, to survive from the
+   * command that creates a session (SolicitOffer/ProvideOffer) to the later, separate commands that use it
+   * (ProvideAnswer/ProvideIceCandidates/EndSession). A plain instance field would silently reset between them.
    */
-  #sessions = new Map<number, WeriftWebRtcSession>();
+  declare internal: MatterbridgeWebRtcTransportProviderServer.Internal;
 
   /**
    * Reads the accessing peer's node id and fabric index off the current command context.
@@ -81,6 +91,27 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    *
    * @returns {{ peerNodeId: NodeId; fabricIndex: FabricIndex }} The peer node id and fabric index, or fallback values if the command was not invoked by a remote actor.
    */
+  /**
+   * Fires an outbound Offer/Answer invoke on a bound WebRtcTransportRequestor without awaiting it.
+   *
+   * The peer must receive and process our own SolicitOffer/ProvideOffer response (which carries the session id it
+   * needs to accept this invoke) before this invoke reaches it. Awaiting the invoke here, before returning our
+   * response, would send it first and the peer would reject it as an unknown session.
+   *
+   * @param {() => void | PromiseLike<void>} action - Invokes the command on the bound requestor.
+   * @param {string} description - Human-readable description of the invoke, for the error log on failure.
+   */
+  /* v8 ignore next 8 -- only reachable once a real requestor is bound; see the v8 ignore comments at this
+   * method's call sites. */
+  #invokeDeferred(action: () => void | PromiseLike<void>, description: string): void {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    setTimeout(() => {
+      Promise.resolve(action()).catch((error: unknown) => {
+        device.log.error(`Failed to invoke ${description} on the bound WebRtcTransportRequestor: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }, DEFERRED_INVOKE_DELAY_MS);
+  }
+
   #getPeerInfo(): { peerNodeId: NodeId; fabricIndex: FabricIndex } {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see this method's doc comment above.
     const session = (this.context as unknown as RemoteActorSessionContext).session;
@@ -150,17 +181,20 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     );
 
     const webRtcPeer = new WeriftWebRtcSession();
-    this.#sessions.set(webRtcSessionId, webRtcPeer);
+    this.internal.sessions.set(webRtcSessionId, webRtcPeer);
     const sdp = await webRtcPeer.createOffer({ video: !!videoStreams?.length, audio: !!audioStreams?.length });
 
     const requestorEndpoint = this.endpoint.behaviors.has(MatterbridgeBindingServer)
       ? this.agent.get(MatterbridgeBindingServer).getEndpoint(WebRtcTransportRequestor.id)
       : undefined;
-    /* v8 ignore next 3 -- requires a real established Matter binding to a WebRtcTransportRequestor peer, which this
+    /* v8 ignore next 6 -- requires a real established Matter binding to a WebRtcTransportRequestor peer, which this
      * project's vitest harness has no infrastructure to set up (no binding test helpers exist). */
     if (requestorEndpoint) {
-      await requestorEndpoint.act((agent) => agent.get(WebRtcTransportRequestorClient).offer({ webRtcSessionId, sdp }));
-      device.log.info(`Invoked Offer on the bound WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      this.#invokeDeferred(
+        () => requestorEndpoint.act((agent) => agent.get(WebRtcTransportRequestorClient).offer({ webRtcSessionId, sdp })),
+        `Offer for session ${webRtcSessionId}`,
+      );
+      device.log.info(`Invoking Offer on the bound WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     } else {
       device.log.info(
         `No WebRtcTransportRequestor is bound yet; the Offer for session ${webRtcSessionId} was not sent (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
@@ -214,18 +248,21 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     device.log.info(`Received an SDP offer for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     device.log.debug(`MatterbridgeWebRtcTransportProviderServer: received SDP offer for session ${webRtcSessionId}: ${request.sdp}`);
 
-    const webRtcPeer = this.#sessions.get(webRtcSessionId) ?? new WeriftWebRtcSession();
-    this.#sessions.set(webRtcSessionId, webRtcPeer);
+    const webRtcPeer = this.internal.sessions.get(webRtcSessionId) ?? new WeriftWebRtcSession();
+    this.internal.sessions.set(webRtcSessionId, webRtcPeer);
     const sdp = await webRtcPeer.createAnswer(request.sdp);
 
     const requestorEndpoint = this.endpoint.behaviors.has(MatterbridgeBindingServer)
       ? this.agent.get(MatterbridgeBindingServer).getEndpoint(WebRtcTransportRequestor.id)
       : undefined;
-    /* v8 ignore next 3 -- requires a real established Matter binding to a WebRtcTransportRequestor peer, which this
+    /* v8 ignore next 6 -- requires a real established Matter binding to a WebRtcTransportRequestor peer, which this
      * project's vitest harness has no infrastructure to set up (no binding test helpers exist). */
     if (requestorEndpoint) {
-      await requestorEndpoint.act((agent) => agent.get(WebRtcTransportRequestorClient).answer({ webRtcSessionId, sdp }));
-      device.log.info(`Invoked Answer on the bound WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      this.#invokeDeferred(
+        () => requestorEndpoint.act((agent) => agent.get(WebRtcTransportRequestorClient).answer({ webRtcSessionId, sdp })),
+        `Answer for session ${webRtcSessionId}`,
+      );
+      device.log.info(`Invoking Answer on the bound WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     } else {
       device.log.info(
         `No WebRtcTransportRequestor is bound yet; the Answer for session ${webRtcSessionId} was not sent (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
@@ -253,7 +290,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     device.log.info(`Received an SDP answer for session ${request.webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     device.log.debug(`MatterbridgeWebRtcTransportProviderServer: received SDP answer for session ${request.webRtcSessionId}: ${request.sdp}`);
 
-    const webRtcPeer = this.#sessions.get(request.webRtcSessionId);
+    const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
     if (webRtcPeer) {
       await webRtcPeer.applyAnswer(request.sdp);
     }
@@ -277,7 +314,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       `Received ${request.iceCandidates.length} ICE candidate(s) for session ${request.webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
 
-    const webRtcPeer = this.#sessions.get(request.webRtcSessionId);
+    const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
     if (webRtcPeer) {
       for (const candidate of request.iceCandidates) {
         await webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex);
@@ -299,12 +336,30 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       throw new StatusResponseError(`WebRTC session ${request.webRtcSessionId} is not present in currentSessions`, Status.NotFound);
     }
     this.state.currentSessions = this.state.currentSessions.filter((session) => session.id !== request.webRtcSessionId);
-    const webRtcPeer = this.#sessions.get(request.webRtcSessionId);
+    const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
     if (webRtcPeer) {
-      this.#sessions.delete(request.webRtcSessionId);
+      this.internal.sessions.delete(request.webRtcSessionId);
       await webRtcPeer.close();
     }
     device.log.info(`Ended WebRTC session ${request.webRtcSessionId} (reason ${request.reason}) (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+  }
+}
+
+/**
+ * matter.js's own Behavior subclasses declare Internal/State/Events this way (see e.g. @matter/node's
+ * SubscriptionsServer.ts); it's how the framework resolves `this.internal`'s type, so an ES module can't replace it.
+ */
+// oxlint-disable-next-line typescript-eslint/no-namespace
+export namespace MatterbridgeWebRtcTransportProviderServer {
+  /**
+   * Internal (endpoint-scoped, not instance-scoped) state for {@link MatterbridgeWebRtcTransportProviderServer}.
+   */
+  export class Internal {
+    /**
+     * The real werift peer connection wrappers backing each session in {@link WebRtcTransportProvider.State.currentSessions},
+     * keyed by WebRTC session id.
+     */
+    sessions = new Map<number, WeriftWebRtcSession>();
   }
 }
 
