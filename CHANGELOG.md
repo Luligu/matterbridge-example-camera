@@ -36,6 +36,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
+- [doorbell]: Add the Doorbell device type with the required Identify, Switch (MomentarySwitch feature) and Chime client clusters, and Power Source support.
 - [chime]: Add validation in `MatterbridgeChimeServer.playChimeSound` to reject a `chimeId` that is not present in `installedChimeSounds` with a `NotFound` status response.
 - [snapshot camera]: Add the Snapshot Camera device with configurable snapshot capabilities, stream allocation, stream priorities, snapshot capture, Identify, and Power Source support.
 - [snapshot camera]: Add `MatterbridgeCameraAvStreamManagementServer` with the Snapshot and Image Control features.

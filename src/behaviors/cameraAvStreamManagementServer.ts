@@ -2,6 +2,7 @@
  * @file packages/core/src/behaviors/cameraAvStreamManagementServer.ts
  * @description This file contains the MatterbridgeCameraAvStreamManagementServer class of Matterbridge.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-13
  * @version 1.0.0
  * @license Apache-2.0
@@ -31,9 +32,144 @@ import { Status, StatusResponseError } from 'matterbridge/matter/types';
  * stream-priority, snapshot-stream allocation, and snapshot-capture commands required by a Snapshot Camera device.
  */
 export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamManagementServer.with(
+  CameraAvStreamManagement.Feature.Video,
+  CameraAvStreamManagement.Feature.Audio,
   CameraAvStreamManagement.Feature.Snapshot,
   CameraAvStreamManagement.Feature.ImageControl,
 ) {
+  /**
+   * Handles the SetStreamPriorities command.
+   * Sets the relative priorities of the various stream usages on the camera.
+   *
+   * @param {CameraAvStreamManagement.SetStreamPrioritiesRequest} request - SetStreamPriorities request payload.
+   * @throws {StatusResponseError} With status InvalidInState if a snapshot, video, or audio stream is currently allocated.
+   * @throws {StatusResponseError} With status DynamicConstraintError if streamPriorities contains an unsupported stream usage.
+   * @throws {StatusResponseError} With status AlreadyExists if streamPriorities contains a duplicate value.
+   */
+  override setStreamPriorities(request: CameraAvStreamManagement.SetStreamPrioritiesRequest): void {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (
+      (this.features.snapshot && this.state.allocatedSnapshotStreams.length > 0) ||
+      (this.features.video && this.state.allocatedVideoStreams.length > 0) ||
+      (this.features.audio && this.state.allocatedAudioStreams.length > 0)
+    ) {
+      throw new StatusResponseError('setStreamPriorities cannot be invoked while snapshot, video or audio streams are allocated', Status.InvalidInState);
+    }
+    if (!request.streamPriorities.every((usage) => this.state.supportedStreamUsages.includes(usage))) {
+      throw new StatusResponseError('streamPriorities shall only contain entries found in supportedStreamUsages', Status.DynamicConstraintError);
+    }
+    if (new Set(request.streamPriorities).size !== request.streamPriorities.length) {
+      throw new StatusResponseError('streamPriorities shall not contain duplicate values', Status.AlreadyExists);
+    }
+    device.log.info(`Setting stream priorities to [${request.streamPriorities.join(', ')}] (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    this.state.streamUsagePriorities = request.streamPriorities;
+  }
+
+  /**
+   * Handles the VideoStreamAllocate command.
+   * Allocates a video stream on the camera and returns the newly allocated video stream identifier.
+   *
+   * @param {CameraAvStreamManagement.VideoStreamAllocateRequest} request - VideoStreamAllocate request payload.
+   * @returns {CameraAvStreamManagement.VideoStreamAllocateResponse} The newly allocated video stream identifier.
+   * @throws {StatusResponseError} With status ConstraintError if the requested stream usage is not present in supportedStreamUsages.
+   */
+  override videoStreamAllocate(request: CameraAvStreamManagement.VideoStreamAllocateRequest): CameraAvStreamManagement.VideoStreamAllocateResponse {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (!this.state.supportedStreamUsages.includes(request.streamUsage)) {
+      throw new StatusResponseError(`Stream usage ${request.streamUsage} is not present in supportedStreamUsages`, Status.ConstraintError);
+    }
+    let videoStreamId = 0;
+    for (const stream of this.state.allocatedVideoStreams) {
+      videoStreamId = Math.max(videoStreamId, stream.videoStreamId + 1);
+    }
+    this.state.allocatedVideoStreams = [
+      ...this.state.allocatedVideoStreams,
+      {
+        videoStreamId,
+        streamUsage: request.streamUsage,
+        videoCodec: request.videoCodec,
+        minFrameRate: request.minFrameRate,
+        maxFrameRate: request.maxFrameRate,
+        minResolution: request.minResolution,
+        maxResolution: request.maxResolution,
+        minBitRate: request.minBitRate,
+        maxBitRate: request.maxBitRate,
+        keyFrameInterval: request.keyFrameInterval,
+        watermarkEnabled: request.watermarkEnabled,
+        osdEnabled: request.osdEnabled,
+        referenceCount: 0,
+      },
+    ];
+    device.log.info(`Allocated video stream ${videoStreamId} for usage ${request.streamUsage} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    return { videoStreamId };
+  }
+
+  /**
+   * Handles the VideoStreamDeallocate command.
+   * Deallocates the video stream on the camera corresponding to the given video stream identifier.
+   *
+   * @param {CameraAvStreamManagement.VideoStreamDeallocateRequest} request - VideoStreamDeallocate request payload.
+   * @throws {StatusResponseError} With status NotFound if the requested videoStreamId is not present in allocatedVideoStreams.
+   */
+  override videoStreamDeallocate(request: CameraAvStreamManagement.VideoStreamDeallocateRequest): void {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (!this.state.allocatedVideoStreams.some((stream) => stream.videoStreamId === request.videoStreamId)) {
+      throw new StatusResponseError(`Video stream ${request.videoStreamId} is not present in allocatedVideoStreams`, Status.NotFound);
+    }
+    this.state.allocatedVideoStreams = this.state.allocatedVideoStreams.filter((stream) => stream.videoStreamId !== request.videoStreamId);
+    device.log.info(`Deallocated video stream ${request.videoStreamId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+  }
+
+  /**
+   * Handles the AudioStreamAllocate command.
+   * Allocates an audio stream on the camera and returns the newly allocated audio stream identifier.
+   *
+   * @param {CameraAvStreamManagement.AudioStreamAllocateRequest} request - AudioStreamAllocate request payload.
+   * @returns {CameraAvStreamManagement.AudioStreamAllocateResponse} The newly allocated audio stream identifier.
+   * @throws {StatusResponseError} With status ConstraintError if the requested stream usage is not present in supportedStreamUsages.
+   */
+  override audioStreamAllocate(request: CameraAvStreamManagement.AudioStreamAllocateRequest): CameraAvStreamManagement.AudioStreamAllocateResponse {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (!this.state.supportedStreamUsages.includes(request.streamUsage)) {
+      throw new StatusResponseError(`Stream usage ${request.streamUsage} is not present in supportedStreamUsages`, Status.ConstraintError);
+    }
+    let audioStreamId = 0;
+    for (const stream of this.state.allocatedAudioStreams) {
+      audioStreamId = Math.max(audioStreamId, stream.audioStreamId + 1);
+    }
+    this.state.allocatedAudioStreams = [
+      ...this.state.allocatedAudioStreams,
+      {
+        audioStreamId,
+        streamUsage: request.streamUsage,
+        audioCodec: request.audioCodec,
+        channelCount: request.channelCount,
+        sampleRate: request.sampleRate,
+        bitRate: request.bitRate,
+        bitDepth: request.bitDepth,
+        referenceCount: 0,
+      },
+    ];
+    device.log.info(`Allocated audio stream ${audioStreamId} for usage ${request.streamUsage} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    return { audioStreamId };
+  }
+
+  /**
+   * Handles the AudioStreamDeallocate command.
+   * Deallocates the audio stream on the camera corresponding to the given audio stream identifier.
+   *
+   * @param {CameraAvStreamManagement.AudioStreamDeallocateRequest} request - AudioStreamDeallocate request payload.
+   * @throws {StatusResponseError} With status NotFound if the requested audioStreamId is not present in allocatedAudioStreams.
+   */
+  override audioStreamDeallocate(request: CameraAvStreamManagement.AudioStreamDeallocateRequest): void {
+    const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (!this.state.allocatedAudioStreams.some((stream) => stream.audioStreamId === request.audioStreamId)) {
+      throw new StatusResponseError(`Audio stream ${request.audioStreamId} is not present in allocatedAudioStreams`, Status.NotFound);
+    }
+    this.state.allocatedAudioStreams = this.state.allocatedAudioStreams.filter((stream) => stream.audioStreamId !== request.audioStreamId);
+    device.log.info(`Deallocated audio stream ${request.audioStreamId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+  }
+
   /**
    * Handles the SnapshotStreamAllocate command (SNP).
    * Allocates a new snapshot stream from the parameters passed in the request and returns its generated identifier.
@@ -114,18 +250,5 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
       imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
       resolution: request.requestedResolution,
     };
-  }
-
-  /**
-   * Handles the SetStreamPriorities command (M).
-   * Replaces the ranked list of stream usage priorities with the one passed in the request.
-   *
-   * @param {CameraAvStreamManagement.SetStreamPrioritiesRequest} request - SetStreamPriorities request payload.
-   */
-  // oxlint-disable-next-line typescript/require-await
-  override async setStreamPriorities(request: CameraAvStreamManagement.SetStreamPrioritiesRequest): Promise<void> {
-    const device = this.endpoint.stateOf(MatterbridgeServer);
-    device.log.info(`Setting stream priorities to ${request.streamPriorities.join(', ')} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
-    this.state.streamUsagePriorities = request.streamPriorities;
   }
 }

@@ -21,12 +21,18 @@
  * limitations under the License.
  */
 
+// Side effect import: works around https://github.com/matter-js/matter.js/issues/4083 until it is fixed upstream.
+// oxlint-disable-next-line import/no-unassigned-import
+import './patches/objectSchemaInjectFieldFix.js';
+
 import { MatterbridgeDynamicPlatform } from 'matterbridge';
 import type { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import type { AnsiLogger } from 'matterbridge/logger';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 
+import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
+import { Doorbell } from './devices/doorbell.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
 /**
@@ -73,12 +79,22 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.registerDevice(exampleChime);
 
-    const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'CAMERA-001', {
+    const exampleDoorbell = new Doorbell('Doorbell', 'DOORBELL-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Replaceable',
+    });
+    await this.registerDevice(exampleDoorbell);
+
+    const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOT-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Wired',
     });
     await this.registerDevice(exampleSnapshotCamera);
+
+    const exampleCamera = new Camera('Camera', 'CAMERA-001');
+    await this.registerDevice(exampleCamera);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
@@ -96,7 +112,10 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     );
     await exampleChime.setAttribute(ChimeCluster, 'enabled', true, exampleChime.log);
 
-    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-CAMERA-001');
+    const exampleDoorbell: Doorbell | undefined = this.getDeviceById('Doorbell-DOORBELL-001');
+    if (!exampleDoorbell) throw new Error(`Doorbell device not found. Please ensure the device is registered before configuration.`);
+
+    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOT-001');
     if (!exampleSnapshotCamera) throw new Error(`Snapshot camera device not found. Please ensure the device is registered before configuration.`);
 
     this.log.info(`Platform ${this.config.name} configured successfully`);

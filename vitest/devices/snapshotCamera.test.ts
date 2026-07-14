@@ -23,7 +23,7 @@ import {
 } from 'matterbridge/vitest-utils/matter';
 
 import { MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
-import { SnapshotCamera, createDefaultCameraAvStreamManagementClusterServer } from '../../src/devices/snapshotCamera.js';
+import { SnapshotCamera, createDefaultSnapshotCameraAvStreamManagementClusterServer } from '../../src/devices/snapshotCamera.js';
 
 await setupTest(NAME);
 
@@ -67,7 +67,9 @@ describe('SnapshotCamera', () => {
     expect(device.hasClusterServer(Identify.id)).toBeFalsy();
     expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
     expect(device.hasClusterServer(CameraAvStreamManagement.id)).toBeTruthy();
-    expect(device.behaviors.has(MatterbridgeCameraAvStreamManagementServer)).toBeTruthy();
+    expect(
+      device.behaviors.has(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot, CameraAvStreamManagement.Feature.ImageControl)),
+    ).toBeTruthy();
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
     expect(device.getAttribute(CameraAvStreamManagement, 'maxConcurrentEncoders')).toBe(1);
@@ -164,17 +166,16 @@ describe('SnapshotCamera', () => {
     const device = new SnapshotCamera('Snapshot Camera Helper', 'CAMERA-HELPER', { powerSourceType: 'None' });
 
     expect(
-      createDefaultCameraAvStreamManagementClusterServer(
-        device,
-        1,
-        10000000,
-        1024,
-        [{ resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false }],
-        10000,
-        [StreamUsage.Recording],
-        [],
-        [StreamUsage.Recording],
-      ),
+      createDefaultSnapshotCameraAvStreamManagementClusterServer(device, {
+        maxConcurrentEncoders: 1,
+        maxEncodedPixelRate: 10000000,
+        maxContentBufferSize: 1024,
+        snapshotCapabilities: [{ resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false }],
+        maxNetworkBandwidth: 10000,
+        supportedStreamUsages: [StreamUsage.Recording],
+        allocatedSnapshotStreams: [],
+        streamUsagePriorities: [StreamUsage.Recording],
+      }),
     ).toBe(device);
   });
 });

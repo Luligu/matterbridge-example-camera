@@ -133,8 +133,7 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
         break;
       // No default
     }
-    createDefaultCameraAvStreamManagementClusterServer(
-      this,
+    createDefaultSnapshotCameraAvStreamManagementClusterServer(this, {
       maxConcurrentEncoders,
       maxEncodedPixelRate,
       maxContentBufferSize,
@@ -143,48 +142,45 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
       supportedStreamUsages,
       allocatedSnapshotStreams,
       streamUsagePriorities,
-    );
+    });
     this.addRequiredClusters();
   }
+}
+
+export interface SnapshotCameraAvStreamManagementClusterOptions {
+  maxConcurrentEncoders: number;
+  maxEncodedPixelRate: number;
+  maxContentBufferSize: number;
+  snapshotCapabilities: CameraAvStreamManagement.SnapshotCapabilities[];
+  maxNetworkBandwidth: number;
+  supportedStreamUsages: StreamUsage[];
+  allocatedSnapshotStreams: CameraAvStreamManagement.SnapshotStream[];
+  streamUsagePriorities: StreamUsage[];
 }
 
 /**
  *  Creates a default CameraAvStreamManagement cluster server, specialized for the Snapshot feature, on the given endpoint.
  * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
- * @param {number} maxConcurrentEncoders - Maximum number of concurrent encoders supported by the camera.
- * @param {number} maxEncodedPixelRate - Maximum data rate in encoded pixels per second.
- * @param {number} maxContentBufferSize - Maximum size of the content buffer in bytes.
- * @param {CameraAvStreamManagement.SnapshotCapabilities[]} snapshotCapabilities - List of supported snapshot capabilities.
- * @param {number} maxNetworkBandwidth - Maximum network bandwidth in bits per second.
- * @param {StreamUsage[]} supportedStreamUsages - List of stream usages supported by the camera.
- * @param {CameraAvStreamManagement.SnapshotStream[]} allocatedSnapshotStreams - List of allocated snapshot streams.
- * @param {StreamUsage[]} streamUsagePriorities - List of stream usages in decreasing order of priority.
+ * @param {SnapshotCameraAvStreamManagementClusterOptions} options - The options for configuring the CameraAvStreamManagement cluster server.
  * @returns {MatterbridgeEndpoint} The endpoint with the CameraAvStreamManagement cluster server created.
  */
-export function createDefaultCameraAvStreamManagementClusterServer(
+export function createDefaultSnapshotCameraAvStreamManagementClusterServer(
   endpoint: MatterbridgeEndpoint,
-  maxConcurrentEncoders: number,
-  maxEncodedPixelRate: number,
-  maxContentBufferSize: number,
-  snapshotCapabilities: CameraAvStreamManagement.SnapshotCapabilities[],
-  maxNetworkBandwidth: number,
-  supportedStreamUsages: StreamUsage[],
-  allocatedSnapshotStreams: CameraAvStreamManagement.SnapshotStream[],
-  streamUsagePriorities: StreamUsage[],
+  options: SnapshotCameraAvStreamManagementClusterOptions,
 ): MatterbridgeEndpoint {
-  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer, {
+  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot, CameraAvStreamManagement.Feature.ImageControl), {
     // mandatory attributes
-    maxContentBufferSize, // M
-    maxNetworkBandwidth, // M
-    supportedStreamUsages, // M
-    streamUsagePriorities, // M
+    maxContentBufferSize: options.maxContentBufferSize, // M
+    maxNetworkBandwidth: options.maxNetworkBandwidth, // M
+    supportedStreamUsages: options.supportedStreamUsages, // M
+    streamUsagePriorities: options.streamUsagePriorities, // M
     // CameraAvStreamManagement.Feature.Snapshot
-    maxConcurrentEncoders, // VDO | SNP
-    maxEncodedPixelRate, // VDO | SNP
-    snapshotCapabilities, // SNP
-    allocatedSnapshotStreams, // SNP
-    // CameraAvStreamManagement.Feature.ImageControl
+    maxConcurrentEncoders: options.maxConcurrentEncoders, // VDO | SNP
+    maxEncodedPixelRate: options.maxEncodedPixelRate, // VDO | SNP
+    snapshotCapabilities: options.snapshotCapabilities, // SNP
+    allocatedSnapshotStreams: options.allocatedSnapshotStreams, // SNP
     // TODO: open issue on matter.js cause it treats ICTL mandatory but is not so we add for now
+    // CameraAvStreamManagement.Feature.ImageControl
     imageRotation: 0,
     imageFlipVertical: false,
     imageFlipHorizontal: false,
