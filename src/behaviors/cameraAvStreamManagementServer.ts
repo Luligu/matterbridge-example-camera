@@ -27,6 +27,8 @@ import { CameraAvStreamManagementServer } from 'matterbridge/matter/behaviors';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
+import { MIRE_HEIGHT, MIRE_JPEG, MIRE_WIDTH } from '../assets/mire.js';
+
 /**
  * CameraAvStreamManagement server, specialized for the Snapshot feature only, that implements the
  * stream-priority, snapshot-stream allocation, and snapshot-capture commands required by a Snapshot Camera device.
@@ -224,6 +226,7 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   /**
    * Handles the CaptureSnapshot command.
    * Returns a snapshot from the camera for the requested (or automatically selected) snapshot stream.
+   * The image data is a static SMPTE color-bars test pattern (mire) until a real capture pipeline is wired in.
    *
    * @param {CameraAvStreamManagement.CaptureSnapshotRequest} request - CaptureSnapshot request payload.
    * @returns {Promise<CameraAvStreamManagement.CaptureSnapshotResponse>} The captured snapshot.
@@ -232,7 +235,7 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   override async captureSnapshot(request: CameraAvStreamManagement.CaptureSnapshotRequest): Promise<CameraAvStreamManagement.CaptureSnapshotResponse> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     device.log.info(`Capturing snapshot ${request.snapshotStreamId ?? 'auto'} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
-    // TODO: Add CameraAvStreamManagement.captureSnapshot in matterbridge
+    // TODO: Replace the mire placeholder with a real capture once CameraAvStreamManagement.captureSnapshot is wired into matterbridge
     /*
     await device.commandHandler.executeHandler('CameraAvStreamManagement.captureSnapshot', {
       command: 'captureSnapshot',
@@ -246,9 +249,9 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
     */
     device.log.debug(`MatterbridgeCameraAvStreamManagementServer: captureSnapshot called with snapshotStreamId ${request.snapshotStreamId}`);
     return {
-      data: new Uint8Array(0),
+      data: MIRE_JPEG,
       imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-      resolution: request.requestedResolution,
+      resolution: { width: MIRE_WIDTH, height: MIRE_HEIGHT },
     };
   }
 }
