@@ -22,6 +22,7 @@ import {
 } from 'matterbridge/vitest-utils/matter';
 
 import { Chime } from '../src/devices/chime.js';
+import { Doorbell } from '../src/devices/doorbell.js';
 import initializePlugin, { ExampleMatterbridgeCameraPlatform } from '../src/module.js';
 
 await setupTest(NAME);
@@ -91,12 +92,24 @@ describe('TestPlatform', () => {
     await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Chime device not found. Please ensure the device is registered before configuration.');
   });
 
-  it('should throw error in onConfigure when the snapshot camera device is not registered', async () => {
+  it('should throw error in onConfigure when the doorbell device is not registered', async () => {
     const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
     const chime = new Chime('Chime', 'CHIME-001');
     vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
     vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
     vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) => (id === 'Chime-CHIME-001' ? chime : undefined));
+    addMatterbridge(unconfiguredPlatform);
+
+    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Doorbell device not found. Please ensure the device is registered before configuration.');
+  });
+
+  it('should throw error in onConfigure when the snapshot camera device is not registered', async () => {
+    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
+    const chime = new Chime('Chime', 'CHIME-001');
+    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
+    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
+    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
+    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) => (id === 'Chime-CHIME-001' ? chime : id === 'Doorbell-DOORBELL-001' ? doorbell : undefined));
     addMatterbridge(unconfiguredPlatform);
 
     await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Snapshot camera device not found. Please ensure the device is registered before configuration.');

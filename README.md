@@ -43,6 +43,16 @@ Features:
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 
+### Doorbell
+
+Features:
+
+- Exposes the Switch cluster with the MomentarySwitch feature only, as required by the Matter specification for this device type.
+- Adds the required Chime client cluster automatically via `addRequiredClusters()`, so a bound Chime device can be triggered when the doorbell button is pressed.
+- Supports simulating a button press with `triggerSwitchEvent('Single', ...)`.
+- Identify cluster is always created (it is a required server cluster for this device type), with configurable identify time and type.
+- Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+
 ### Snapshot Camera
 
 Features:

@@ -24,12 +24,8 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
-import {
-  addWebRtcTransportRequestorClient,
-  createDefaultWebRtcTransportProviderClusterServer,
-  MatterbridgeWebRtcTransportProviderServer,
-} from '../../src/behaviors/webRtcTransportProviderServer.js';
-import { Camera } from '../../src/devices/camera.js';
+import { MatterbridgeWebRtcTransportProviderServer } from '../../src/behaviors/webRtcTransportProviderServer.js';
+import { addWebRtcTransportRequestorClient, Camera, createDefaultWebRtcTransportProviderClusterServer } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
 
@@ -299,23 +295,23 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(addWebRtcTransportRequestorClient(device)).toBe(device);
   });
 
-  it('should add WebRtcTransportRequestor to an existing MatterbridgeBindingServer clientList', () => {
+  it('should leave an existing MatterbridgeBindingServer clientList untouched, since require() is a no-op once the behavior is already registered', () => {
     const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientMerge' });
     endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [Identify.id] });
 
     expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
 
     const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
-    expect(clientList).toEqual([Identify.id, WebRtcTransportRequestor.id]);
+    expect(clientList).toEqual([Identify.id]);
   });
 
-  it('should add WebRtcTransportRequestor when an existing MatterbridgeBindingServer has no clientList option', () => {
+  it('should leave an existing MatterbridgeBindingServer with no clientList option untouched, since require() is a no-op once the behavior is already registered', () => {
     const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientNoOptions' });
     endpoint.behaviors.require(MatterbridgeBindingServer);
 
     expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
 
     const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
-    expect(clientList).toEqual([WebRtcTransportRequestor.id]);
+    expect(clientList).toEqual([]);
   });
 });
