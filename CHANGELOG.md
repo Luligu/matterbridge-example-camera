@@ -31,7 +31,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Breaking changes
 
-- [matterbridge]: Require Matterbrdige 3.9.5 (from 3.9.5-git-438aa9a).
+- [matterbridge]: Require Matterbrdige 3.9.5 (from 3.9.5-git-623095608a9ab3f792c80e288cf236e0b5de878a).
 - [DevContainer]: Bump DevContainer config v.1.1.0. Rebuild the container.
 
 ### Added

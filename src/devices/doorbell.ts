@@ -88,6 +88,6 @@ export class Doorbell extends MatterbridgeEndpoint {
     this.createDefaultMomentarySwitchClusterServer();
     this.behaviors.require(MatterbridgeBindingServer, { clientList: [Chime.id] });
     this.type.clientClusters['chime'] ??= ChimeClient;
-    this.addRequiredClusterServers();
+    this.addRequiredClusters();
   }
 }

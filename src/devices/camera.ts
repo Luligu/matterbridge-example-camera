@@ -168,7 +168,7 @@ export class Camera extends MatterbridgeEndpoint {
     });
     createDefaultWebRtcTransportProviderClusterServer(this);
     addWebRtcTransportRequestorClient(this);
-    this.addRequiredClusterServers();
+    this.addRequiredClusters();
   }
 }
 
