@@ -23,6 +23,10 @@
 
 import { RTCPeerConnection } from 'werift';
 
+export type WeriftSessionLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export type WeriftSessionLogger = (level: WeriftSessionLogLevel, message: string) => void;
+
 /**
  * Media kinds to negotiate when creating a real WebRTC offer for a WebRtcTransportProvider session.
  */
@@ -46,8 +50,28 @@ export class WeriftWebRtcSession {
   /** The underlying werift peer connection for this session. */
   readonly peerConnection: RTCPeerConnection;
 
-  constructor() {
+  private readonly logger?: WeriftSessionLogger;
+
+  private readonly label: string;
+
+  constructor(logger?: WeriftSessionLogger, label = 'WebRTC session') {
     this.peerConnection = new RTCPeerConnection();
+    this.logger = logger;
+    this.label = label;
+    this.log('debug', 'Created RTCPeerConnection');
+  }
+
+  private log(level: WeriftSessionLogLevel, message: string): void {
+    this.logger?.(level, `${this.label}: ${message}`);
+  }
+
+  private summarizeSdp(sdp: string): string {
+    const mediaKinds = sdp
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('m='))
+      .map((line) => line.slice(2).split(' ')[0]);
+    return `length=${sdp.length} media=[${mediaKinds.join(',')}]`;
   }
 
   /**
@@ -57,6 +81,7 @@ export class WeriftWebRtcSession {
    * @returns {Promise<string>} The generated local SDP offer.
    */
   async createOffer(options: WeriftOfferOptions): Promise<string> {
+    this.log('debug', `createOffer requested (video=${options.video}, audio=${options.audio})`);
     if (options.video) this.peerConnection.addTransceiver('video', { direction: 'sendonly' });
     if (options.audio) this.peerConnection.addTransceiver('audio', { direction: 'sendonly' });
     const offer = await this.peerConnection.createOffer();
@@ -64,7 +89,9 @@ export class WeriftWebRtcSession {
     // setLocalDescription gathers ICE candidates into the SDP it stores as localDescription; offer.sdp itself
     // predates that gathering, so localDescription (always set once setLocalDescription above resolves) is returned.
     // oxlint-disable-next-line typescript-eslint/no-non-null-assertion
-    return this.peerConnection.localDescription!.sdp;
+    const sdp = this.peerConnection.localDescription!.sdp;
+    this.log('info', `Created local SDP offer (${this.summarizeSdp(sdp)})`);
+    return sdp;
   }
 
   /**
@@ -74,6 +101,7 @@ export class WeriftWebRtcSession {
    * @returns {Promise<string>} The generated local SDP answer.
    */
   async createAnswer(offerSdp: string): Promise<string> {
+    this.log('debug', `createAnswer requested for remote offer (${this.summarizeSdp(offerSdp)})`);
     await this.peerConnection.setRemoteDescription({ type: 'offer', sdp: offerSdp });
     // Transceivers werift auto-creates from the remote offer default to a direction that answers "inactive" with
     // port 0 when no local track is attached; a port-0 m-section is still listed in a=group:BUNDLE, which peers
@@ -85,7 +113,9 @@ export class WeriftWebRtcSession {
     await this.peerConnection.setLocalDescription(answer);
     // See the matching comment in createOffer above: localDescription (not answer.sdp) carries the gathered candidates.
     // oxlint-disable-next-line typescript-eslint/no-non-null-assertion
-    return this.peerConnection.localDescription!.sdp;
+    const sdp = this.peerConnection.localDescription!.sdp;
+    this.log('info', `Created local SDP answer (${this.summarizeSdp(sdp)})`);
+    return sdp;
   }
 
   /**
@@ -95,7 +125,9 @@ export class WeriftWebRtcSession {
    * @returns {Promise<void>} Resolves once the remote description has been applied.
    */
   async applyAnswer(answerSdp: string): Promise<void> {
+    this.log('debug', `applyAnswer requested (${this.summarizeSdp(answerSdp)})`);
     await this.peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+    this.log('info', `Remote SDP answer applied (signalingState=${this.peerConnection.signalingState})`);
   }
 
   /**
@@ -107,6 +139,10 @@ export class WeriftWebRtcSession {
    * @returns {Promise<void>} Resolves once the candidate has been applied.
    */
   async addIceCandidate(candidate: string, sdpMid: string | null, sdpMLineIndex: number | null): Promise<void> {
+    this.log(
+      'debug',
+      `Applying ICE candidate (mid=${sdpMid ?? 'null'}, mLine=${sdpMLineIndex ?? 'null'}, endOfCandidates=${candidate.trim() === ''})`,
+    );
     await this.peerConnection.addIceCandidate({ candidate, sdpMid: sdpMid ?? undefined, sdpMLineIndex: sdpMLineIndex ?? undefined });
   }
 
@@ -116,6 +152,8 @@ export class WeriftWebRtcSession {
    * @returns {Promise<void>} Resolves once the peer connection is closed.
    */
   async close(): Promise<void> {
+    this.log('debug', 'Closing RTCPeerConnection');
     await this.peerConnection.close();
+    this.log('info', `RTCPeerConnection closed (connectionState=${this.peerConnection.connectionState})`);
   }
 }

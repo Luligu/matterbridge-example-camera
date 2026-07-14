@@ -213,7 +213,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       `Solicited a WebRTC offer for session ${webRtcSessionId} (stream usage ${request.streamUsage}) (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
 
-    const webRtcPeer = new WeriftWebRtcSession();
+    const webRtcPeer = new WeriftWebRtcSession((level, message) => device.log[level](message), `WebRTC session ${webRtcSessionId}`);
     this.internal.sessions.set(webRtcSessionId, webRtcPeer);
     const sdp = await webRtcPeer.createOffer({ video: !!videoStreams?.length, audio: !!audioStreams?.length });
 
@@ -276,7 +276,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     device.log.info(`Received an SDP offer for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     device.log.debug(`MatterbridgeWebRtcTransportProviderServer: received SDP offer for session ${webRtcSessionId}: ${request.sdp}`);
 
-    const webRtcPeer = this.internal.sessions.get(webRtcSessionId) ?? new WeriftWebRtcSession();
+    const webRtcPeer =
+      this.internal.sessions.get(webRtcSessionId) ??
+      new WeriftWebRtcSession((level, message) => device.log[level](message), `WebRTC session ${webRtcSessionId}`);
     this.internal.sessions.set(webRtcSessionId, webRtcPeer);
     const sdp = await webRtcPeer.createAnswer(request.sdp);
 
@@ -341,8 +343,37 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
 
     const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
     if (webRtcPeer) {
-      for (const candidate of request.iceCandidates) {
-        await webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex);
+      for (const [index, candidate] of request.iceCandidates.entries()) {
+        const startedAt = Date.now();
+        const isMdnsHostCandidate = /\.local\s+\d+\s+typ\s+host\b/i.test(candidate.candidate);
+        if (isMdnsHostCandidate) {
+          device.log.debug(
+            `Skipping mDNS host ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
+              `(mid=${candidate.sdpMid ?? 'null'}, mLine=${candidate.sdpmLineIndex ?? 'null'}) ` +
+              `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          );
+          continue;
+        }
+        device.log.debug(
+          `Applying ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
+            `(mid=${candidate.sdpMid ?? 'null'}, mLine=${candidate.sdpmLineIndex ?? 'null'}, endOfCandidates=${candidate.candidate.trim() === ''}) ` +
+            `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        );
+        try {
+          await Promise.race([
+            webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('ICE candidate apply timeout after 2000ms')), 2000)),
+          ]);
+          device.log.debug(
+            `Applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
+              `in ${Date.now() - startedAt}ms (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          );
+        } catch (error) {
+          device.log.warn(
+            `Failed ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} after ${Date.now() - startedAt}ms ` +
+              `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber}): ${String(error)}`,
+          );
+        }
       }
     }
   }
