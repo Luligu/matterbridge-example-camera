@@ -86,7 +86,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.registerDevice(exampleDoorbell);
 
-    const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'CAMERA-001', {
+    const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOT-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Wired',
@@ -115,7 +115,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleDoorbell: Doorbell | undefined = this.getDeviceById('Doorbell-DOORBELL-001');
     if (!exampleDoorbell) throw new Error(`Doorbell device not found. Please ensure the device is registered before configuration.`);
 
-    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-CAMERA-001');
+    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOT-001');
     if (!exampleSnapshotCamera) throw new Error(`Snapshot camera device not found. Please ensure the device is registered before configuration.`);
 
     this.log.info(`Platform ${this.config.name} configured successfully`);

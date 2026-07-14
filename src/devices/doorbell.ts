@@ -1,7 +1,8 @@
 /**
  * @file src/devices/doorbell.ts
  * @description This file contains the Doorbell class.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-14
  * @version 1.0.0
  * @license Apache-2.0
@@ -23,7 +24,9 @@
 
 // Matterbridge
 import { doorbell, MatterbridgeEndpoint, powerSource } from 'matterbridge';
-import { Identify } from 'matterbridge/matter/clusters';
+import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
+import { ChimeClient } from 'matterbridge/matter/behaviors';
+import { Chime, Identify } from 'matterbridge/matter/clusters';
 
 /**
  * Options for configuring a {@link Doorbell} instance.
@@ -83,6 +86,8 @@ export class Doorbell extends MatterbridgeEndpoint {
       // No default
     }
     this.createDefaultMomentarySwitchClusterServer();
-    this.addRequiredClusters();
+    this.behaviors.require(MatterbridgeBindingServer, { clientList: [Chime.id] });
+    this.type.clientClusters['chime'] ??= ChimeClient;
+    this.addRequiredClusterServers();
   }
 }

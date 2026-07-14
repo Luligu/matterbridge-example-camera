@@ -8,7 +8,7 @@ const NAME = 'CameraDevice';
 const MATTER_PORT = 6003;
 const MATTER_CREATE_ONLY = true;
 
-import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
+import { CameraAvStreamManagement, Identify, PowerSource } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
 import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
@@ -22,8 +22,7 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
-import { createDefaultCameraAvStreamManagementClusterServer } from '../../src/behaviors/videoCameraAvStreamManagementServer.js';
-import { Camera } from '../../src/devices/camera.js';
+import { Camera, createDefaultCameraAvStreamManagementClusterServer } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
 
@@ -86,6 +85,25 @@ describe('Camera', () => {
     expect(device.getAttribute(Identify, 'identifyType')).toBe(Identify.IdentifyType.VisibleIndicator);
   });
 
+  it.each([
+    ['Rechargeable', PowerSource.BatChargeLevel.Ok],
+    ['Replaceable', PowerSource.BatChargeLevel.Ok],
+    ['Battery', PowerSource.BatChargeLevel.Ok],
+  ] as const)('should create a camera device with a %s power source', async (powerSourceType, expectedChargeLevel) => {
+    const device = new Camera(`Camera ${powerSourceType}`, `CAMERA-${powerSourceType.toUpperCase()}`, { powerSourceType });
+    expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
+
+    expect(await addDevice(aggregator, device)).toBeTruthy();
+    expect(device.getAttribute(PowerSource, 'batChargeLevel')).toBe(expectedChargeLevel);
+  });
+
+  it('should create a camera device with no power source', async () => {
+    const device = new Camera('Camera None', 'CAMERA-NONE', { powerSourceType: 'None' });
+    expect(device.hasClusterServer(PowerSource.id)).toBeFalsy();
+
+    expect(await addDevice(aggregator, device)).toBeTruthy();
+  });
+
   it('should create a camera device with custom stream usages', async () => {
     const device = new Camera('Camera Custom', 'CAMERA-CUSTOM', {
       supportedStreamUsages: [StreamUsage.LiveView],
@@ -113,9 +131,6 @@ describe('Camera', () => {
         rateDistortionTradeOffPoints: [{ codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1920, height: 1080 }, minBitRate: 1_000_000 }],
         currentFrameRate: 30,
         viewport: { x1: 0, y1: 0, x2: 1920, y2: 1080 },
-        imageRotation: 0,
-        imageFlipHorizontal: false,
-        imageFlipVertical: false,
         microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
       }),
     ).toBe(device);
