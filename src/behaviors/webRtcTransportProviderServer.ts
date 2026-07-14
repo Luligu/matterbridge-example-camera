@@ -361,6 +361,8 @@ export namespace MatterbridgeWebRtcTransportProviderServer {
      */
     sessions = new Map<number, WeriftWebRtcSession>();
   }
+  /* v8 ignore next -- compiler-generated fallback (`Foo || (Foo = {})`) for namespace/class declaration merging;
+   * the class is always already defined by the time this runs, so the assignment branch is structurally unreachable. */
 }
 
 /**
