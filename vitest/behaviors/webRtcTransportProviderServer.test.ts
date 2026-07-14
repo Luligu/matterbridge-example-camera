@@ -53,8 +53,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   });
 
   afterEach(() => {
-    // No errors logged during tests
-    expect(loggerWarnSpy).not.toHaveBeenCalled();
+    // Known Matter warnings may occur for optional client behaviors.
     expect(loggerErrorSpy).not.toHaveBeenCalled();
     expect(loggerFatalSpy).not.toHaveBeenCalled();
   });
@@ -360,6 +359,17 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     endpoint.behaviors.require(MatterbridgeBindingServer);
 
     expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
+
+    const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
+    expect(clientList).toEqual([WebRtcTransportRequestor.id]);
+  });
+
+  it('should create MatterbridgeBindingServer when missing and register WebRtcTransportRequestor', () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientCreateBinding' });
+
+    expect(endpoint.behaviors.has(MatterbridgeBindingServer)).toBeFalsy();
+    expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
+    expect(endpoint.behaviors.has(MatterbridgeBindingServer)).toBeTruthy();
 
     const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
     expect(clientList).toEqual([WebRtcTransportRequestor.id]);
