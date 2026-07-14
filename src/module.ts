@@ -32,6 +32,7 @@ import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matte
 
 import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
+import { Doorbell } from './devices/doorbell.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
 /**
@@ -78,6 +79,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.registerDevice(exampleChime);
 
+    const exampleDoorbell = new Doorbell('Doorbell', 'DOORBELL-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Replaceable',
+    });
+    await this.registerDevice(exampleDoorbell);
+
     const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'CAMERA-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
@@ -103,6 +111,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       exampleChime.log,
     );
     await exampleChime.setAttribute(ChimeCluster, 'enabled', true, exampleChime.log);
+
+    const exampleDoorbell: Doorbell | undefined = this.getDeviceById('Doorbell-DOORBELL-001');
+    if (!exampleDoorbell) throw new Error(`Doorbell device not found. Please ensure the device is registered before configuration.`);
 
     const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-CAMERA-001');
     if (!exampleSnapshotCamera) throw new Error(`Snapshot camera device not found. Please ensure the device is registered before configuration.`);
