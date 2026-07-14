@@ -11,7 +11,7 @@ const MATTER_CREATE_ONLY = true;
 import { camera, MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { Identify, WebRtcTransportDefinitions, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
-import { EndpointNumber, StreamUsage } from 'matterbridge/matter/types';
+import { EndpointNumber, FabricIndex, NodeId, StreamUsage } from 'matterbridge/matter/types';
 import { loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
@@ -24,8 +24,12 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
-import { MatterbridgeWebRtcTransportProviderServer } from '../../src/behaviors/webRtcTransportProviderServer.js';
-import { addWebRtcTransportRequestorClient, Camera, createDefaultWebRtcTransportProviderClusterServer } from '../../src/devices/camera.js';
+import {
+  addWebRtcTransportRequestorClient,
+  createDefaultWebRtcTransportProviderClusterServer,
+  MatterbridgeWebRtcTransportProviderServer,
+} from '../../src/behaviors/webRtcTransportProviderServer.js';
+import { Camera } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
 
@@ -273,7 +277,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), videoStreams: [0] }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('No WebRtcTransportRequestor is bound yet'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
   });
 
   it('should not solicit an offer when no WebRtcTransportRequestor client is registered at all', async () => {
@@ -286,7 +290,53 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), videoStreams: [0] }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('No WebRtcTransportRequestor is bound yet'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+  });
+
+  it('should not provide an offer when no WebRtcTransportRequestor client is registered at all', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcProvideOfferNoClientCluster' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', videoStreams: [0] }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+  });
+
+  it('should not touch a real peer connection for a session restored from persisted state without one', async () => {
+    // currentSessions is a replicated attribute (persisted across restarts); the werift peer connection in `internal`
+    // is not. Seed a session directly, bypassing solicitOffer/provideOffer, to simulate that post-restart state.
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcOrphanSession' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    await endpoint.setAttribute(WebRtcTransportProvider, 'currentSessions', [
+      {
+        id: 0,
+        peerNodeId: NodeId(0),
+        peerEndpointId: EndpointNumber(1),
+        streamUsage: StreamUsage.LiveView,
+        metadataEnabled: false,
+        videoStreams: [0],
+        audioStreams: undefined,
+        fabricIndex: FabricIndex(1),
+      },
+    ]);
+
+    await expect(endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: 0, sdp: 'v=0 o=- answer' })).resolves.toBeUndefined();
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
+        webRtcSessionId: 0,
+        iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: 0 }],
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+    ).resolves.toBeUndefined();
   });
 
   it('should add addWebRtcTransportRequestorClient to an endpoint that already has it registered', () => {
@@ -295,23 +345,23 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(addWebRtcTransportRequestorClient(device)).toBe(device);
   });
 
-  it('should leave an existing MatterbridgeBindingServer clientList untouched, since require() is a no-op once the behavior is already registered', () => {
+  it('should add WebRtcTransportRequestor to an existing MatterbridgeBindingServer clientList', () => {
     const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientMerge' });
     endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [Identify.id] });
 
     expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
 
     const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
-    expect(clientList).toEqual([Identify.id]);
+    expect(clientList).toEqual([Identify.id, WebRtcTransportRequestor.id]);
   });
 
-  it('should leave an existing MatterbridgeBindingServer with no clientList option untouched, since require() is a no-op once the behavior is already registered', () => {
+  it('should add WebRtcTransportRequestor when an existing MatterbridgeBindingServer has no clientList option', () => {
     const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientNoOptions' });
     endpoint.behaviors.require(MatterbridgeBindingServer);
 
     expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
 
     const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
-    expect(clientList).toEqual([]);
+    expect(clientList).toEqual([WebRtcTransportRequestor.id]);
   });
 });
