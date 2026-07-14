@@ -212,7 +212,12 @@ export interface CameraAvStreamManagementClusterOptions {
  */
 export function createDefaultCameraAvStreamManagementClusterServer(endpoint: MatterbridgeEndpoint, options: CameraAvStreamManagementClusterOptions): MatterbridgeEndpoint {
   endpoint.behaviors.require(
-    MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Video, CameraAvStreamManagement.Feature.Audio, CameraAvStreamManagement.Feature.ImageControl),
+    MatterbridgeCameraAvStreamManagementServer.with(
+      CameraAvStreamManagement.Feature.Video,
+      CameraAvStreamManagement.Feature.Audio,
+      CameraAvStreamManagement.Feature.Snapshot,
+      CameraAvStreamManagement.Feature.ImageControl,
+    ),
     {
       ...options,
       hardPrivacyModeOn: false,
