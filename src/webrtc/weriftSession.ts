@@ -21,9 +21,8 @@
  * limitations under the License.
  */
 
-import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { access, rm } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createSocket } from 'node:dgram';
 
@@ -66,8 +65,6 @@ export class WeriftWebRtcSession {
   private testVideoUdpDisposer?: () => void;
 
   private testVideoAttached = false;
-
-  private selectedVideoCodecMimeType?: string;
 
   constructor(logger?: WeriftSessionLogger, label = 'WebRTC session') {
     this.peerConnection = new RTCPeerConnection();
@@ -216,10 +213,9 @@ export class WeriftWebRtcSession {
       this.testVideoUdpDisposer = disposer;
       this.testVideoGenerator = generator;
       this.testVideoAttached = true;
-      this.selectedVideoCodecMimeType = selectedMimeType;
       this.log(
         'info',
-        `Attached synthetic SMPTE RTP video track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort}, token=${randomUUID()})`,
+        `Attached synthetic SMPTE RTP video track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
       );
     } catch (error) {
       this.log('warn', `Failed to attach synthetic test video track: ${error instanceof Error ? error.message : String(error)}`);
@@ -240,7 +236,7 @@ export class WeriftWebRtcSession {
     }
   }
 
-  private async cleanupTestVideoArtifacts(): Promise<void> {
+  private cleanupTestVideoArtifacts(): void {
     if (this.testVideoGenerator) {
       this.testVideoGenerator.kill('SIGTERM');
       this.testVideoGenerator = undefined;
@@ -248,7 +244,6 @@ export class WeriftWebRtcSession {
     this.testVideoUdpDisposer?.();
     this.testVideoUdpDisposer = undefined;
     this.testVideoAttached = false;
-    this.selectedVideoCodecMimeType = undefined;
   }
 
   /**
@@ -351,7 +346,7 @@ export class WeriftWebRtcSession {
   async close(): Promise<void> {
     this.log('debug', 'Closing RTCPeerConnection');
     await this.peerConnection.close();
-    await this.cleanupTestVideoArtifacts();
+    this.cleanupTestVideoArtifacts();
     this.log('info', `RTCPeerConnection closed (connectionState=${this.peerConnection.connectionState})`);
   }
 }

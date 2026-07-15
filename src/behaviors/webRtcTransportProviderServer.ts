@@ -362,7 +362,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
         try {
           await Promise.race([
             webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('ICE candidate apply timeout after 2000ms')), 2000)),
+            new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error('ICE candidate apply timeout after 2000ms')), 2000)),
           ]);
           device.log.debug(
             `Applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
