@@ -21,10 +21,10 @@
  * limitations under the License.
  */
 
-import { constants } from 'node:fs';
-import { access } from 'node:fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createSocket } from 'node:dgram';
+import { constants } from 'node:fs';
+import { access } from 'node:fs/promises';
 
 import { RTCPeerConnection, RTCRtpCodecParameters } from 'werift';
 import { navigator } from 'werift/nonstandard';
@@ -48,9 +48,11 @@ export interface WeriftOfferOptions {
  * MatterbridgeWebRtcTransportProviderServer in ../behaviors/webRtcTransportProviderServer.ts), so the session's SDP
  * offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded.
  *
- * In addition to SDP/ICE negotiation, this session can inject a synthetic SMPTE bars video source using
- * werift/nonstandard + ffmpeg/gstreamer so an end-to-end media path can be validated without a real camera capture
- * pipeline.
+ * In addition to SDP/ICE negotiation, this session can inject a video source using werift/nonstandard + ffmpeg so an
+ * end-to-end media path can be validated without a real camera capture pipeline. The source is a synthetic SMPTE
+ * bars test pattern by default, or a local webcam capture device when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam and
+ * MATTERBRIDGE_CAMERA_WEBCAM_DEVICE identifies the device (e.g. /dev/video0 on Linux, an avfoundation index on
+ * macOS, or a dshow device name on Windows).
  */
 export class WeriftWebRtcSession {
   /** The underlying werift peer connection for this session. */
@@ -156,6 +158,39 @@ export class WeriftWebRtcSession {
     return undefined;
   }
 
+  /**
+   * Resolves the ffmpeg input arguments and a human-readable description for the configured video source.
+   *
+   * Defaults to the synthetic SMPTE bars test pattern. Set MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam and
+   * MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=<device> to capture from a local webcam instead; falls back to the test
+   * pattern (logging a warning) if the device is missing or webcam capture isn't supported on this platform.
+   *
+   * @returns {{ args: string[]; description: string }} The ffmpeg input arguments and a description of the source, for logging.
+   */
+  private buildFfmpegVideoInputArgs(): { args: string[]; description: string } {
+    const testPatternInput = { args: ['-re', '-stream_loop', '-1', '-f', 'lavfi', '-i', 'smptebars=size=640x480:rate=10'], description: 'synthetic SMPTE bars test' };
+    if (process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE?.toLowerCase() !== 'webcam') return testPatternInput;
+
+    const device = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    if (!device) {
+      this.log('warn', 'MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam requires MATTERBRIDGE_CAMERA_WEBCAM_DEVICE to be set; falling back to the synthetic test video');
+      return testPatternInput;
+    }
+
+    const description = `local webcam (${device})`;
+    switch (process.platform) {
+      case 'linux':
+        return { args: ['-f', 'v4l2', '-input_format', 'yuyv422', '-video_size', '640x480', '-framerate', '30', '-i', device], description };
+      case 'darwin':
+        return { args: ['-f', 'avfoundation', '-video_size', '640x480', '-framerate', '30', '-i', device], description };
+      case 'win32':
+        return { args: ['-f', 'dshow', '-video_size', '640x480', '-framerate', '30', '-i', `video=${device}`], description };
+      default:
+        this.log('warn', `Webcam capture via ffmpeg is not supported on platform "${process.platform}"; falling back to the synthetic test video`);
+        return testPatternInput;
+    }
+  }
+
   private async ensureTestVideoTrack(codec?: RTCRtpCodecParameters): Promise<void> {
     if (this.testVideoAttached) return;
     if (process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO === '1') {
@@ -163,11 +198,12 @@ export class WeriftWebRtcSession {
       return;
     }
 
-    this.log('debug', 'Attempting to attach synthetic SMPTE test video track');
+    const videoInput = this.buildFfmpegVideoInputArgs();
+    this.log('debug', `Attempting to attach ${videoInput.description} video track`);
 
     const ffmpegCommand = await this.resolveCommand('ffmpeg');
     if (!ffmpegCommand) {
-      this.log('warn', 'Cannot inject test video stream: missing dependency ffmpeg');
+      this.log('warn', 'Cannot inject video stream: missing dependency ffmpeg');
       return;
     }
 
@@ -190,13 +226,7 @@ export class WeriftWebRtcSession {
         '-hide_banner',
         '-loglevel',
         'error',
-        '-re',
-        '-stream_loop',
-        '-1',
-        '-f',
-        'lavfi',
-        '-i',
-        'smptebars=size=640x480:rate=10',
+        ...videoInput.args,
         '-an',
         ...encoderArgs,
         '-f',
@@ -207,7 +237,7 @@ export class WeriftWebRtcSession {
       ]);
 
       generator.once('error', (error: unknown) => {
-        this.log('warn', `Synthetic RTP generator failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.log('warn', `Video generator failed: ${error instanceof Error ? error.message : String(error)}`);
       });
 
       this.testVideoUdpDisposer = disposer;
@@ -215,10 +245,10 @@ export class WeriftWebRtcSession {
       this.testVideoAttached = true;
       this.log(
         'info',
-        `Attached synthetic SMPTE RTP video track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
+        `Attached ${videoInput.description} video track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
       );
     } catch (error) {
-      this.log('warn', `Failed to attach synthetic test video track: ${error instanceof Error ? error.message : String(error)}`);
+      this.log('warn', `Failed to attach ${videoInput.description} video track: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -331,10 +361,7 @@ export class WeriftWebRtcSession {
    * @returns {Promise<void>} Resolves once the candidate has been applied.
    */
   async addIceCandidate(candidate: string, sdpMid: string | null, sdpMLineIndex: number | null): Promise<void> {
-    this.log(
-      'debug',
-      `Applying ICE candidate (mid=${sdpMid ?? 'null'}, mLine=${sdpMLineIndex ?? 'null'}, endOfCandidates=${candidate.trim() === ''})`,
-    );
+    this.log('debug', `Applying ICE candidate (mid=${sdpMid ?? 'null'}, mLine=${sdpMLineIndex ?? 'null'}, endOfCandidates=${candidate.trim() === ''})`);
     await this.peerConnection.addIceCandidate({ candidate, sdpMid: sdpMid ?? undefined, sdpMLineIndex: sdpMLineIndex ?? undefined });
   }
 
