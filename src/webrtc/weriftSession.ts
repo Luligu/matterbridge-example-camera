@@ -21,7 +21,14 @@
  * limitations under the License.
  */
 
-import { RTCPeerConnection } from 'werift';
+import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
+import { access, rm } from 'node:fs/promises';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { createSocket } from 'node:dgram';
+
+import { RTCPeerConnection, RTCRtpCodecParameters } from 'werift';
+import { navigator } from 'werift/nonstandard';
 
 export type WeriftSessionLogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -42,9 +49,9 @@ export interface WeriftOfferOptions {
  * MatterbridgeWebRtcTransportProviderServer in ../behaviors/webRtcTransportProviderServer.ts), so the session's SDP
  * offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded.
  *
- * This currently only covers SDP/ICE negotiation and connection teardown: it does not yet attach an encoded media
- * track to the negotiated transceivers, so no RTP flows once negotiated. Attaching a real encoder is a follow-up
- * step once this negotiation slice has been validated end to end.
+ * In addition to SDP/ICE negotiation, this session can inject a synthetic SMPTE bars video source using
+ * werift/nonstandard + ffmpeg/gstreamer so an end-to-end media path can be validated without a real camera capture
+ * pipeline.
  */
 export class WeriftWebRtcSession {
   /** The underlying werift peer connection for this session. */
@@ -53,6 +60,14 @@ export class WeriftWebRtcSession {
   private readonly logger?: WeriftSessionLogger;
 
   private readonly label: string;
+
+  private testVideoGenerator?: ChildProcess;
+
+  private testVideoUdpDisposer?: () => void;
+
+  private testVideoAttached = false;
+
+  private selectedVideoCodecMimeType?: string;
 
   constructor(logger?: WeriftSessionLogger, label = 'WebRTC session') {
     this.peerConnection = new RTCPeerConnection();
@@ -74,6 +89,168 @@ export class WeriftWebRtcSession {
     return `length=${sdp.length} media=[${mediaKinds.join(',')}]`;
   }
 
+  private async runProcess(command: string, args: string[]): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(command, args, { stdio: 'ignore' });
+      child.once('error', reject);
+      child.once('exit', (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`${command} exited with code ${code ?? -1}`));
+      });
+    });
+  }
+
+  private async hasCommand(command: string): Promise<boolean> {
+    for (const versionArg of ['--version', '-version']) {
+      try {
+        await this.runProcess(command, [versionArg]);
+        return true;
+      } catch {
+        // Try alternative version switches because tools differ (e.g. ffmpeg uses -version).
+      }
+    }
+    return false;
+  }
+
+  private async resolveCommand(command: string): Promise<string | undefined> {
+    const candidates = [command, `/usr/bin/${command}`, `/bin/${command}`, `/usr/local/bin/${command}`];
+    for (const candidate of candidates) {
+      if (candidate.includes('/')) {
+        try {
+          await access(candidate, constants.X_OK);
+        } catch {
+          continue;
+        }
+      }
+      if (await this.hasCommand(candidate)) return candidate;
+    }
+    return undefined;
+  }
+
+  private async getFreeUdpPort(): Promise<number> {
+    return await new Promise<number>((resolve, reject) => {
+      const socket = createSocket('udp4');
+      socket.once('error', reject);
+      socket.bind(0, '127.0.0.1', () => {
+        const address = socket.address();
+        if (typeof address === 'string') {
+          socket.close();
+          reject(new Error('Failed to allocate UDP port'));
+          return;
+        }
+        const port = address.port;
+        socket.close(() => resolve(port));
+      });
+    });
+  }
+
+  private getPreferredInjectableVideoCodec(): RTCRtpCodecParameters | undefined {
+    for (const transceiver of this.peerConnection.getTransceivers()) {
+      if (transceiver.kind !== 'video') continue;
+      const preferredCodec = transceiver.codecs.find((codec) => {
+        const mimeType = codec.mimeType.toLowerCase();
+        return mimeType === 'video/vp8' || mimeType === 'video/h264';
+      });
+      if (preferredCodec) return preferredCodec;
+    }
+    return undefined;
+  }
+
+  private async ensureTestVideoTrack(codec?: RTCRtpCodecParameters): Promise<void> {
+    if (this.testVideoAttached) return;
+    if (process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO === '1') {
+      this.log('info', 'Test video injection disabled by MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO=1');
+      return;
+    }
+
+    this.log('debug', 'Attempting to attach synthetic SMPTE test video track');
+
+    const ffmpegCommand = await this.resolveCommand('ffmpeg');
+    if (!ffmpegCommand) {
+      this.log('warn', 'Cannot inject test video stream: missing dependency ffmpeg');
+      return;
+    }
+
+    const selectedMimeType = (codec?.mimeType ?? 'video/vp8').toLowerCase();
+    const selectedPayloadType = codec?.payloadType ?? 120;
+    try {
+      const udpPort = await this.getFreeUdpPort();
+      const { track, disposer } = navigator.mediaDevices.getUdpMedia({
+        port: udpPort,
+        codec: new RTCRtpCodecParameters({ mimeType: selectedMimeType, clockRate: 90000, payloadType: selectedPayloadType }),
+      });
+      this.peerConnection.addTrack(track);
+
+      const encoderArgs =
+        selectedMimeType === 'video/h264'
+          ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', '20']
+          : ['-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-pix_fmt', 'yuv420p', '-g', '20'];
+
+      const generator = spawn(ffmpegCommand, [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-re',
+        '-stream_loop',
+        '-1',
+        '-f',
+        'lavfi',
+        '-i',
+        'smptebars=size=640x480:rate=10',
+        '-an',
+        ...encoderArgs,
+        '-f',
+        'rtp',
+        '-payload_type',
+        String(selectedPayloadType),
+        `rtp://127.0.0.1:${udpPort}`,
+      ]);
+
+      generator.once('error', (error: unknown) => {
+        this.log('warn', `Synthetic RTP generator failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+
+      this.testVideoUdpDisposer = disposer;
+      this.testVideoGenerator = generator;
+      this.testVideoAttached = true;
+      this.selectedVideoCodecMimeType = selectedMimeType;
+      this.log(
+        'info',
+        `Attached synthetic SMPTE RTP video track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort}, token=${randomUUID()})`,
+      );
+    } catch (error) {
+      this.log('warn', `Failed to attach synthetic test video track: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private preferVideoCodecOnTransceivers(mimeType: string): void {
+    let adjustedTransceivers = 0;
+    for (const transceiver of this.peerConnection.getTransceivers()) {
+      if (transceiver.kind !== 'video') continue;
+      const preferredCodecs = transceiver.codecs.filter((codec) => codec.mimeType.toLowerCase() === mimeType);
+      if (!preferredCodecs.length) continue;
+      transceiver.codecs = preferredCodecs;
+      adjustedTransceivers += 1;
+    }
+    if (adjustedTransceivers > 0) {
+      this.log('info', `Preferred ${mimeType.toUpperCase()} codecs on ${adjustedTransceivers} video transceiver(s)`);
+    }
+  }
+
+  private async cleanupTestVideoArtifacts(): Promise<void> {
+    if (this.testVideoGenerator) {
+      this.testVideoGenerator.kill('SIGTERM');
+      this.testVideoGenerator = undefined;
+    }
+    this.testVideoUdpDisposer?.();
+    this.testVideoUdpDisposer = undefined;
+    this.testVideoAttached = false;
+    this.selectedVideoCodecMimeType = undefined;
+  }
+
   /**
    * Adds a sendonly transceiver for each requested media kind and creates a real local SDP offer.
    *
@@ -82,7 +259,16 @@ export class WeriftWebRtcSession {
    */
   async createOffer(options: WeriftOfferOptions): Promise<string> {
     this.log('debug', `createOffer requested (video=${options.video}, audio=${options.audio})`);
-    if (options.video) this.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+    if (options.video) {
+      const preferredCodec = this.getPreferredInjectableVideoCodec();
+      if (preferredCodec) {
+        this.preferVideoCodecOnTransceivers(preferredCodec.mimeType.toLowerCase());
+      } else {
+        this.log('warn', 'No injectable video codec available on negotiated transceivers (supported: VP8, H264)');
+      }
+      await this.ensureTestVideoTrack(preferredCodec);
+      if (!this.testVideoAttached) this.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+    }
     if (options.audio) this.peerConnection.addTransceiver('audio', { direction: 'sendonly' });
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
@@ -103,6 +289,17 @@ export class WeriftWebRtcSession {
   async createAnswer(offerSdp: string): Promise<string> {
     this.log('debug', `createAnswer requested for remote offer (${this.summarizeSdp(offerSdp)})`);
     await this.peerConnection.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+    const hasVideoTransceiver = this.peerConnection.getTransceivers().some((transceiver) => transceiver.kind === 'video');
+    this.log('debug', `Remote offer created video transceiver: ${hasVideoTransceiver}`);
+    if (hasVideoTransceiver) {
+      const preferredCodec = this.getPreferredInjectableVideoCodec();
+      if (preferredCodec) {
+        this.preferVideoCodecOnTransceivers(preferredCodec.mimeType.toLowerCase());
+      } else {
+        this.log('warn', 'No injectable video codec available on negotiated transceivers (supported: VP8, H264)');
+      }
+      await this.ensureTestVideoTrack(preferredCodec);
+    }
     // Transceivers werift auto-creates from the remote offer default to a direction that answers "inactive" with
     // port 0 when no local track is attached; a port-0 m-section is still listed in a=group:BUNDLE, which peers
     // (e.g. Firefox) reject as invalid. Answering "sendonly" keeps the m-section active even with no track yet.
@@ -154,6 +351,7 @@ export class WeriftWebRtcSession {
   async close(): Promise<void> {
     this.log('debug', 'Closing RTCPeerConnection');
     await this.peerConnection.close();
+    await this.cleanupTestVideoArtifacts();
     this.log('info', `RTCPeerConnection closed (connectionState=${this.peerConnection.connectionState})`);
   }
 }
