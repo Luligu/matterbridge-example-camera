@@ -52,7 +52,8 @@ export interface WeriftOfferOptions {
  * end-to-end media path can be validated without a real camera capture pipeline. The source is a synthetic SMPTE
  * bars test pattern by default, or a local webcam capture device when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam and
  * MATTERBRIDGE_CAMERA_WEBCAM_DEVICE identifies the device (e.g. /dev/video0 on Linux, an avfoundation index on
- * macOS, or a dshow device name on Windows).
+ * macOS, or a dshow device name on Windows). The webcam capture resolution defaults to 640x480 and can be set to
+ * 1280x720 or 1920x1080 with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION.
  */
 export class WeriftWebRtcSession {
   /** The underlying werift peer connection for this session. */
@@ -158,12 +159,35 @@ export class WeriftWebRtcSession {
     return undefined;
   }
 
+  /** Webcam capture resolutions supported via MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION; falls back to the first entry. */
+  private static readonly SUPPORTED_WEBCAM_RESOLUTIONS = ['640x480', '1280x720', '1920x1080'];
+
+  /**
+   * Resolves the configured webcam capture resolution from MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION, falling back
+   * (with a warning) to 640x480 if unset or not one of the supported resolutions.
+   *
+   * @returns {string} The resolution to pass to ffmpeg's -video_size option, e.g. "1280x720".
+   */
+  private getConfiguredWebcamResolution(): string {
+    const [defaultResolution] = WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS;
+    const requested = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
+    if (!requested) return defaultResolution;
+    if (WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.includes(requested)) return requested;
+    this.log(
+      'warn',
+      `Unsupported MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION "${requested}" (supported: ${WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.join(', ')}); falling back to ${defaultResolution}`,
+    );
+    return defaultResolution;
+  }
+
   /**
    * Resolves the ffmpeg input arguments and a human-readable description for the configured video source.
    *
    * Defaults to the synthetic SMPTE bars test pattern. Set MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam and
    * MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=<device> to capture from a local webcam instead; falls back to the test
-   * pattern (logging a warning) if the device is missing or webcam capture isn't supported on this platform.
+   * pattern (logging a warning) if the device is missing or webcam capture isn't supported on this platform. The
+   * webcam capture resolution defaults to 640x480 and can be overridden with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION
+   * (640x480, 1280x720, or 1920x1080).
    *
    * @returns {{ args: string[]; description: string }} The ffmpeg input arguments and a description of the source, for logging.
    */
@@ -177,14 +201,15 @@ export class WeriftWebRtcSession {
       return testPatternInput;
     }
 
-    const description = `local webcam (${device})`;
+    const resolution = this.getConfiguredWebcamResolution();
+    const description = `local webcam (${device}, ${resolution})`;
     switch (process.platform) {
       case 'linux':
-        return { args: ['-f', 'v4l2', '-input_format', 'yuyv422', '-video_size', '640x480', '-framerate', '30', '-i', device], description };
+        return { args: ['-f', 'v4l2', '-input_format', 'yuyv422', '-video_size', resolution, '-framerate', '30', '-i', device], description };
       case 'darwin':
-        return { args: ['-f', 'avfoundation', '-video_size', '640x480', '-framerate', '30', '-i', device], description };
+        return { args: ['-f', 'avfoundation', '-video_size', resolution, '-framerate', '30', '-i', device], description };
       case 'win32':
-        return { args: ['-f', 'dshow', '-video_size', '640x480', '-framerate', '30', '-i', `video=${device}`], description };
+        return { args: ['-f', 'dshow', '-video_size', resolution, '-framerate', '30', '-i', `video=${device}`], description };
       default:
         this.log('warn', `Webcam capture via ffmpeg is not supported on platform "${process.platform}"; falling back to the synthetic test video`);
         return testPatternInput;
