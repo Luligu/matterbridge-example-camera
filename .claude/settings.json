@@ -33,6 +33,7 @@
       "Bash(bun remove:*)"
     ],
     "allow": [
+      "Read",
       "Bash(npm run)",
       "Bash(npm run typecheck:*)",
       "Bash(npm run build:*)",
@@ -53,7 +54,9 @@
       "Bash(tail:*)",
       "Bash(find:*)",
       "Bash(echo:*)",
-      "Read(//matterbridge:*)"
+      "Bash(head:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)"
     ]
   }
 }
