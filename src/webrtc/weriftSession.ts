@@ -163,6 +163,19 @@ export class WeriftWebRtcSession {
   private static readonly SUPPORTED_WEBCAM_RESOLUTIONS = ['640x480', '1280x720', '1920x1080'];
 
   /**
+   * Target encoder bitrate (kbps) per resolution. Without an explicit -b:v, ffmpeg falls back to a generic ~200kbps
+   * default that is far too low for 720p/1080p and produces heavy blocking artifacts. 1920x1080 is capped lower
+   * than a naive linear scale-up would suggest: at this camera's actual capture rate (~5fps at 1080p), a higher
+   * target let individual encoded frames balloon past 150-200KB, which is too large to reliably fragment/deliver
+   * over the local RTP hop and resulted in a black (never-decoded) video.
+   */
+  private static readonly BITRATE_KBPS_BY_RESOLUTION: Record<string, number> = {
+    '640x480': 1000,
+    '1280x720': 2500,
+    '1920x1080': 2000,
+  };
+
+  /**
    * Resolves the configured webcam capture resolution from MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION, falling back
    * (with a warning) to 640x480 if unset or not one of the supported resolutions.
    *
@@ -189,10 +202,14 @@ export class WeriftWebRtcSession {
    * webcam capture resolution defaults to 640x480 and can be overridden with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION
    * (640x480, 1280x720, or 1920x1080).
    *
-   * @returns {{ args: string[]; description: string }} The ffmpeg input arguments and a description of the source, for logging.
+   * @returns {{ args: string[]; description: string; bitrateKbps: number }} The ffmpeg input arguments, a description of the source for logging, and the target encoder bitrate.
    */
-  private buildFfmpegVideoInputArgs(): { args: string[]; description: string } {
-    const testPatternInput = { args: ['-re', '-stream_loop', '-1', '-f', 'lavfi', '-i', 'smptebars=size=640x480:rate=10'], description: 'synthetic SMPTE bars test' };
+  private buildFfmpegVideoInputArgs(): { args: string[]; description: string; bitrateKbps: number } {
+    const testPatternInput = {
+      args: ['-re', '-stream_loop', '-1', '-f', 'lavfi', '-i', 'smptebars=size=640x480:rate=10'],
+      description: 'synthetic SMPTE bars test',
+      bitrateKbps: WeriftWebRtcSession.BITRATE_KBPS_BY_RESOLUTION['640x480'],
+    };
     if (process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE?.toLowerCase() !== 'webcam') return testPatternInput;
 
     const device = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
@@ -202,14 +219,15 @@ export class WeriftWebRtcSession {
     }
 
     const resolution = this.getConfiguredWebcamResolution();
+    const bitrateKbps = WeriftWebRtcSession.BITRATE_KBPS_BY_RESOLUTION[resolution];
     const description = `local webcam (${device}, ${resolution})`;
     switch (process.platform) {
       case 'linux':
-        return { args: ['-f', 'v4l2', '-input_format', 'yuyv422', '-video_size', resolution, '-framerate', '30', '-i', device], description };
+        return { args: ['-f', 'v4l2', '-input_format', 'yuyv422', '-video_size', resolution, '-framerate', '30', '-i', device], description, bitrateKbps };
       case 'darwin':
-        return { args: ['-f', 'avfoundation', '-video_size', resolution, '-framerate', '30', '-i', device], description };
+        return { args: ['-f', 'avfoundation', '-video_size', resolution, '-framerate', '30', '-i', device], description, bitrateKbps };
       case 'win32':
-        return { args: ['-f', 'dshow', '-video_size', resolution, '-framerate', '30', '-i', `video=${device}`], description };
+        return { args: ['-f', 'dshow', '-video_size', resolution, '-framerate', '30', '-i', `video=${device}`], description, bitrateKbps };
       default:
         this.log('warn', `Webcam capture via ffmpeg is not supported on platform "${process.platform}"; falling back to the synthetic test video`);
         return testPatternInput;
@@ -242,10 +260,11 @@ export class WeriftWebRtcSession {
       });
       this.peerConnection.addTrack(track);
 
+      const bitrate = `${videoInput.bitrateKbps}k`;
       const encoderArgs =
         selectedMimeType === 'video/h264'
-          ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', '20']
-          : ['-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-pix_fmt', 'yuv420p', '-g', '20'];
+          ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', '20', '-b:v', bitrate, '-maxrate', bitrate, '-bufsize', bitrate]
+          : ['-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '4', '-pix_fmt', 'yuv420p', '-g', '20', '-b:v', bitrate, '-maxrate', bitrate, '-bufsize', bitrate];
 
       const generator = spawn(ffmpegCommand, [
         '-hide_banner',
