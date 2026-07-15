@@ -27,7 +27,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
-## [0.0.2] - Dev branch
+## [0.0.2] - 2026-07-15
 
 ### Breaking changes
 
@@ -36,6 +36,9 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
+- [Snapshot]: Add JPEG television color and geometry calibration cards for snapshot testing.
+- [WebRTC]: Add deterministic H.264, Opus, and MP4 media fixtures for WebRTC stream testing.
+- [WebRTC]: Add a Vitest integration test covering a complete local `werift` client/server negotiation and data-channel flow.
 - [doorbell]: Add the Doorbell device type with the required Identify, Switch (MomentarySwitch feature) and Chime client clusters, and Power Source support.
 - [chime]: Add validation in `MatterbridgeChimeServer.playChimeSound` to reject a `chimeId` that is not present in `installedChimeSounds` with a `NotFound` status response.
 - [snapshot camera]: Add the Snapshot Camera device with configurable snapshot capabilities, stream allocation, stream priorities, snapshot capture, Identify, and Power Source support.
@@ -43,6 +46,8 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Changed
 
+- [WebRTC]: Transfer the MP4 camera fixture over the werift data channel and verify its reconstructed SHA-256 hash.
+- [Snapshot]: Return `assets/camera-color-test.jpeg` from `CaptureSnapshot` instead of the embedded mire image.
 - [chime]: Document the Chime device features in the README.
 - [snapshot camera]: Document the Snapshot Camera device features in the README.
 - [agents]: Update agents instructions.

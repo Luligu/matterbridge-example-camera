@@ -22,12 +22,16 @@
  * limitations under the License.
  */
 
+import { readFileSync } from 'node:fs';
+
 import { MatterbridgeServer } from 'matterbridge/behaviors';
 import { CameraAvStreamManagementServer } from 'matterbridge/matter/behaviors';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
-import { MIRE_HEIGHT, MIRE_JPEG, MIRE_WIDTH } from '../assets/mire.js';
+const cameraColorTestJpeg = readFileSync(new URL('../../assets/camera-color-test-480-270.jpeg', import.meta.url));
+const cameraColorTestWidth = 480;
+const cameraColorTestHeight = 270;
 
 /**
  * CameraAvStreamManagement server, specialized for the Snapshot feature only, that implements the
@@ -226,7 +230,7 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   /**
    * Handles the CaptureSnapshot command.
    * Returns a snapshot from the camera for the requested (or automatically selected) snapshot stream.
-   * The image data is a static SMPTE color-bars test pattern (mire) until a real capture pipeline is wired in.
+   * The image data is a static JPEG television calibration card until a real capture pipeline is wired in.
    *
    * @param {CameraAvStreamManagement.CaptureSnapshotRequest} request - CaptureSnapshot request payload.
    * @returns {Promise<CameraAvStreamManagement.CaptureSnapshotResponse>} The captured snapshot.
@@ -235,7 +239,7 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   override async captureSnapshot(request: CameraAvStreamManagement.CaptureSnapshotRequest): Promise<CameraAvStreamManagement.CaptureSnapshotResponse> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     device.log.info(`Capturing snapshot ${request.snapshotStreamId ?? 'auto'} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
-    // TODO: Replace the mire placeholder with a real capture once CameraAvStreamManagement.captureSnapshot is wired into matterbridge
+    // TODO: Replace the static calibration card with a real capture once CameraAvStreamManagement.captureSnapshot is wired into matterbridge
     /*
     await device.commandHandler.executeHandler('CameraAvStreamManagement.captureSnapshot', {
       command: 'captureSnapshot',
@@ -249,9 +253,9 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
     */
     device.log.debug(`MatterbridgeCameraAvStreamManagementServer: captureSnapshot called with snapshotStreamId ${request.snapshotStreamId}`);
     return {
-      data: MIRE_JPEG,
+      data: cameraColorTestJpeg,
       imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-      resolution: { width: MIRE_WIDTH, height: MIRE_HEIGHT },
+      resolution: { width: cameraColorTestWidth, height: cameraColorTestHeight },
     };
   }
 }

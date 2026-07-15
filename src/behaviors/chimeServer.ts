@@ -28,9 +28,18 @@ import type { Chime } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
 /**
+ * ChimeServer base with the ChimeStartedPlaying event enabled.
+ *
+ * ChimeStartedPlaying has conformance `Rev >= v2`, which matter.js always resolves as conditional rather than
+ * mandatory (it does not consult the runtime ClusterRevision value), so the event is not attached to `this.events`
+ * unless explicitly enabled here.
+ */
+const ChimeServerBase = ChimeServer.enable({ events: { chimeStartedPlaying: true } });
+
+/**
  * Chime server that forwards the PlayChimeSound command to the Matterbridge command handler and generates the ChimeStartedPlaying event.
  */
-export class MatterbridgeChimeServer extends ChimeServer {
+export class MatterbridgeChimeServer extends ChimeServerBase {
   /**
    * Handles the PlayChimeSound command.
    * Plays the chime sound passed in the request or, if none is passed, the currently selected chime, and generates the ChimeStartedPlaying event.
@@ -59,7 +68,6 @@ export class MatterbridgeChimeServer extends ChimeServer {
     });
     */
     device.log.debug(`MatterbridgeChimeServer: playChimeSound called with chimeId ${chimeId}`);
-    // ChimeStartedPlaying is provisional in the Matter spec, so matter.js does not instantiate an emitter for it; guard against that.
-    this.events.chimeStartedPlaying?.emit({ chimeId }, this.context);
+    this.events.chimeStartedPlaying.emit({ chimeId }, this.context);
   }
 }

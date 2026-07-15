@@ -20,8 +20,8 @@ echo "Node.js version: $(node -v)"
 echo "Npm version: $(npm -v)"
 echo ""
 
-sudo mkdir -p /home/node/.npm
-sudo chown -R node:node /home/node/.npm
+# sudo mkdir -p /home/node/.npm
+# sudo chown -R node:node /home/node/.npm
 
 echo "1 - Installing the plugin dependencies..."
 npm install --no-fund --no-audit
