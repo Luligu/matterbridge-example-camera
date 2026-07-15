@@ -276,9 +276,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     device.log.info(`Received an SDP offer for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     device.log.debug(`MatterbridgeWebRtcTransportProviderServer: received SDP offer for session ${webRtcSessionId}: ${request.sdp}`);
 
-    const webRtcPeer =
-      this.internal.sessions.get(webRtcSessionId) ??
-      new WeriftWebRtcSession((level, message) => device.log[level](message), `WebRTC session ${webRtcSessionId}`);
+    const webRtcPeer = this.internal.sessions.get(webRtcSessionId) ?? new WeriftWebRtcSession((level, message) => device.log[level](message), `WebRTC session ${webRtcSessionId}`);
     this.internal.sessions.set(webRtcSessionId, webRtcPeer);
     const sdp = await webRtcPeer.createAnswer(request.sdp);
 

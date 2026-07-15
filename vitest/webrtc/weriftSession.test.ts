@@ -119,4 +119,43 @@ describe('WeriftWebRtcSession', () => {
 
     await session.close();
   });
+
+  describe('video source selection', () => {
+    const originalPlatform = process.platform;
+
+    afterEach(() => {
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+      delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
+    });
+
+    it('should still attach a video track, falling back to the test pattern, when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam is set without a device', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
+      const session = new WeriftWebRtcSession();
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it.each([
+      ['linux', '/dev/video0'],
+      ['darwin', '0'],
+      ['win32', 'Integrated Camera'],
+      ['freebsd', '/dev/video0'],
+    ])('should attach a video track from the configured webcam device on platform %s', async (platform, device) => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
+      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = device;
+      Object.defineProperty(process, 'platform', { value: platform });
+      const session = new WeriftWebRtcSession();
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+  });
 });
