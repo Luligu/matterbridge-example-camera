@@ -68,8 +68,8 @@ interface RemoteActorSessionContext {
  * - EndSession closes the session's peer connection.
  *
  * This implementation has no mechanism to send a deferred Offer/Answer later once the peer becomes reachable after
- * the fact. It also does not yet attach an encoded media track to the negotiated transceivers, so no RTP flow is
- * established even once negotiation completes; attaching a real encoder is a follow-up step.
+ * the fact. The underlying WeriftWebRtcSession can inject a synthetic SMPTE bars video track for end-to-end media
+ * validation when video is negotiated.
  *
  * Known upstream limitation: matter.js's fabric-index injection for fabric-scoped command invokes
  * (CommandInvokeResponse#decodeWithSchema) recurses into every nested struct field of the request when decoding, including
