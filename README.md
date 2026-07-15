@@ -64,3 +64,168 @@ Features:
 - Captures snapshots using a requested stream or automatic stream selection and returns the requested resolution as JPEG data.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+
+## Werift integration test
+
+The `vitest/werift.test.ts` integration test creates local client and server peers and verifies SDP offer/answer negotiation, ICE candidate exchange, a bidirectional data-channel transfer, and connection teardown with `werift`.
+
+The test uses the client as the Matter controller and the server as the camera device. Its signaling flow is:
+
+```text
+Controller/client                         Camera/server
+      |                                        |
+      |---------- SDP offer ----------------->|
+      |------ client ICE candidates --------->|
+      |<--------- SDP answer -----------------|
+      |<------ server ICE candidates ---------|
+      |                                        |
+      |<======= ICE + DTLS connected =========>|
+      |<======= SCTP data channel =============>|
+      |                                        |
+      |---------- start-live-view ------------>|
+      |<--------- live-view-started -----------|
+      |                                        |
+      |<=========== close peers ===============>|
+```
+
+Legend:
+
+- **SDP — Session Description Protocol:** describes the media session, including codecs, formats, transport parameters, and how each peer expects to communicate. The controller sends an SDP offer and the camera returns an SDP answer.
+- **ICE — Interactive Connectivity Establishment:** discovers and tests possible network paths between the peers. ICE candidates contain addresses and ports that may be used to establish the direct WebRTC connection.
+- **DTLS — Datagram Transport Layer Security:** authenticates the peers and encrypts communication over the selected UDP network path. WebRTC uses the negotiated DTLS connection to protect subsequent media and data transport.
+- **SCTP — Stream Control Transmission Protocol:** transports WebRTC data-channel messages over the secure DTLS connection. In this test, it carries `start-live-view` and `live-view-started` between the controller and camera.
+
+`createOffer()` and `createAnswer()` produce the SDP descriptions. Applying each local description gathers that peer's ICE candidates. After each peer receives the other peer's description and candidates, werift selects a network path, performs the DTLS handshake, and opens the SCTP data channel. The two control messages prove that data can travel in both directions. The camera peer then sends `assets/test-camera.mp4` to the controller in 16 KiB binary chunks; the test reconstructs it and compares its byte length and SHA-256 hash before closing both peers.
+
+In the camera implementation, Matter's WebRTC Transport Provider and Requestor clusters are responsible for carrying the SDP and ICE signaling between devices. The resulting WebRTC connection carries the media or data directly; Matter does not carry the WebRTC payload itself. This test validates werift independently and does not yet connect it to `MatterbridgeWebRtcTransportProviderServer`.
+
+Run it with:
+
+```bash
+npm run test -- vitest/werift.test.ts
+```
+
+### Media test assets
+
+The `assets` directory contains deterministic three-second media fixtures for extending the werift test to real media tracks:
+
+- `test-video.h264`: raw H.264 Constrained Baseline video, 640×360 at 15 FPS, with a moving test pattern. Use this elementary stream when implementing H.264 NAL-unit parsing and RTP packetization.
+- `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a 1 kHz test tone. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
+- `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track. The werift test transfers the complete file over its SCTP data channel and verifies its integrity. This exercises binary file transport, not a WebRTC video RTP track.
+- `camera-color-test.jpeg`: 1920×1080 broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command. It contains color bars, grayscale references, geometry targets, focus patterns, safe-area guides, and near-black/near-white patches for inspecting hue, saturation, brightness, contrast, geometry, overscan, and focus.
+
+WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they do not send an MP4, Ogg, or MPEG container directly. The current MP4 transfer deliberately uses the separate data-channel path. A future video-track test should parse the relevant elementary frames, packetize them as RTP, call werift's media track `writeRtp()`, and verify reception through `onTrack` and `onReceiveRtp`.
+
+## Chip tests
+
+```bash
+docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8283:8283 -v "%USERPROFILE%/GitHub/matterbridge-example-camera/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
+docker logs -f matterbridge-chip-test-hub --tail 1000
+docker exec -it matterbridge-chip-test-hub bash
+```
+
+```bash
+# Generic device composition and conformance
+python3 src/python_testing/TC_DeviceBasicComposition.py
+python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
+python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
+
+# Doorbell mandatory Switch server
+python3 src/python_testing/TC_SWTCH.py
+
+# Chime cluster
+python3 src/python_testing/TC_CHIME_2_2.py
+python3 src/python_testing/TC_CHIME_2_3.py
+python3 src/python_testing/TC_CHIME_2_5.py
+python3 src/python_testing/TC_CHIME_2_6.py
+
+# Camera AV Stream Management
+python3 src/python_testing/TC_AVSM_2_1.py
+python3 src/python_testing/TC_AVSM_2_2.py
+python3 src/python_testing/TC_AVSM_2_3.py
+python3 src/python_testing/TC_AVSM_2_4.py
+python3 src/python_testing/TC_AVSM_2_5.py
+python3 src/python_testing/TC_AVSM_2_6.py
+python3 src/python_testing/TC_AVSM_2_7.py
+python3 src/python_testing/TC_AVSM_2_8.py
+python3 src/python_testing/TC_AVSM_2_9.py
+python3 src/python_testing/TC_AVSM_2_10.py
+python3 src/python_testing/TC_AVSM_2_11.py
+python3 src/python_testing/TC_AVSM_2_12.py
+python3 src/python_testing/TC_AVSM_2_13.py
+python3 src/python_testing/TC_AVSM_2_14.py
+python3 src/python_testing/TC_AVSM_2_15.py
+python3 src/python_testing/TC_AVSM_2_16.py
+python3 src/python_testing/TC_AVSM_2_17.py
+python3 src/python_testing/TC_AVSM_2_18.py
+python3 src/python_testing/TC_AVSM_2_19.py
+python3 src/python_testing/TC_AVSM_2_20.py
+python3 src/python_testing/TC_AVSM_2_21.py
+
+# Additional Camera AV Stream Management tests
+python3 src/python_testing/TC_AVSM_StreamReuseRangeParams.py
+python3 src/python_testing/TC_AVSM_VideoStreamsPersistence.py
+
+# Audio/Video Stream Usage Management
+python3 src/python_testing/TC_AVSUM_2_1.py
+python3 src/python_testing/TC_AVSUM_2_2.py
+python3 src/python_testing/TC_AVSUM_2_3.py
+python3 src/python_testing/TC_AVSUM_2_4.py
+python3 src/python_testing/TC_AVSUM_2_5.py
+python3 src/python_testing/TC_AVSUM_2_6.py
+python3 src/python_testing/TC_AVSUM_2_7.py
+python3 src/python_testing/TC_AVSUM_2_8.py
+python3 src/python_testing/TC_AVSUM_2_9.py
+
+# Push AV Stream Transport
+python3 src/python_testing/TC_PAVST_2_1.py
+python3 src/python_testing/TC_PAVST_2_2.py
+python3 src/python_testing/TC_PAVST_2_3.py
+python3 src/python_testing/TC_PAVST_2_4.py
+python3 src/python_testing/TC_PAVST_2_5.py
+python3 src/python_testing/TC_PAVST_2_6.py
+python3 src/python_testing/TC_PAVST_2_7.py
+python3 src/python_testing/TC_PAVST_2_8.py
+python3 src/python_testing/TC_PAVST_2_9.py
+python3 src/python_testing/TC_PAVST_2_10.py
+python3 src/python_testing/TC_PAVST_2_11.py
+python3 src/python_testing/TC_PAVST_2_12.py
+python3 src/python_testing/TC_PAVST_2_13.py
+
+# WebRTC Transport Provider
+python3 src/python_testing/TC_WEBRTCP_2_1.py
+python3 src/python_testing/TC_WEBRTCP_2_2.py
+python3 src/python_testing/TC_WEBRTCP_2_3.py
+python3 src/python_testing/TC_WEBRTCP_2_4.py
+python3 src/python_testing/TC_WEBRTCP_2_5.py
+python3 src/python_testing/TC_WEBRTCP_2_6.py
+python3 src/python_testing/TC_WEBRTCP_2_7.py
+python3 src/python_testing/TC_WEBRTCP_2_8.py
+python3 src/python_testing/TC_WEBRTCP_2_9.py
+python3 src/python_testing/TC_WEBRTCP_2_10.py
+python3 src/python_testing/TC_WEBRTCP_2_11.py
+python3 src/python_testing/TC_WEBRTCP_2_12.py
+python3 src/python_testing/TC_WEBRTCP_2_13.py
+python3 src/python_testing/TC_WEBRTCP_2_14.py
+python3 src/python_testing/TC_WEBRTCP_2_15.py
+python3 src/python_testing/TC_WEBRTCP_2_16.py
+python3 src/python_testing/TC_WEBRTCP_2_17.py
+python3 src/python_testing/TC_WEBRTCP_2_18.py
+python3 src/python_testing/TC_WEBRTCP_2_19.py
+python3 src/python_testing/TC_WEBRTCP_2_20.py
+python3 src/python_testing/TC_WEBRTCP_2_21.py
+python3 src/python_testing/TC_WEBRTCP_2_22.py
+python3 src/python_testing/TC_WEBRTCP_2_23.py
+python3 src/python_testing/TC_WEBRTCP_2_24.py
+python3 src/python_testing/TC_WEBRTCP_2_25.py
+python3 src/python_testing/TC_WEBRTCP_2_26.py
+python3 src/python_testing/TC_WEBRTCP_2_27.py
+python3 src/python_testing/TC_WEBRTCP_2_28.py
+python3 src/python_testing/TC_WEBRTCP_2_29.py
+python3 src/python_testing/TC_WEBRTCP_2_30.py
+python3 src/python_testing/TC_WEBRTCP_2_31.py
+python3 src/python_testing/TC_WEBRTCP_2_32.py
+
+# Zone Management
+python3 src/python_testing/TC_ZONEMGMT_2_4.py
+```
