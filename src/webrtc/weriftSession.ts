@@ -41,6 +41,13 @@ export interface WeriftOfferOptions {
   video: boolean;
   /** Whether to add a sendonly audio transceiver to the offer. */
   audio: boolean;
+  /**
+   * Preferred webcam capture resolution (e.g. "1280x720") for this session, typically the allocated video stream's
+   * resolution from a real client's CameraAvStreamManagement.VideoStreamAllocate request. Takes precedence over
+   * MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION when it names a supported resolution; ignored for the synthetic test
+   * pattern source.
+   */
+  videoResolution?: string;
 }
 
 /**
@@ -176,13 +183,22 @@ export class WeriftWebRtcSession {
   };
 
   /**
-   * Resolves the configured webcam capture resolution from MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION, falling back
-   * (with a warning) to 640x480 if unset or not one of the supported resolutions.
+   * Resolves the webcam capture resolution to use, preferring the requested per-session resolution (typically the
+   * client's allocated video stream resolution) when it names a supported resolution, then
+   * MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION, then falling back (with a warning) to 640x480.
    *
+   * @param {string} [requestedResolution] - The per-session preferred resolution, e.g. "1280x720".
    * @returns {string} The resolution to pass to ffmpeg's -video_size option, e.g. "1280x720".
    */
-  private getConfiguredWebcamResolution(): string {
+  private getConfiguredWebcamResolution(requestedResolution?: string): string {
     const [defaultResolution] = WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS;
+    if (requestedResolution) {
+      if (WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.includes(requestedResolution)) return requestedResolution;
+      this.log(
+        'warn',
+        `Requested video stream resolution "${requestedResolution}" is not supported for webcam capture (supported: ${WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.join(', ')}); falling back to MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION`,
+      );
+    }
     const requested = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
     if (!requested) return defaultResolution;
     if (WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.includes(requested)) return requested;
@@ -200,11 +216,12 @@ export class WeriftWebRtcSession {
    * MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=<device> to capture from a local webcam instead; falls back to the test
    * pattern (logging a warning) if the device is missing or webcam capture isn't supported on this platform. The
    * webcam capture resolution defaults to 640x480 and can be overridden with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION
-   * (640x480, 1280x720, or 1920x1080).
+   * (640x480, 1280x720, or 1920x1080), or per-session via requestedResolution.
    *
+   * @param {string} [requestedResolution] - The per-session preferred webcam resolution; see {@link getConfiguredWebcamResolution}.
    * @returns {{ args: string[]; description: string; bitrateKbps: number }} The ffmpeg input arguments, a description of the source for logging, and the target encoder bitrate.
    */
-  private buildFfmpegVideoInputArgs(): { args: string[]; description: string; bitrateKbps: number } {
+  private buildFfmpegVideoInputArgs(requestedResolution?: string): { args: string[]; description: string; bitrateKbps: number } {
     const testPatternInput = {
       args: ['-re', '-stream_loop', '-1', '-f', 'lavfi', '-i', 'smptebars=size=640x480:rate=10'],
       description: 'synthetic SMPTE bars test',
@@ -218,7 +235,7 @@ export class WeriftWebRtcSession {
       return testPatternInput;
     }
 
-    const resolution = this.getConfiguredWebcamResolution();
+    const resolution = this.getConfiguredWebcamResolution(requestedResolution);
     const bitrateKbps = WeriftWebRtcSession.BITRATE_KBPS_BY_RESOLUTION[resolution];
     const description = `local webcam (${device}, ${resolution})`;
     switch (process.platform) {
@@ -234,14 +251,14 @@ export class WeriftWebRtcSession {
     }
   }
 
-  private async ensureTestVideoTrack(codec?: RTCRtpCodecParameters): Promise<void> {
+  private async ensureTestVideoTrack(codec?: RTCRtpCodecParameters, videoResolution?: string): Promise<void> {
     if (this.testVideoAttached) return;
     if (process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO === '1') {
       this.log('info', 'Test video injection disabled by MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO=1');
       return;
     }
 
-    const videoInput = this.buildFfmpegVideoInputArgs();
+    const videoInput = this.buildFfmpegVideoInputArgs(videoResolution);
     this.log('debug', `Attempting to attach ${videoInput.description} video track`);
 
     const ffmpegCommand = await this.resolveCommand('ffmpeg');
@@ -335,7 +352,7 @@ export class WeriftWebRtcSession {
       } else {
         this.log('warn', 'No injectable video codec available on negotiated transceivers (supported: VP8, H264)');
       }
-      await this.ensureTestVideoTrack(preferredCodec);
+      await this.ensureTestVideoTrack(preferredCodec, options.videoResolution);
       if (!this.testVideoAttached) this.peerConnection.addTransceiver('video', { direction: 'sendonly' });
     }
     if (options.audio) this.peerConnection.addTransceiver('audio', { direction: 'sendonly' });
@@ -353,9 +370,10 @@ export class WeriftWebRtcSession {
    * Applies a remote SDP offer and creates a real local SDP answer for it.
    *
    * @param {string} offerSdp - The remote SDP offer to answer.
+   * @param {string} [videoResolution] - Preferred webcam capture resolution for this session; see {@link WeriftOfferOptions.videoResolution}.
    * @returns {Promise<string>} The generated local SDP answer.
    */
-  async createAnswer(offerSdp: string): Promise<string> {
+  async createAnswer(offerSdp: string, videoResolution?: string): Promise<string> {
     this.log('debug', `createAnswer requested for remote offer (${this.summarizeSdp(offerSdp)})`);
     await this.peerConnection.setRemoteDescription({ type: 'offer', sdp: offerSdp });
     const hasVideoTransceiver = this.peerConnection.getTransceivers().some((transceiver) => transceiver.kind === 'video');
@@ -367,7 +385,7 @@ export class WeriftWebRtcSession {
       } else {
         this.log('warn', 'No injectable video codec available on negotiated transceivers (supported: VP8, H264)');
       }
-      await this.ensureTestVideoTrack(preferredCodec);
+      await this.ensureTestVideoTrack(preferredCodec, videoResolution);
     }
     // Transceivers werift auto-creates from the remote offer default to a direction that answers "inactive" with
     // port 0 when no local track is attached; a port-0 m-section is still listed in a=group:BUNDLE, which peers

@@ -10,9 +10,9 @@ const MATTER_CREATE_ONLY = true;
 
 import { camera, MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
-import { Identify, WebRtcTransportDefinitions, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
+import { CameraAvStreamManagement, Identify, WebRtcTransportDefinitions, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import { EndpointNumber, FabricIndex, NodeId, StreamUsage } from 'matterbridge/matter/types';
-import { loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
+import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -269,6 +269,47 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(1);
     expect(currentSessions[0].id).toBe(1);
+  });
+
+  it('should use the allocated video stream resolution for the injected webcam capture, matching a real client resolution/quality picker', async () => {
+    const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+    const originalWebcamDevice = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
+    process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = 'test-webcam-device';
+
+    try {
+      await device.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 480 },
+        maxResolution: { width: 1280, height: 720 },
+        minBitRate: 1_000_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 4000,
+      });
+      const allocatedVideoStreams = device.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams') ?? [];
+      const { videoStreamId } = allocatedVideoStreams[allocatedVideoStreams.length - 1];
+
+      await expect(
+        device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
+          streamUsage: StreamUsage.LiveView,
+          originatingEndpointId: EndpointNumber(1),
+          videoStreams: [videoStreamId],
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('local webcam (test-webcam-device, 1280x720)'));
+
+      const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+      const webRtcSessionId = currentSessions[currentSessions.length - 1].id;
+      await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
+      await device.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamDeallocate', { videoStreamId });
+    } finally {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
+      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = originalWebcamDevice;
+    }
   });
 
   it('should not solicit an offer without a bound WebRtcTransportRequestor', async () => {

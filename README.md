@@ -84,7 +84,9 @@ The video source defaults to a synthetic SMPTE bars test pattern, or can be swit
 - `MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO=1`: disables video injection entirely (only the negotiated transceiver is created, with no track attached).
 - `MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam`: capture from a local webcam via ffmpeg instead of the SMPTE bars test pattern. Requires `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE`; falls back to the test pattern (with a warning) if unset.
 - `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=<device>`: the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow).
-- `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=<width>x<height>`: webcam capture resolution — `640x480` (default), `1280x720`, or `1920x1080`. Falls back to `640x480` (with a warning) for unsupported values. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
+- `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=<width>x<height>`: default webcam capture resolution — `640x480` (default), `1280x720`, or `1920x1080`. Falls back to `640x480` (with a warning) for unsupported values. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
+
+A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
 
 Requires `ffmpeg` to be installed and reachable on `PATH` (or under `/usr/bin`, `/bin`, or `/usr/local/bin`).
 
