@@ -318,6 +318,12 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+
+    // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
+    // the test doesn't leak that process.
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    const webRtcSessionId = currentSessions[currentSessions.length - 1].id;
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should not solicit an offer when no WebRtcTransportRequestor client is registered at all', async () => {
@@ -331,6 +337,10 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+
+    // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
+    // the test doesn't leak that process.
+    await endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should not provide an offer when no WebRtcTransportRequestor client is registered at all', async () => {
@@ -344,6 +354,10 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+
+    // provideOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
+    // the test doesn't leak that process.
+    await endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should not touch a real peer connection for a session restored from persisted state without one', async () => {
