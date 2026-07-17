@@ -132,7 +132,10 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       peerEndpoint.behaviors.require(WebRtcTransportRequestorClient);
       return peerEndpoint;
       /* v8 ignore stop */
-    } catch {
+    } catch (error) {
+      this.endpoint.stateOf(MatterbridgeServer).log.debug(
+        `Could not resolve peer WebRtcTransportRequestor endpoint (peerNodeId=${peerNodeId}, fabricIndex=${fabricIndex}, peerEndpointId=${peerEndpointId}): ${error instanceof Error ? error.message : String(error)}`,
+      );
       return undefined;
     }
   }
