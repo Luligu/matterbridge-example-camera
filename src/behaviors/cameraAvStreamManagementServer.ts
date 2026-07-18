@@ -29,9 +29,41 @@ import { CameraAvStreamManagementServer } from 'matterbridge/matter/behaviors';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
-const cameraColorTestJpeg = readFileSync(new URL('../../assets/camera-color-test-480-270.jpeg', import.meta.url));
-const cameraColorTestWidth = 480;
-const cameraColorTestHeight = 270;
+/**
+ * A static JPEG television calibration card available to serve from `CaptureSnapshot`, at a given resolution.
+ */
+interface CameraColorTestJpeg {
+  /** The JPEG image data. */
+  data: Buffer;
+  /** The resolution of the JPEG image. */
+  resolution: CameraAvStreamManagement.VideoResolution;
+}
+
+const cameraColorTestJpegs: CameraColorTestJpeg[] = [
+  { data: readFileSync(new URL('../../assets/camera-color-test-480-270.jpeg', import.meta.url)), resolution: { width: 480, height: 270 } },
+  { data: readFileSync(new URL('../../assets/camera-color-test-960-540.jpeg', import.meta.url)), resolution: { width: 960, height: 540 } },
+  { data: readFileSync(new URL('../../assets/camera-color-test-1920-1080.jpeg', import.meta.url)), resolution: { width: 1920, height: 1080 } },
+];
+
+/**
+ * Picks the {@link CameraColorTestJpeg} whose resolution is the closest match, by pixel count, to the requested resolution.
+ *
+ * @param {CameraAvStreamManagement.VideoResolution} requestedResolution - The resolution requested by the client.
+ * @returns {CameraColorTestJpeg} The closest matching available calibration card.
+ */
+function closestCameraColorTestJpeg(requestedResolution: CameraAvStreamManagement.VideoResolution): CameraColorTestJpeg {
+  const requestedPixelCount = requestedResolution.width * requestedResolution.height;
+  let closest = cameraColorTestJpegs[0];
+  for (const candidate of cameraColorTestJpegs) {
+    if (
+      Math.abs(candidate.resolution.width * candidate.resolution.height - requestedPixelCount) <
+      Math.abs(closest.resolution.width * closest.resolution.height - requestedPixelCount)
+    ) {
+      closest = candidate;
+    }
+  }
+  return closest;
+}
 
 /**
  * CameraAvStreamManagement server, specialized for the Snapshot feature only, that implements the
@@ -230,7 +262,8 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   /**
    * Handles the CaptureSnapshot command.
    * Returns a snapshot from the camera for the requested (or automatically selected) snapshot stream.
-   * The image data is a static JPEG television calibration card until a real capture pipeline is wired in.
+   * The image data is a static JPEG television calibration card, picked from {@link cameraColorTestJpegs} to most
+   * closely match the requested resolution, until a real capture pipeline is wired in.
    *
    * @param {CameraAvStreamManagement.CaptureSnapshotRequest} request - CaptureSnapshot request payload.
    * @returns {Promise<CameraAvStreamManagement.CaptureSnapshotResponse>} The captured snapshot.
@@ -252,10 +285,11 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
     });
     */
     device.log.debug(`MatterbridgeCameraAvStreamManagementServer: captureSnapshot called with snapshotStreamId ${request.snapshotStreamId}`);
+    const { data, resolution } = closestCameraColorTestJpeg(request.requestedResolution);
     return {
-      data: cameraColorTestJpeg,
+      data,
       imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-      resolution: { width: cameraColorTestWidth, height: cameraColorTestHeight },
+      resolution,
     };
   }
 }
