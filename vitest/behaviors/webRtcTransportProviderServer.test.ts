@@ -459,6 +459,17 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).rejects.toThrow('solicitOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically');
   });
 
+  it('should reject provideOffer without videoStreams or audioStreams when the endpoint has no CameraAvStreamManagement cluster', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcProvideOfferNoCameraAvStreamManagement' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer' }),
+    ).rejects.toThrow('provideOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically');
+  });
+
   it('should not touch a real peer connection for a session restored from persisted state without one', async () => {
     // currentSessions is a replicated attribute (persisted across restarts); the werift peer connection in `internal`
     // is not. Seed a session directly, bypassing solicitOffer/provideOffer, to simulate that post-restart state.
