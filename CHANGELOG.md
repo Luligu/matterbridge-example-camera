@@ -27,6 +27,19 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.0.4] - Dev branch
+
+### Fixed
+
+- [camera]: Fix `Camera` to provide default `snapshotCapabilities` and `allocatedSnapshotStreams` values for the CameraAvStreamManagement Snapshot feature, which was enabled but left the `SnapshotCapabilities` attribute as an empty list.
+
+### Changed
+
+- [camera]: Document in the JSDoc that the CameraAvStreamManagement Snapshot feature is implemented.
+- [snapshot camera]: Document the CameraAvStreamManagement features implemented in the JSDoc.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
 ## [0.0.3] - 2026-07-17
 
 ### Breaking changes

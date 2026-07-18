@@ -68,6 +68,9 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
    * A Snapshot Camera is a camera which can only support retrieving still images on-demand via the Capture
    * Snapshot command in the Camera AV Stream Management cluster.
    *
+   * The CameraAvStreamManagement Snapshot and ImageControl features are implemented; the Video and Audio features
+   * are not part of this example (see the Camera device for one implementing those).
+   *
    * @param {string} name - The name of the snapshot camera.
    * @param {string} serial - The serial number of the snapshot camera.
    * @param {SnapshotCameraOptions} [options] - Optional configuration values. Missing fields use defaults.

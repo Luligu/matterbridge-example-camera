@@ -132,7 +132,19 @@ describe('Camera', () => {
         currentFrameRate: 30,
         viewport: { x1: 0, y1: 0, x2: 1920, y2: 1080 },
         microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
+        snapshotCapabilities: [{ resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false }],
+        allocatedSnapshotStreams: [],
       }),
     ).toBe(device);
+  });
+
+  it('should create a camera device with default snapshot capabilities', async () => {
+    const device = new Camera('Camera Snapshot Defaults', 'CAMERA-SNAPSHOT-DEFAULTS');
+
+    expect(await addDevice(aggregator, device)).toBeTruthy();
+    expect(device.getAttribute(CameraAvStreamManagement, 'snapshotCapabilities')).toEqual([
+      { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+    ]);
+    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([]);
   });
 });
