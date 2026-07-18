@@ -27,6 +27,20 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [Unreleased]
+
+### Added
+
+- [webrtc]: `WebRtcTransportProvider` now negotiates real SDP offers/answers through a werift `RTCPeerConnection` (`WeriftWebRtcSession`) instead of a placeholder SDP string, and applies real ICE candidates and connection teardown.
+- [webrtc]: Injects a real video track into the negotiated connection via ffmpeg, so the media path can be validated end to end without a physical camera. Defaults to a synthetic SMPTE bars test pattern, or captures from a real local webcam (`MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam`, `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE`) at 640x480/1280x720/1920x1080, following the resolution the client actually allocated via `CameraAvStreamManagement.VideoStreamAllocate`. See the README for the full list of environment variables.
+
+### Changed
+
+- [webrtc]: Offer/Answer invokes now address the peer's `WebRtcTransportRequestor` directly using the peer node id captured from the session (matching matter.js's OTA Provider/Requestor pattern), instead of the Binding cluster.
+- [webrtc]: Improved ICE candidate handling and WebRTC session logging, including logging why the peer's `WebRtcTransportRequestor` endpoint couldn't be resolved (previously a silent failure), and closing dangling WebRTC sessions left open when the requestor is unreachable.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
 ## [0.0.3] - 2026-07-17
 
 ### Breaking changes

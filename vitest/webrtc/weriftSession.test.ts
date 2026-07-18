@@ -370,7 +370,7 @@ describe('WeriftWebRtcSession', () => {
     it('should still negotiate a video transceiver but not inject a track when ffmpeg cannot be resolved', async () => {
       type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       const session = new WeriftWebRtcSession();
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(undefined);
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(void 0);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
