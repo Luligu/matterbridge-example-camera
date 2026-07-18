@@ -32,6 +32,9 @@ jobs:
       - name: Verify Npm version
         run: npm -v
 
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Clone matterbridge repo
         run: git clone --depth 1 --single-branch --no-tags -b dev https://github.com/Luligu/matterbridge.git ../matterbridge
 
@@ -106,14 +109,11 @@ jobs:
         shell: bash
         run: |
           if [ "${{ steps.check_configs.outputs.has_jest }}" == "true" ]; then
-            npm run test:vitest:coverage -- --testTimeout=30000 || echo "::warning::TEMP DIAGNOSTIC: coverage thresholds not met, continuing to inspect the report"
+            npm run test:vitest:coverage -- --testTimeout=30000
           else
-            npm run test:coverage -- --testTimeout=30000 || echo "::warning::TEMP DIAGNOSTIC: coverage thresholds not met, continuing to inspect the report"
+            npm run test:coverage -- --testTimeout=30000
           fi
           test -f ./coverage/vitest/lcov.info || { echo "::error::Vitest ran but lcov.info missing"; exit 1; }
-          echo "::group::TEMP DIAGNOSTIC: full uncovered records for src/webrtc/weriftSession.ts"
-          awk '/SF:.*weriftSession\.ts/{flag=1} flag{print} /end_of_record/{flag=0}' ./coverage/vitest/lcov.info | grep -E ',0$' || true
-          echo "::endgroup::"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
