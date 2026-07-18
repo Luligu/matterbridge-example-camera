@@ -200,6 +200,90 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   }
 
   /**
+   * Resolves the video/audio stream ids for a SolicitOffer/ProvideOffer request that omitted videoStreams and
+   * audioStreams (and their deprecated single-id counterparts), per the Matter specification's automatic stream
+   * selection for revision 1 clients (e.g. Home Assistant's Matter camera integration), which never allocates
+   * streams explicitly and expects the camera to select or allocate them on its own.
+   *
+   * Reuses an already allocated stream matching the request's stream usage, falling back to the endpoint's first
+   * allocated stream of that kind, and only allocates a new one, from the endpoint's CameraAvStreamManagement default
+   * video/audio capabilities, when none exists yet.
+   *
+   * @param {StreamUsage} streamUsage - The requested stream usage.
+   * @returns {Promise<{ videoStreams?: number[]; audioStreams?: number[] }>} The resolved video/audio stream id lists; a list is omitted if the endpoint has no CameraAvStreamManagement cluster or no allocatable stream of that kind.
+   */
+  async #autoAssignStreams(streamUsage: StreamUsage): Promise<{ videoStreams?: number[]; audioStreams?: number[] }> {
+    if (!this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)) return {};
+    const state = this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer);
+
+    // Spread into plain arrays first: state's list attributes throw on out-of-bounds index access (e.g. `[0]` on an
+    // empty list) instead of returning undefined like a normal JS array.
+    const allocatedVideoStreams = [...state.allocatedVideoStreams];
+    let videoStreamId = (allocatedVideoStreams.find((stream) => stream.streamUsage === streamUsage) ?? allocatedVideoStreams[0])?.videoStreamId;
+    if (videoStreamId === undefined && state.rateDistortionTradeOffPoints.length > 0) {
+      const [{ codec, resolution, minBitRate }] = state.rateDistortionTradeOffPoints;
+      ({ videoStreamId } = await this.endpoint.act((agent) =>
+        agent.get(MatterbridgeCameraAvStreamManagementServer).videoStreamAllocate({
+          streamUsage,
+          videoCodec: codec,
+          minFrameRate: 1,
+          maxFrameRate: state.videoSensorParams.maxFps,
+          minResolution: state.minViewportResolution,
+          maxResolution: resolution,
+          minBitRate,
+          maxBitRate: minBitRate,
+          keyFrameInterval: 4000,
+        }),
+      ));
+    }
+
+    const allocatedAudioStreams = [...state.allocatedAudioStreams];
+    let audioStreamId = (allocatedAudioStreams.find((stream) => stream.streamUsage === streamUsage) ?? allocatedAudioStreams[0])?.audioStreamId;
+    if (audioStreamId === undefined && state.microphoneCapabilities.supportedCodecs.length > 0) {
+      const { microphoneCapabilities } = state;
+      ({ audioStreamId } = await this.endpoint.act((agent) =>
+        agent.get(MatterbridgeCameraAvStreamManagementServer).audioStreamAllocate({
+          streamUsage,
+          audioCodec: microphoneCapabilities.supportedCodecs[0],
+          channelCount: microphoneCapabilities.maxNumberOfChannels,
+          sampleRate: microphoneCapabilities.supportedSampleRates[0],
+          bitRate: 32_000,
+          bitDepth: microphoneCapabilities.supportedBitDepths[0],
+        }),
+      ));
+    }
+
+    return {
+      videoStreams: videoStreamId === undefined ? undefined : [videoStreamId],
+      audioStreams: audioStreamId === undefined ? undefined : [audioStreamId],
+    };
+  }
+
+  /**
+   * Builds the deprecated single-id `videoStreamId`/`audioStreamId` echo fields for a SolicitOfferResponse/ProvideOfferResponse.
+   *
+   * Per the Matter specification, their presence in the response is tied to the corresponding deprecated request field
+   * (`videoStreamId`/`audioStreamId`) being present, regardless of whether the modern `videoStreams`/`audioStreams` list
+   * was used instead: revision 1 clients (e.g. Home Assistant's Matter camera integration) send the deprecated field as
+   * null to request automatic stream selection, and read the response's echoed id to learn which stream was selected.
+   *
+   * @param {{ videoStreamId?: number | null; audioStreamId?: number | null }} request - The relevant deprecated fields of the SolicitOffer/ProvideOffer request.
+   * @param {number[]} [videoStreams] - The resolved videoStreams ids for the request (see {@link #resolveStreamLists}/{@link #autoAssignStreams}).
+   * @param {number[]} [audioStreams] - The resolved audioStreams ids for the request (see {@link #resolveStreamLists}/{@link #autoAssignStreams}).
+   * @returns {{ videoStreamId?: number | null; audioStreamId?: number | null }} The echo fields to include in the response; a field is omitted if the corresponding deprecated request field was not present.
+   */
+  #echoDeprecatedStreamIds(
+    request: { videoStreamId?: number | null; audioStreamId?: number | null },
+    videoStreams?: number[],
+    audioStreams?: number[],
+  ): { videoStreamId?: number | null; audioStreamId?: number | null } {
+    return {
+      videoStreamId: request.videoStreamId === undefined ? undefined : (videoStreams?.[0] ?? null),
+      audioStreamId: request.audioStreamId === undefined ? undefined : (audioStreams?.[0] ?? null),
+    };
+  }
+
+  /**
    * Handles the SolicitOffer command.
    * Creates a real werift peer connection for the new session (see {@link WeriftWebRtcSession}) and, if a
    * WebRtcTransportRequestor is bound to this endpoint, invokes Offer on it with the SDP offer generated by that
@@ -208,12 +292,18 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    *
    * @param {WebRtcTransportProvider.SolicitOfferRequest} request - SolicitOffer request payload.
    * @returns {Promise<WebRtcTransportProvider.SolicitOfferResponse>} The newly allocated session identifier, with deferredOffer set to true.
-   * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided; automatic stream assignment is not implemented.
+   * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
    */
   override async solicitOffer(request: WebRtcTransportProvider.SolicitOfferRequest): Promise<WebRtcTransportProvider.SolicitOfferResponse> {
-    const { videoStreams, audioStreams } = this.#resolveStreamLists(request);
+    let { videoStreams, audioStreams } = this.#resolveStreamLists(request);
     if (!videoStreams?.length && !audioStreams?.length) {
-      throw new StatusResponseError('solicitOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented', Status.ConstraintError);
+      ({ videoStreams, audioStreams } = await this.#autoAssignStreams(request.streamUsage));
+    }
+    if (!videoStreams?.length && !audioStreams?.length) {
+      throw new StatusResponseError(
+        'solicitOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
+        Status.ConstraintError,
+      );
     }
     const device = this.endpoint.stateOf(MatterbridgeServer);
     let webRtcSessionId = 0;
@@ -254,7 +344,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       );
     }
 
-    return { webRtcSessionId, deferredOffer: true };
+    return { webRtcSessionId, deferredOffer: true, ...this.#echoDeprecatedStreamIds(request, videoStreams, audioStreams) };
   }
 
   /**
@@ -267,15 +357,21 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @param {WebRtcTransportProvider.ProvideOfferRequest} request - ProvideOffer request payload.
    * @returns {Promise<WebRtcTransportProvider.ProvideOfferResponse>} The session identifier the offer was recorded against.
    * @throws {StatusResponseError} With status NotFound if a non-null webRtcSessionId is not present in currentSessions.
-   * @throws {StatusResponseError} With status ConstraintError if webRtcSessionId is null and neither videoStreams nor audioStreams is provided; automatic stream assignment is not implemented.
+   * @throws {StatusResponseError} With status ConstraintError if webRtcSessionId is null and neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
    */
   override async provideOffer(request: WebRtcTransportProvider.ProvideOfferRequest): Promise<WebRtcTransportProvider.ProvideOfferResponse> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     let webRtcSessionId = request.webRtcSessionId;
     if (webRtcSessionId === null) {
-      const { videoStreams, audioStreams } = this.#resolveStreamLists(request);
+      let { videoStreams, audioStreams } = this.#resolveStreamLists(request);
       if (!videoStreams?.length && !audioStreams?.length) {
-        throw new StatusResponseError('provideOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented', Status.ConstraintError);
+        ({ videoStreams, audioStreams } = await this.#autoAssignStreams(request.streamUsage ?? StreamUsage.LiveView));
+      }
+      if (!videoStreams?.length && !audioStreams?.length) {
+        throw new StatusResponseError(
+          'provideOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
+          Status.ConstraintError,
+        );
       }
       webRtcSessionId = 0;
       for (const session of this.state.currentSessions) {
@@ -319,7 +415,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       );
     }
 
-    return { webRtcSessionId };
+    // Spread into plain arrays first: state's list attributes throw on out-of-bounds index access (e.g. `[0]` on an
+    // empty list) instead of returning undefined like a normal JS array.
+    return { webRtcSessionId, ...this.#echoDeprecatedStreamIds(request, session.videoStreams && [...session.videoStreams], session.audioStreams && [...session.audioStreams]) };
   }
 
   /**

@@ -75,10 +75,18 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(await addDevice(aggregator, device)).toBeTruthy();
   });
 
-  it('should reject solicitOffer without videoStreams or audioStreams', async () => {
+  it('should solicit an offer with automatically assigned video and audio streams when none are provided', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1) }),
-    ).rejects.toThrow('solicitOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented');
+    ).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Solicited a WebRTC offer for session 0'));
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    expect(currentSessions[0].videoStreams).toEqual([0]);
+    expect(currentSessions[0].audioStreams).toEqual([0]);
+
+    // Restores currentSessions to empty, so the session ids the rest of this flow depends on stay unaffected.
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should solicit an offer and record a deferred session', async () => {
@@ -122,10 +130,17 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(currentSessions[0].id).toBe(0);
   });
 
-  it('should reject provideOffer for a new session without videoStreams or audioStreams', async () => {
-    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer' })).rejects.toThrow(
-      'provideOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented',
-    );
+  it('should provide an offer for a new session with automatically assigned video and audio streams', async () => {
+    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer' })).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 1'));
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    expect(currentSessions).toHaveLength(2);
+    expect(currentSessions[1].videoStreams).toEqual([0]);
+    expect(currentSessions[1].audioStreams).toEqual([0]);
+
+    // Restores currentSessions to just session 0, so the session ids the rest of this flow depends on stay unaffected.
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 1, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should provide an offer for a new session', async () => {
@@ -203,10 +218,18 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(currentSessions).toHaveLength(2);
   });
 
-  it('should reject solicitOffer with only the deprecated audioStreamId field set to null', async () => {
+  it('should solicit an offer with only the deprecated audioStreamId field set to null, automatically assigning streams', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), audioStreamId: null }),
-    ).rejects.toThrow('solicitOffer requires at least one of videoStreams or audioStreams; automatic stream assignment is not implemented');
+    ).resolves.toBeUndefined();
+
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    const session = currentSessions[currentSessions.length - 1];
+    expect(session.videoStreams).toEqual([0]);
+    expect(session.audioStreams).toEqual([0]);
+
+    // Restores currentSessions to its pre-test state, so the session ids the rest of this flow depends on stay unaffected.
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: session.id, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should provide an offer for an existing session', async () => {
@@ -423,6 +446,17 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     // provideOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
     // the test doesn't leak that process.
     await endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
+  });
+
+  it('should reject solicitOffer without videoStreams or audioStreams when the endpoint has no CameraAvStreamManagement cluster', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcNoCameraAvStreamManagement' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1) }),
+    ).rejects.toThrow('solicitOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically');
   });
 
   it('should not touch a real peer connection for a session restored from persisted state without one', async () => {
