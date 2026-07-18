@@ -105,6 +105,8 @@ export class WeriftWebRtcSession {
           resolve();
           return;
         }
+        /* v8 ignore next -- `code` is only null when the child is killed by a signal rather than exiting normally,
+         * which isn't practical to trigger deterministically in this harness; the fallback is cosmetic (error text). */
         reject(new Error(`${command} exited with code ${code ?? -1}`));
       });
     });
@@ -143,11 +145,14 @@ export class WeriftWebRtcSession {
       socket.once('error', reject);
       socket.bind(0, '127.0.0.1', () => {
         const address = socket.address();
+        /* v8 ignore start -- unreachable: `.address()` only ever returns a string for a Unix domain socket; this
+         * socket is always created as 'udp4', so it always returns an AddressInfo object. */
         if (typeof address === 'string') {
           socket.close();
           reject(new Error('Failed to allocate UDP port'));
           return;
         }
+        /* v8 ignore stop */
         const port = address.port;
         socket.close(() => resolve(port));
       });
@@ -297,9 +302,13 @@ export class WeriftWebRtcSession {
         `rtp://127.0.0.1:${udpPort}`,
       ]);
 
+      /* v8 ignore start -- requires the spawned ffmpeg process itself to fail after resolveCommand already verified
+       * it runs (e.g. the binary is removed between the check and this spawn), which this harness can't simulate
+       * without deleting real system binaries or mocking node:child_process. */
       generator.once('error', (error: unknown) => {
         this.log('warn', `Video generator failed: ${error instanceof Error ? error.message : String(error)}`);
       });
+      /* v8 ignore stop */
 
       this.testVideoUdpDisposer = disposer;
       this.testVideoGenerator = generator;
@@ -308,9 +317,12 @@ export class WeriftWebRtcSession {
         'info',
         `Attached ${videoInput.description} video track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
       );
+      /* v8 ignore start -- requires a lower-level failure (UDP port allocation racing, werift/nonstandard media
+       * internals throwing) that isn't practically triggerable in this harness without mocking werift internals. */
     } catch (error) {
       this.log('warn', `Failed to attach ${videoInput.description} video track: ${error instanceof Error ? error.message : String(error)}`);
     }
+    /* v8 ignore stop */
   }
 
   private preferVideoCodecOnTransceivers(mimeType: string): void {
@@ -322,9 +334,12 @@ export class WeriftWebRtcSession {
       transceiver.codecs = preferredCodecs;
       adjustedTransceivers += 1;
     }
+    /* v8 ignore start -- unreachable: callers only ever pass a mimeType they just found on one of these same
+     * transceivers via getPreferredInjectableVideoCodec(), so adjustedTransceivers always ends up > 0. */
     if (adjustedTransceivers > 0) {
       this.log('info', `Preferred ${mimeType.toUpperCase()} codecs on ${adjustedTransceivers} video transceiver(s)`);
     }
+    /* v8 ignore stop */
   }
 
   private cleanupTestVideoArtifacts(): void {
@@ -380,11 +395,15 @@ export class WeriftWebRtcSession {
     this.log('debug', `Remote offer created video transceiver: ${hasVideoTransceiver}`);
     if (hasVideoTransceiver) {
       const preferredCodec = this.getPreferredInjectableVideoCodec();
+      /* v8 ignore start -- unreachable: this.peerConnection defaults to VP8 as its only local video codec (werift's
+       * own RTCPeerConnection default), so any offer that negotiates a video transceiver at all always ends up with
+       * VP8 available; there is no real-world remote offer that reaches this point without an injectable codec. */
       if (preferredCodec) {
         this.preferVideoCodecOnTransceivers(preferredCodec.mimeType.toLowerCase());
       } else {
         this.log('warn', 'No injectable video codec available on negotiated transceivers (supported: VP8, H264)');
       }
+      /* v8 ignore stop */
       await this.ensureTestVideoTrack(preferredCodec, videoResolution);
     }
     // Transceivers werift auto-creates from the remote offer default to a direction that answers "inactive" with

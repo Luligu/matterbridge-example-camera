@@ -8,8 +8,9 @@ const NAME = 'WebRtcTransportProviderServerBehavior';
 const MATTER_PORT = 6005;
 const MATTER_CREATE_ONLY = true;
 
-import { camera, MatterbridgeEndpoint } from 'matterbridge';
+import { camera, internalFor, MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
+import { Node } from 'matterbridge/matter';
 import { CameraAvStreamManagement, Identify, WebRtcTransportDefinitions, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import { EndpointNumber, FabricIndex, NodeId, StreamUsage } from 'matterbridge/matter/types';
 import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
@@ -219,6 +220,22 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 0'));
   });
 
+  it('should log a non-Error rejection reason when the peer WebRtcTransportRequestor endpoint cannot be resolved', async () => {
+    vi.spyOn(Node, 'forEndpoint').mockImplementationOnce(() => {
+      // oxlint-disable-next-line typescript/only-throw-error -- intentionally exercises the non-Error branch of the catch's error formatting.
+      throw 'boom';
+    });
+
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', {
+        webRtcSessionId: 0,
+        sdp: 'v=0 o=- re-offer',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringMatching(/Could not resolve peer WebRtcTransportRequestor endpoint.*boom/));
+  });
+
   it('should reject provideOffer for an unknown session', async () => {
     await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: 99, sdp: 'v=0 o=- offer' })).rejects.toThrow(
       'WebRTC session 99 is not present in currentSessions',
@@ -246,6 +263,54 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received 1 ICE candidate(s) for session 0'));
+  });
+
+  it('should skip mDNS host ICE candidates without applying them', async () => {
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
+        webRtcSessionId: 0,
+        iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 8f4f3af1-a0a0-4f2c-9276-c6b423a3d2fd.local 54321 typ host', sdpMid: null, sdpmLineIndex: null }],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping mDNS host ICE candidate'));
+  });
+
+  it('should log a warning when applying an ICE candidate fails', async () => {
+    const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
+    const webRtcPeer = internal?.sessions.get(0);
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
+    vi.spyOn(webRtcPeer!, 'addIceCandidate').mockRejectedValueOnce(new Error('addIceCandidate failed'));
+
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
+        webRtcSessionId: 0,
+        iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: null }],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed ICE candidate'));
+  });
+
+  it('should log a warning when applying an ICE candidate times out', async () => {
+    vi.useFakeTimers();
+    try {
+      const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
+      const webRtcPeer = internal?.sessions.get(0);
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
+      vi.spyOn(webRtcPeer!, 'addIceCandidate').mockImplementationOnce(async () => new Promise(() => {}));
+
+      const invocation = device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
+        webRtcSessionId: 0,
+        iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: 0 }],
+      });
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(invocation).resolves.toBeUndefined();
+      expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ICE candidate apply timeout after 2000ms'));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should reject provideIceCandidates for an unknown session', async () => {

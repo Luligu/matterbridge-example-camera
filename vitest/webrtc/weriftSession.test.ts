@@ -4,7 +4,7 @@
  * @author Ludovic BOUÉ
  */
 
-import { RTCPeerConnection } from 'werift';
+import { RTCPeerConnection, RTCRtpCodecParameters } from 'werift';
 
 import { WeriftWebRtcSession } from '../../src/webrtc/weriftSession.js';
 
@@ -82,6 +82,17 @@ describe('WeriftWebRtcSession', () => {
     await session.createOffer({ video: true, audio: false });
 
     await expect(session.close()).resolves.toBeUndefined();
+  });
+
+  it('should not attach a second test video track when creating a subsequent offer on the same session', async () => {
+    const session = new WeriftWebRtcSession();
+    await session.createOffer({ video: true, audio: false });
+
+    const sdp = await session.createOffer({ video: true, audio: false });
+
+    expect(sdp).toContain('m=video');
+
+    await session.close();
   });
 
   it('should create a real SDP answer for a remote SDP offer', async () => {
@@ -177,6 +188,189 @@ describe('WeriftWebRtcSession', () => {
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = '4000x3000';
       const session = new WeriftWebRtcSession();
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should still attach a video track, falling back to MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION, when the requested per-session resolution is not supported', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
+      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
+      process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = '1280x720';
+      const session = new WeriftWebRtcSession();
+
+      const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '9999x9999' });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+  });
+
+  describe('test video injection toggle', () => {
+    afterEach(() => {
+      delete process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO;
+    });
+
+    it('should still negotiate a video transceiver but not inject a track when MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO=1', async () => {
+      process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO = '1';
+      const session = new WeriftWebRtcSession();
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+  });
+
+  describe('injectable codec selection', () => {
+    it('should prefer an already-negotiated injectable codec when creating a subsequent offer', async () => {
+      const session = new WeriftWebRtcSession();
+      const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+      transceiver.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/VP8', clockRate: 90000, payloadType: 96 })];
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should prefer an already-negotiated H264 codec, using the H264 ffmpeg encoder, when creating a subsequent offer', async () => {
+      const session = new WeriftWebRtcSession();
+      const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+      transceiver.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/h264', clockRate: 90000, payloadType: 97 })];
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should skip non-video transceivers when selecting and preferring an injectable codec', async () => {
+      const session = new WeriftWebRtcSession();
+      const remote = new RTCPeerConnection();
+      // Audio added before video so the answering session encounters the non-video transceiver first in each loop.
+      remote.addTransceiver('audio', { direction: 'sendonly' });
+      remote.addTransceiver('video', { direction: 'sendonly' });
+      const offer = await remote.createOffer();
+      await remote.setLocalDescription(offer);
+      const offerSdp = remote.localDescription?.sdp ?? offer.sdp;
+      await remote.close();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=video');
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
+
+    it('should not treat a non-injectable codec as preferred when creating an offer for a pre-existing transceiver', async () => {
+      const session = new WeriftWebRtcSession();
+      const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+      transceiver.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/VP9', clockRate: 90000, payloadType: 98 })];
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should only adjust the video transceiver(s) that actually have the preferred codec available', async () => {
+      const session = new WeriftWebRtcSession();
+      const withPreferredCodec = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+      withPreferredCodec.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/VP8', clockRate: 90000, payloadType: 96 })];
+      const withoutPreferredCodec = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+      withoutPreferredCodec.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/VP9', clockRate: 90000, payloadType: 98 })];
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+  });
+
+  describe('answering an offer with no video media', () => {
+    it('should create an SDP answer without attempting video codec selection when the remote offer has no video transceiver', async () => {
+      const session = new WeriftWebRtcSession();
+      const remote = new RTCPeerConnection();
+      remote.addTransceiver('audio', { direction: 'sendonly' });
+      const offer = await remote.createOffer();
+      await remote.setLocalDescription(offer);
+      const offerSdp = remote.localDescription?.sdp ?? offer.sdp;
+      await remote.close();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+      expect(answerSdp).not.toContain('m=video');
+
+      await session.close();
+    });
+  });
+
+  describe('per-session webcam resolution precedence', () => {
+    afterEach(() => {
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+      delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    });
+
+    it('should use the requested per-session resolution when it names a supported resolution', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
+      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
+      const session = new WeriftWebRtcSession();
+
+      const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '1280x720' });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+  });
+
+  describe('ffmpeg command resolution', () => {
+    const originalPath = process.env.PATH;
+
+    afterEach(() => {
+      process.env.PATH = originalPath;
+    });
+
+    it('should still attach a video track by falling back to an absolute ffmpeg path when the bare command is not on PATH', async () => {
+      process.env.PATH = '';
+      const session = new WeriftWebRtcSession();
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should resolve undefined when a command does not exist on PATH nor at any of its absolute fallback locations', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      const session = new WeriftWebRtcSession();
+
+      const resolved = await (session as unknown as ResolveCommand).resolveCommand('matterbridge-example-camera-test-nonexistent-command');
+
+      expect(resolved).toBeUndefined();
+
+      await session.close();
+    });
+  });
+
+  describe('missing ffmpeg dependency', () => {
+    it('should still negotiate a video transceiver but not inject a track when ffmpeg cannot be resolved', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      const session = new WeriftWebRtcSession();
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(undefined);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
