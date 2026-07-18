@@ -12,7 +12,7 @@ import { camera, internalFor, MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { Node } from 'matterbridge/matter';
 import { CameraAvStreamManagement, Identify, WebRtcTransportDefinitions, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
-import { EndpointNumber, FabricIndex, NodeId, StreamUsage } from 'matterbridge/matter/types';
+import { EndpointNumber, FabricIndex, NodeId, StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
 import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
@@ -25,6 +25,7 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
+import { MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
 import {
   addWebRtcTransportRequestorClient,
   createDefaultWebRtcTransportProviderClusterServer,
@@ -218,6 +219,19 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(currentSessions).toHaveLength(2);
   });
 
+  it('should echo a null deprecated videoStreamId when no video stream was resolved for the request', async () => {
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', videoStreamId: null, audioStreamId: 5 }),
+    ).resolves.toBeUndefined();
+
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    const session = currentSessions[currentSessions.length - 1];
+    expect(session.videoStreams).toBeUndefined();
+    expect(session.audioStreams).toEqual([5]);
+
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: session.id, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
+  });
+
   it('should solicit an offer with only the deprecated audioStreamId field set to null, automatically assigning streams', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), audioStreamId: null }),
@@ -400,6 +414,20 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     }
   });
 
+  it('should resolve no webcam resolution when the requested video stream id has no matching allocated stream', async () => {
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), videoStreams: [999] }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+
+    // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
+    // the test doesn't leak that process.
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    const webRtcSessionId = currentSessions[currentSessions.length - 1].id;
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
+  });
+
   it('should not solicit an offer without a bound WebRtcTransportRequestor', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), videoStreams: [0] }),
@@ -465,9 +493,62 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     endpoint.addRequiredClusterServers();
     expect(await addDevice(aggregator, endpoint)).toBeTruthy();
 
+    await expect(endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer' })).rejects.toThrow(
+      'provideOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
+    );
+  });
+
+  it('should auto-assign only an audio stream when the camera has no assignable video capability', async () => {
+    const endpoint = new Camera('WebRtc No Video Capability', 'WEBRTC-NO-VIDEO-CAPABILITY', { rateDistortionTradeOffPoints: [] });
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
     await expect(
-      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer' }),
-    ).rejects.toThrow('provideOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically');
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1) }),
+    ).resolves.toBeUndefined();
+
+    const currentSessions = endpoint.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    expect(currentSessions[0].videoStreams).toBeUndefined();
+    expect(currentSessions[0].audioStreams).toEqual([0]);
+  });
+
+  it('should reject solicitOffer without videoStreams or audioStreams when the camera has no assignable video or audio capability', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcNoAssignableCapability' });
+    endpoint.behaviors.require(
+      MatterbridgeCameraAvStreamManagementServer.with(
+        CameraAvStreamManagement.Feature.Video,
+        CameraAvStreamManagement.Feature.Snapshot,
+        CameraAvStreamManagement.Feature.ImageControl,
+      ),
+      {
+        maxContentBufferSize: 4_194_304,
+        maxNetworkBandwidth: 10_000_000,
+        supportedStreamUsages: [StreamUsage.LiveView],
+        streamUsagePriorities: [StreamUsage.LiveView],
+        maxConcurrentEncoders: 1,
+        maxEncodedPixelRate: 1920 * 1080 * 30,
+        videoSensorParams: { sensorWidth: 1920, sensorHeight: 1080, maxFps: 30 },
+        minViewportResolution: { width: 640, height: 360 },
+        rateDistortionTradeOffPoints: [],
+        currentFrameRate: 30,
+        viewport: { x1: 0, y1: 0, x2: 1920, y2: 1080 },
+        snapshotCapabilities: [],
+        allocatedSnapshotStreams: [],
+        allocatedVideoStreams: [],
+        hardPrivacyModeOn: false,
+        statusLightEnabled: false,
+        statusLightBrightness: ThreeLevelAuto.Auto,
+        imageRotation: 0,
+        imageFlipVertical: false,
+        imageFlipHorizontal: false,
+      },
+    );
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1) }),
+    ).rejects.toThrow('solicitOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically');
   });
 
   it('should not touch a real peer connection for a session restored from persisted state without one', async () => {

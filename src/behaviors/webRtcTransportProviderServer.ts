@@ -255,6 +255,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
 
     return {
       videoStreams: videoStreamId === undefined ? undefined : [videoStreamId],
+      /* v8 ignore next -- microphoneCapabilities.supportedCodecs is schema-enforced to have at least 1 entry
+       * whenever the Audio feature is present, and MatterbridgeCameraAvStreamManagementServer always enables Audio
+       * (see its class declaration); audioStreamId can therefore never be undefined here. */
       audioStreams: audioStreamId === undefined ? undefined : [audioStreamId],
     };
   }
