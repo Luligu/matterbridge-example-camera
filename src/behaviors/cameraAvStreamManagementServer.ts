@@ -29,9 +29,36 @@ import { CameraAvStreamManagementServer } from 'matterbridge/matter/behaviors';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
-const cameraColorTestJpeg = readFileSync(new URL('../../assets/camera-color-test-480-270.jpeg', import.meta.url));
-const cameraColorTestWidth = 480;
-const cameraColorTestHeight = 270;
+/**
+ * A static JPEG television calibration card available to serve from `CaptureSnapshot`, at a given resolution.
+ */
+export interface CameraColorTestJpeg {
+  /** The JPEG image data. */
+  data: Buffer;
+  /** The resolution of the JPEG image. */
+  resolution: CameraAvStreamManagement.VideoResolution;
+}
+
+const DEFAULT_CAMERA_COLOR_TEST_RESOLUTION = '640x480';
+
+const cameraColorTestJpegs: Record<string, CameraColorTestJpeg> = {
+  '640x480': { data: readFileSync(new URL('../../assets/camera-color-640-480.jpeg', import.meta.url)), resolution: { width: 640, height: 480 } },
+  '1280x720': { data: readFileSync(new URL('../../assets/camera-color-1280-720.jpeg', import.meta.url)), resolution: { width: 1280, height: 720 } },
+  '1920x1080': { data: readFileSync(new URL('../../assets/camera-color-1920-1080.jpeg', import.meta.url)), resolution: { width: 1920, height: 1080 } },
+};
+
+/**
+ * Returns the {@link CameraColorTestJpeg} calibration card matching the requested resolution exactly.
+ *
+ * Edge cases:
+ *  - Falls back to the 640x480 card when the requested resolution isn't one of the standard camera resolutions (640x480, 1280x720, 1920x1080).
+ *
+ * @param {CameraAvStreamManagement.VideoResolution} requestedResolution - The resolution requested by the client.
+ * @returns {CameraColorTestJpeg} The matching calibration card.
+ */
+export function cameraColorTestJpegForResolution(requestedResolution: CameraAvStreamManagement.VideoResolution): CameraColorTestJpeg {
+  return cameraColorTestJpegs[`${requestedResolution.width}x${requestedResolution.height}`] ?? cameraColorTestJpegs[DEFAULT_CAMERA_COLOR_TEST_RESOLUTION];
+}
 
 /**
  * CameraAvStreamManagement server, specialized for the Snapshot feature only, that implements the
@@ -230,7 +257,8 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   /**
    * Handles the CaptureSnapshot command.
    * Returns a snapshot from the camera for the requested (or automatically selected) snapshot stream.
-   * The image data is a static JPEG television calibration card until a real capture pipeline is wired in.
+   * The image data is a static JPEG television calibration card, picked from {@link cameraColorTestJpegs} to match
+   * the requested resolution, until a real capture pipeline is wired in.
    *
    * @param {CameraAvStreamManagement.CaptureSnapshotRequest} request - CaptureSnapshot request payload.
    * @returns {Promise<CameraAvStreamManagement.CaptureSnapshotResponse>} The captured snapshot.
@@ -252,10 +280,11 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
     });
     */
     device.log.debug(`MatterbridgeCameraAvStreamManagementServer: captureSnapshot called with snapshotStreamId ${request.snapshotStreamId}`);
+    const { data, resolution } = cameraColorTestJpegForResolution(request.requestedResolution);
     return {
-      data: cameraColorTestJpeg,
+      data,
       imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-      resolution: { width: cameraColorTestWidth, height: cameraColorTestHeight },
+      resolution,
     };
   }
 }

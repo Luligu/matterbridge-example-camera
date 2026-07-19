@@ -68,6 +68,9 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
    * A Snapshot Camera is a camera which can only support retrieving still images on-demand via the Capture
    * Snapshot command in the Camera AV Stream Management cluster.
    *
+   * The CameraAvStreamManagement Snapshot and ImageControl features are implemented; the Video and Audio features
+   * are not part of this example (see the Camera device for one implementing those).
+   *
    * @param {string} name - The name of the snapshot camera.
    * @param {string} serial - The serial number of the snapshot camera.
    * @param {SnapshotCameraOptions} [options] - Optional configuration values. Missing fields use defaults.
@@ -80,7 +83,7 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
    *  - maxConcurrentEncoders: 1
    *  - maxEncodedPixelRate: 10000000
    *  - maxContentBufferSize: 1024
-   *  - snapshotCapabilities: [{ resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false }]
+   *  - snapshotCapabilities: [{ resolution: 640x480 }, { resolution: 1280x720 }, { resolution: 1920x1080 }], each with maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false
    *  - maxNetworkBandwidth: 10000
    *  - supportedStreamUsages: [StreamUsage.Recording]
    *  - allocatedSnapshotStreams: []
@@ -99,12 +102,9 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
       maxEncodedPixelRate = 10000000,
       maxContentBufferSize = 1024,
       snapshotCapabilities = [
-        {
-          resolution: { width: 1280, height: 720 },
-          maxFrameRate: 10,
-          imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-          requiresEncodedPixels: false,
-        },
+        { resolution: { width: 640, height: 480 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+        { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+        { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
       maxNetworkBandwidth = 10000,
       supportedStreamUsages = [StreamUsage.Recording],

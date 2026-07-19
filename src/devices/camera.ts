@@ -36,10 +36,9 @@ import { MatterbridgeWebRtcTransportProviderServer } from '../behaviors/webRtcTr
 /**
  * Options for configuring a {@link Camera} instance.
  *
- * Only the CameraAvStreamManagement Video, Audio and ImageControl features, the WebRtcTransportProvider cluster, and the
- * WebRtcTransportRequestor client (Offer invocation only) are implemented: the CameraAvStreamManagement Snapshot feature,
- * and the Answer/End invocations on the WebRtcTransportRequestor client, required by the Matter specification for a fully
- * compliant Camera device type, are not part of this example.
+ * The CameraAvStreamManagement Video, Audio, Snapshot and ImageControl features and the WebRtcTransportProvider cluster
+ * are implemented; only the Answer/End invocations on the WebRtcTransportRequestor client (Offer invocation only is
+ * implemented), required by the Matter specification for a fully compliant Camera device type, are not part of this example.
  */
 export interface CameraOptions {
   /** Identify time in seconds */
@@ -73,6 +72,10 @@ export interface CameraOptions {
   viewport?: Viewport;
   /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
   microphoneCapabilities?: CameraAvStreamManagement.AudioCapabilities;
+  /** Indicates the list of supported snapshot capabilities */
+  snapshotCapabilities?: CameraAvStreamManagement.SnapshotCapabilities[];
+  /** Indicates the list of allocated snapshot streams */
+  allocatedSnapshotStreams?: CameraAvStreamManagement.SnapshotStream[];
 }
 
 /**
@@ -108,6 +111,8 @@ export class Camera extends MatterbridgeEndpoint {
    *  - imageFlipHorizontal: false
    *  - imageFlipVertical: false
    *  - microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
+   *  - snapshotCapabilities: [{ resolution: 640x480 }, { resolution: 1280x720 }, { resolution: 1920x1080 }], each with maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false
+   *  - allocatedSnapshotStreams: []
    *
    * @returns {Camera} The Camera instance.
    */
@@ -128,6 +133,12 @@ export class Camera extends MatterbridgeEndpoint {
       currentFrameRate = 30,
       viewport = { x1: 0, y1: 0, x2: videoSensorParams.sensorWidth, y2: videoSensorParams.sensorHeight },
       microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
+      snapshotCapabilities = [
+        { resolution: { width: 640, height: 480 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+        { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+        { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+      ],
+      allocatedSnapshotStreams = [],
     } = options;
     super(powerSourceType === 'None' ? [camera] : [camera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
     if (identifyType !== Identify.IdentifyType.None) {
@@ -165,6 +176,8 @@ export class Camera extends MatterbridgeEndpoint {
       currentFrameRate,
       viewport,
       microphoneCapabilities,
+      snapshotCapabilities,
+      allocatedSnapshotStreams,
     });
     createDefaultWebRtcTransportProviderClusterServer(this);
     addWebRtcTransportRequestorClient(this);
@@ -200,11 +213,15 @@ export interface CameraAvStreamManagementClusterOptions {
   viewport: Viewport;
   /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
   microphoneCapabilities: CameraAvStreamManagement.AudioCapabilities;
+  /** Indicates the list of supported snapshot capabilities */
+  snapshotCapabilities: CameraAvStreamManagement.SnapshotCapabilities[];
+  /** Indicates the list of allocated snapshot streams */
+  allocatedSnapshotStreams: CameraAvStreamManagement.SnapshotStream[];
 }
 
 /**
- * Creates a default CameraAvStreamManagement cluster server, with the Video, Audio and ImageControl features enabled, on
- * the given endpoint.
+ * Creates a default CameraAvStreamManagement cluster server, with the Video, Audio, Snapshot and ImageControl features
+ * enabled, on the given endpoint.
  *
  * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
  * @param {CameraAvStreamManagementClusterOptions} options - The initial state of the CameraAvStreamManagement cluster server.
