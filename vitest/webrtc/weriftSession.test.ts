@@ -4,7 +4,11 @@
  * @author Ludovic BOUÉ
  */
 
-import { RTCPeerConnection, RTCRtpCodecParameters } from 'werift';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+import { RTCPeerConnection, RTCRtpCodecParameters, useH264 } from 'werift';
 
 import { WeriftWebRtcSession } from '../../src/webrtc/weriftSession.js';
 
@@ -16,6 +20,21 @@ import { WeriftWebRtcSession } from '../../src/webrtc/weriftSession.js';
  */
 async function createRemoteOfferSdp(): Promise<string> {
   const remote = new RTCPeerConnection();
+  remote.addTransceiver('video', { direction: 'sendonly' });
+  const offer = await remote.createOffer();
+  await remote.setLocalDescription(offer);
+  const sdp = remote.localDescription?.sdp ?? offer.sdp;
+  await remote.close();
+  return sdp;
+}
+
+/**
+ * Creates a real SDP offer whose video media section only advertises H264, matching controllers that do not offer VP8.
+ *
+ * @returns {Promise<string>} A real SDP offer with a single sendonly H264 video transceiver.
+ */
+async function createH264RemoteOfferSdp(): Promise<string> {
+  const remote = new RTCPeerConnection({ codecs: { video: [useH264()] } });
   remote.addTransceiver('video', { direction: 'sendonly' });
   const offer = await remote.createOffer();
   await remote.setLocalDescription(offer);
@@ -103,6 +122,20 @@ describe('WeriftWebRtcSession', () => {
 
     expect(answerSdp).toContain('v=0');
     expect(answerSdp).toContain('m=video');
+    expect(session.peerConnection.signalingState).toBe('stable');
+
+    await session.close();
+  });
+
+  it('should create a real SDP answer for a remote H264-only SDP offer', async () => {
+    const session = new WeriftWebRtcSession();
+    const offerSdp = await createH264RemoteOfferSdp();
+
+    const answerSdp = await session.createAnswer(offerSdp);
+
+    expect(answerSdp).toContain('v=0');
+    expect(answerSdp).toContain('m=video');
+    expect(answerSdp.toLowerCase()).toContain('h264/90000');
     expect(session.peerConnection.signalingState).toBe('stable');
 
     await session.close();
@@ -338,9 +371,17 @@ describe('WeriftWebRtcSession', () => {
 
   describe('ffmpeg command resolution', () => {
     const originalPath = process.env.PATH;
+    const originalLocalAppData = process.env.LOCALAPPDATA;
+    const originalProgramFiles = process.env.ProgramFiles;
+    const originalProgramFilesX86 = process.env['ProgramFiles(x86)'];
+    const originalPlatform = process.platform;
 
     afterEach(() => {
       process.env.PATH = originalPath;
+      process.env.LOCALAPPDATA = originalLocalAppData;
+      process.env.ProgramFiles = originalProgramFiles;
+      process.env['ProgramFiles(x86)'] = originalProgramFilesX86;
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
     });
 
     it('should resolve when a spawned command exits successfully', async () => {
@@ -401,6 +442,62 @@ describe('WeriftWebRtcSession', () => {
       const resolved = await (session as unknown as ResolveCommand).resolveCommand(process.execPath);
 
       expect(resolved).toBe(process.execPath);
+
+      await session.close();
+    });
+
+    it('should include the winget Gyan.FFmpeg package bin path on Windows', async () => {
+      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
+      const session = new WeriftWebRtcSession();
+      const localAppData = await mkdtemp(join(tmpdir(), 'matterbridge-ffmpeg-'));
+      const wingetPackage = join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build');
+      await mkdir(join(wingetPackage, 'bin'), { recursive: true });
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      process.env.LOCALAPPDATA = localAppData;
+
+      try {
+        const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg');
+
+        expect(candidates).toContain(join(wingetPackage, 'bin', 'ffmpeg.exe'));
+      } finally {
+        await rm(localAppData, { force: true, recursive: true });
+        await session.close();
+      }
+    });
+
+    it('should ignore unrelated winget package entries on Windows', async () => {
+      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
+      const session = new WeriftWebRtcSession();
+      const localAppData = await mkdtemp(join(tmpdir(), 'matterbridge-ffmpeg-'));
+      const wingetPackages = join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+      await mkdir(join(wingetPackages, 'Other.Package_Microsoft.Winget.Source_8wekyb3d8bbwe'), { recursive: true });
+      await mkdir(join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin'), { recursive: true });
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      process.env.LOCALAPPDATA = localAppData;
+      process.env.ProgramFiles = '';
+      process.env['ProgramFiles(x86)'] = '';
+
+      try {
+        const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg.exe');
+
+        expect(candidates).toEqual([join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin', 'ffmpeg.exe')]);
+      } finally {
+        await rm(localAppData, { force: true, recursive: true });
+        await session.close();
+      }
+    });
+
+    it('should return no Windows candidates for non-ffmpeg commands when Program Files paths are missing', async () => {
+      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
+      const session = new WeriftWebRtcSession();
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      process.env.LOCALAPPDATA = undefined;
+      process.env.ProgramFiles = '';
+      process.env['ProgramFiles(x86)'] = '';
+
+      const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('not-ffmpeg');
+
+      expect(candidates).toEqual([]);
 
       await session.close();
     });
