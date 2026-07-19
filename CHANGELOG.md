@@ -28,6 +28,14 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [Unreleased]
+
+### Fixed
+
+- [snapshot]: README asset docs still described the pre-#15 `camera-color-test-*.jpeg` names; `CaptureSnapshot` now reads `camera-color-{640-480,1280-720,1920-1080}.jpeg`. Also documented why all three calibration cards are kept under the ~65535-byte Matter message-size ceiling (AES-CCM's 13-byte nonce) and why it can't be worked around by tuning TCP.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
+
 ## [0.0.4] - 2026-07-19
 
 ### Added
