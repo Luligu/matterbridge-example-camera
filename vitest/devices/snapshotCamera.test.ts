@@ -76,12 +76,9 @@ describe('SnapshotCamera', () => {
     expect(device.getAttribute(CameraAvStreamManagement, 'maxEncodedPixelRate')).toBe(10000000);
     expect(device.getAttribute(CameraAvStreamManagement, 'maxContentBufferSize')).toBe(1024);
     expect(device.getAttribute(CameraAvStreamManagement, 'snapshotCapabilities')).toEqual([
-      {
-        resolution: { width: 1280, height: 720 },
-        maxFrameRate: 10,
-        imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-        requiresEncodedPixels: false,
-      },
+      { resolution: { width: 640, height: 480 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+      { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+      { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
     ]);
     expect(device.getAttribute(CameraAvStreamManagement, 'maxNetworkBandwidth')).toBe(10000);
     expect(device.getAttribute(CameraAvStreamManagement, 'supportedStreamUsages')).toEqual([StreamUsage.Recording]);
