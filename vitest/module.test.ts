@@ -54,7 +54,8 @@ describe('TestPlatform', () => {
   });
 
   afterEach(async () => {
-    // Known Matter warnings may occur for optional client behaviors.
+    // No errors logged during tests
+    expect(loggerWarnSpy).not.toHaveBeenCalled();
     expect(loggerErrorSpy).not.toHaveBeenCalled();
     expect(loggerFatalSpy).not.toHaveBeenCalled();
     // Clear debug

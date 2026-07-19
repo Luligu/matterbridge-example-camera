@@ -36,7 +36,15 @@ import { Camera } from '../../src/devices/camera.js';
 await setupTest(NAME);
 
 describe('MatterbridgeWebRtcTransportProviderServer', () => {
+  const originalDisableTestVideo = process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO;
+
   let device: Camera;
+
+  function clearExpectedWarnings(...expectedMessages: string[]): void {
+    const unexpectedWarnings = loggerWarnSpy.mock.calls.filter(([message]) => !expectedMessages.some((expectedMessage) => message.includes(expectedMessage)));
+    expect(unexpectedWarnings).toEqual([]);
+    loggerWarnSpy.mockClear();
+  }
 
   beforeAll(async () => {
     // Setup the Matter test environment
@@ -52,12 +60,15 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   beforeEach(() => {
     // Clear all mocks
     vi.clearAllMocks();
+    process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO = '1';
   });
 
   afterEach(() => {
-    // Known Matter warnings may occur for optional client behaviors.
+    // No errors logged during tests
+    expect(loggerWarnSpy).not.toHaveBeenCalled();
     expect(loggerErrorSpy).not.toHaveBeenCalled();
     expect(loggerFatalSpy).not.toHaveBeenCalled();
+    process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO = originalDisableTestVideo;
   });
 
   afterAll(async () => {
@@ -85,6 +96,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions[0].videoStreams).toEqual([0]);
     expect(currentSessions[0].audioStreams).toEqual([0]);
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // Restores currentSessions to empty, so the session ids the rest of this flow depends on stay unaffected.
     await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
@@ -104,6 +116,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(currentSessions).toHaveLength(1);
     expect(currentSessions[0].id).toBe(0);
     expect(currentSessions[0].streamUsage).toBe(StreamUsage.LiveView);
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
   });
 
   it('should solicit a second offer with an incremented session id', async () => {
@@ -241,6 +254,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     const session = currentSessions[currentSessions.length - 1];
     expect(session.videoStreams).toEqual([0]);
     expect(session.audioStreams).toEqual([0]);
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // Restores currentSessions to its pre-test state, so the session ids the rest of this flow depends on stay unaffected.
     await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: session.id, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
@@ -327,6 +341,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed ICE candidate'));
+    loggerWarnSpy.mockClear();
   });
 
   it('should log a warning when applying an ICE candidate times out', async () => {
@@ -345,6 +360,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
       await expect(invocation).resolves.toBeUndefined();
       expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ICE candidate apply timeout after 2000ms'));
+      loggerWarnSpy.mockClear();
     } finally {
       vi.useRealTimers();
     }
@@ -376,6 +392,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   it('should use the allocated video stream resolution for the injected webcam capture, matching a real client resolution/quality picker', async () => {
     const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
     const originalWebcamDevice = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    delete process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO;
     process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
     process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = 'test-webcam-device';
 
@@ -403,6 +420,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       ).resolves.toBeUndefined();
 
       expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('local webcam (test-webcam-device, 1280x720)'));
+      clearExpectedWarnings('No injectable video codec available on negotiated transceivers', 'Cannot inject video stream: missing dependency ffmpeg');
 
       const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
       const webRtcSessionId = currentSessions[currentSessions.length - 1].id;
@@ -420,6 +438,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
     // the test doesn't leak that process.
@@ -434,6 +453,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
     // the test doesn't leak that process.
@@ -453,6 +473,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
     // the test doesn't leak that process.

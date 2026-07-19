@@ -34,25 +34,35 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
   let camera: Camera;
 
   beforeAll(async () => {
+    // Setup the Matter test environment
     await createTestEnvironment();
+
+    // Create the server node and aggregator
     await createServerNode(MATTER_PORT);
+
+    // Start the server node if not in create-only mode
     if (!MATTER_CREATE_ONLY) await startServerNode();
   });
 
   beforeEach(() => {
+    // Clear all mocks
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    // Known Matter warnings may occur for optional client behaviors.
+    // No errors logged during tests
+    expect(loggerWarnSpy).not.toHaveBeenCalled();
     expect(loggerErrorSpy).not.toHaveBeenCalled();
     expect(loggerFatalSpy).not.toHaveBeenCalled();
   });
 
   afterAll(async () => {
+    // Stop or flush the server node depending on the create-only mode
     if (MATTER_CREATE_ONLY) await flushServerNode();
     else await stopServerNode();
+    // Destroy the Matter test environment
     await destroyTestEnvironment();
+    // Restore all mocks
     vi.restoreAllMocks();
   });
 

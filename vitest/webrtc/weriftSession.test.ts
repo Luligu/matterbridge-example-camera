@@ -343,6 +343,33 @@ describe('WeriftWebRtcSession', () => {
       process.env.PATH = originalPath;
     });
 
+    it('should resolve when a spawned command exits successfully', async () => {
+      type RunProcess = { runProcess(command: string, args: string[]): Promise<void> };
+      const session = new WeriftWebRtcSession();
+
+      await expect((session as unknown as RunProcess).runProcess(process.execPath, ['--version'])).resolves.toBeUndefined();
+
+      await session.close();
+    });
+
+    it('should reject when a spawned command exits with a non-zero code', async () => {
+      type RunProcess = { runProcess(command: string, args: string[]): Promise<void> };
+      const session = new WeriftWebRtcSession();
+
+      await expect((session as unknown as RunProcess).runProcess(process.execPath, ['-e', 'process.exit(7)'])).rejects.toThrow('exited with code 7');
+
+      await session.close();
+    });
+
+    it('should report that a command exists when a version probe succeeds', async () => {
+      type HasCommand = { hasCommand(command: string): Promise<boolean> };
+      const session = new WeriftWebRtcSession();
+
+      await expect((session as unknown as HasCommand).hasCommand(process.execPath)).resolves.toBe(true);
+
+      await session.close();
+    });
+
     it('should fail to resolve a command via the bare PATH lookup when PATH is empty', async () => {
       type HasCommand = { hasCommand(command: string): Promise<boolean> };
       const session = new WeriftWebRtcSession();
@@ -366,6 +393,17 @@ describe('WeriftWebRtcSession', () => {
 
       await session.close();
     });
+
+    it('should resolve the first command candidate when its version probe succeeds', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      const session = new WeriftWebRtcSession();
+
+      const resolved = await (session as unknown as ResolveCommand).resolveCommand(process.execPath);
+
+      expect(resolved).toBe(process.execPath);
+
+      await session.close();
+    });
   });
 
   describe('missing ffmpeg dependency', () => {
@@ -379,6 +417,48 @@ describe('WeriftWebRtcSession', () => {
       expect(sdp).toContain('m=video');
 
       await session.close();
+    });
+  });
+
+  describe('video track injection lifecycle', () => {
+    it('should attach a default VP8 video track only once when no codec is already preferred', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      type TestVideoState = { testVideoAttached: boolean; testVideoGenerator?: { killed: boolean } };
+      const session = new WeriftWebRtcSession();
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+
+      const firstSdp = await session.createOffer({ video: true, audio: false });
+      const secondSdp = await session.createOffer({ video: true, audio: false });
+
+      expect(firstSdp).toContain('m=video');
+      expect(secondSdp).toContain('m=video');
+      expect((session as unknown as TestVideoState).testVideoAttached).toBe(true);
+      expect((session as unknown as TestVideoState).testVideoGenerator).toBeDefined();
+
+      await session.close();
+    });
+
+    it.each([
+      ['VP8', new RTCRtpCodecParameters({ mimeType: 'video/VP8', clockRate: 90000, payloadType: 96 })],
+      ['H264', new RTCRtpCodecParameters({ mimeType: 'video/H264', clockRate: 90000, payloadType: 97 })],
+    ])('should attach and clean up a %s video track when command resolution succeeds', async (_name, codec) => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      type TestVideoState = { testVideoAttached: boolean; testVideoGenerator?: { killed: boolean } };
+      const session = new WeriftWebRtcSession();
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+      const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
+      transceiver.codecs = [codec];
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+      expect((session as unknown as TestVideoState).testVideoAttached).toBe(true);
+      expect((session as unknown as TestVideoState).testVideoGenerator).toBeDefined();
+
+      await session.close();
+
+      expect((session as unknown as TestVideoState).testVideoAttached).toBe(false);
+      expect((session as unknown as TestVideoState).testVideoGenerator).toBeUndefined();
     });
   });
 });
