@@ -110,6 +110,12 @@ Example, capturing from a real Linux webcam at 720p:
 MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=/dev/video0 MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=1280x720 npm start
 ```
 
+### Known limitation: Firefox clients with a VPN or "WebRTC leak protection" enabled
+
+`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates` applies every ICE candidate it receives, including mDNS-obfuscated `*.local` host candidates (the Chromium/Edge default): werift-ice resolves those via a real multicast DNS query before pairing them, so no special handling is needed here.
+
+This relies on the client machine actually answering that mDNS query with its real LAN address. Some VPN clients and security suites deliberately restrict WebRTC to only advertise a non-routable IPv6 link-local (`fe80::...`) address instead of the real LAN IP, specifically to prevent local-IP leakage over WebRTC ("WebRTC leak protection"). A link-local address can never be reached by a remote peer, so the connection stays black-screen no matter how the candidate is resolved. This has been observed with Firefox even with `media.peerconnection.ice.obfuscate_host_addresses` disabled in `about:config` (i.e. even when Firefox sends its real candidate directly instead of an mDNS name, that candidate was still just the link-local address) — Chromium-based browsers (Edge, Chrome) on the same machine and network were unaffected. If a stream stays black specifically with Firefox, check for a VPN client or privacy extension with WebRTC leak protection before assuming a bug in this plugin.
+
 ## Werift integration test
 
 The `vitest/werift.test.ts` integration test creates local client and server peers and verifies SDP offer/answer negotiation, ICE candidate exchange, a bidirectional data-channel transfer, and connection teardown with `werift`.
