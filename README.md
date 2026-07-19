@@ -59,6 +59,7 @@ Features:
 
 - Exposes the Camera AV Stream Management cluster with the Video, Audio and ImageControl features (the Snapshot feature is not implemented in this example; see Snapshot Camera).
 - Exposes the WebRtcTransportProvider cluster and registers a WebRtcTransportRequestor client, so a bound device can solicit and receive WebRTC offers.
+- Automatically selects or allocates a video/audio stream when a client's `SolicitOffer`/`ProvideOffer` omits `videoStreams`/`audioStreams` (and their deprecated single-id counterparts), per the Matter specification's automatic stream selection for revision 1 clients. This is required to interoperate with clients that never allocate streams explicitly, such as Home Assistant's Matter camera integration.
 - Supports configurable stream usages and priorities, encoder limits, video sensor parameters, viewport, rate-distortion trade-off points, and microphone capabilities.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
@@ -74,6 +75,27 @@ Features:
 - Captures snapshots using a requested stream or automatic stream selection and returns the requested resolution as JPEG data.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+
+## WebRTC test video injection
+
+`WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video track into the negotiated connection, so the end-to-end media path can be validated without a real camera capture pipeline.
+
+The video source defaults to a synthetic SMPTE bars test pattern, or can be switched to a real local webcam. Configure it with environment variables:
+
+- `MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO=1`: disables video injection entirely (only the negotiated transceiver is created, with no track attached).
+- `MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam`: capture from a local webcam via ffmpeg instead of the SMPTE bars test pattern. Requires `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE`; falls back to the test pattern (with a warning) if unset.
+- `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=<device>`: the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow).
+- `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=<width>x<height>`: default webcam capture resolution — `640x480` (default), `1280x720`, or `1920x1080`. Falls back to `640x480` (with a warning) for unsupported values. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
+
+A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
+
+Requires `ffmpeg` to be installed and reachable on `PATH` (or under `/usr/bin`, `/bin`, or `/usr/local/bin`).
+
+Example, capturing from a real Linux webcam at 720p:
+
+```bash
+MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=/dev/video0 MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=1280x720 npm start
+```
 
 ## Werift integration test
 
