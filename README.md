@@ -145,9 +145,19 @@ The `assets` directory contains deterministic three-second media fixtures for ex
 - `test-video.h264`: raw H.264 Constrained Baseline video, 640×360 at 15 FPS, with a moving test pattern. Use this elementary stream when implementing H.264 NAL-unit parsing and RTP packetization.
 - `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a 1 kHz test tone. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
 - `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track. The werift test transfers the complete file over its SCTP data channel and verifies its integrity. This exercises binary file transport, not a WebRTC video RTP track.
-- `camera-color-test-1920-1080.jpeg`: 1920×1080 broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command. It contains color bars, grayscale references, geometry targets, focus patterns, safe-area guides, and near-black/near-white patches for inspecting hue, saturation, brightness, contrast, geometry, overscan, and focus.
-- `camera-color-test-1280-720.jpeg`: 1280×720 SMPTE color-bars test pattern (mire) returned by the example's `CaptureSnapshot` command, generated with `ffmpeg -f lavfi -i smptebars=size=1280x720`.
-- `camera-color-test-640-480.jpeg`: 640×480 SMPTE color-bars test pattern (mire) returned by the example's `CaptureSnapshot` command, generated with `ffmpeg -f lavfi -i smptebars=size=640x480`.
+- `camera-color-1920-1080.jpeg`: 1920×1080 broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command. It contains color bars, grayscale references, geometry targets, focus patterns, safe-area guides, and near-black/near-white patches for inspecting hue, saturation, brightness, contrast, geometry, overscan, and focus. Recompressed to ~50 KB so it stays under the Matter message-size ceiling — see below.
+- `camera-color-1280-720.jpeg`: 1280×720 SMPTE color-bars test pattern (mire) returned by the example's `CaptureSnapshot` command, generated with `ffmpeg -f lavfi -i smptebars=size=1280x720`.
+- `camera-color-640-480.jpeg`: 640×480 SMPTE color-bars test pattern (mire) returned by the example's `CaptureSnapshot` command, generated with `ffmpeg -f lavfi -i smptebars=size=640x480`.
+
+#### Why the snapshot calibration cards stay under ~64 KB
+
+All three calibration cards above are kept well under the Matter message size ceiling, which caps at **65535 bytes** for a single message and cannot be worked around by tuning TCP:
+
+- Every Matter message is encrypted with AES-128-CCM, using a 13-byte nonce built from the security flags, message counter, and node ID (`Session.generateNonce`, part of the Matter message-security spec, not a matter.js choice).
+- AES-CCM (RFC 3610 / NIST SP 800-38C) requires the nonce length `N` and the length-field size `L` to satisfy `N + L = 15` bytes for a 128-bit block cipher. With `N = 13`, that leaves `L = 2`.
+- A 2-byte length field caps the plaintext of a single CCM-encrypted message at `2^16 - 1 = 65535` bytes — a cryptographic ceiling, not a networking one. matter.js's `DEFAULT_MAX_TCP_MESSAGE_SIZE` (64000) is just a round number kept safely under that limit.
+
+A `CaptureSnapshot` response whose `data` field doesn't fit fails to send: the client gets a generic invoke failure instead of an image, since the encoder cannot represent the required plaintext length in the message header. `CameraAvStreamManagement.CaptureSnapshot` returns its image as a single field of a single command response, so it inherits this ceiling directly. Matter has a dedicated mechanism for transferring larger payloads — BDX (Bulk Data Exchange), used for OTA updates and diagnostic logs — which splits big content across a sequence of acknowledged messages instead of one oversized one, but `CaptureSnapshot` doesn't use it.
 
 WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they do not send an MP4, Ogg, or MPEG container directly. The current MP4 transfer deliberately uses the separate data-channel path. A future video-track test should parse the relevant elementary frames, packetize them as RTP, call werift's media track `writeRtp()`, and verify reception through `onTrack` and `onReceiveRtp`.
 
