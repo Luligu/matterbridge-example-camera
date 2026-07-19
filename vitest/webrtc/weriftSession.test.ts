@@ -5,8 +5,8 @@
  */
 
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264 } from 'werift';
 
@@ -449,16 +449,16 @@ describe('WeriftWebRtcSession', () => {
     it('should include the winget Gyan.FFmpeg package bin path on Windows', async () => {
       type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
       const session = new WeriftWebRtcSession();
-      const localAppData = await mkdtemp(join(tmpdir(), 'matterbridge-ffmpeg-'));
-      const wingetPackage = join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build');
-      await mkdir(join(wingetPackage, 'bin'), { recursive: true });
+      const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
+      const wingetPackage = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build');
+      await mkdir(path.join(wingetPackage, 'bin'), { recursive: true });
       Object.defineProperty(process, 'platform', { value: 'win32' });
       process.env.LOCALAPPDATA = localAppData;
 
       try {
         const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg');
 
-        expect(candidates).toContain(join(wingetPackage, 'bin', 'ffmpeg.exe'));
+        expect(candidates).toContain(path.join(wingetPackage, 'bin', 'ffmpeg.exe'));
       } finally {
         await rm(localAppData, { force: true, recursive: true });
         await session.close();
@@ -468,10 +468,10 @@ describe('WeriftWebRtcSession', () => {
     it('should ignore unrelated winget package entries on Windows', async () => {
       type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
       const session = new WeriftWebRtcSession();
-      const localAppData = await mkdtemp(join(tmpdir(), 'matterbridge-ffmpeg-'));
-      const wingetPackages = join(localAppData, 'Microsoft', 'WinGet', 'Packages');
-      await mkdir(join(wingetPackages, 'Other.Package_Microsoft.Winget.Source_8wekyb3d8bbwe'), { recursive: true });
-      await mkdir(join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin'), { recursive: true });
+      const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
+      const wingetPackages = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+      await mkdir(path.join(wingetPackages, 'Other.Package_Microsoft.Winget.Source_8wekyb3d8bbwe'), { recursive: true });
+      await mkdir(path.join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin'), { recursive: true });
       Object.defineProperty(process, 'platform', { value: 'win32' });
       process.env.LOCALAPPDATA = localAppData;
       process.env.ProgramFiles = '';
@@ -480,7 +480,28 @@ describe('WeriftWebRtcSession', () => {
       try {
         const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg.exe');
 
-        expect(candidates).toEqual([join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin', 'ffmpeg.exe')]);
+        expect(candidates).toEqual([path.join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin', 'ffmpeg.exe')]);
+      } finally {
+        await rm(localAppData, { force: true, recursive: true });
+        await session.close();
+      }
+    });
+
+    it('should ignore Gyan winget package entries without ffmpeg version directories on Windows', async () => {
+      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
+      const session = new WeriftWebRtcSession();
+      const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
+      const wingetPackage = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe');
+      await mkdir(path.join(wingetPackage, 'metadata'), { recursive: true });
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      process.env.LOCALAPPDATA = localAppData;
+      process.env.ProgramFiles = '';
+      process.env['ProgramFiles(x86)'] = '';
+
+      try {
+        const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg');
+
+        expect(candidates).toEqual([]);
       } finally {
         await rm(localAppData, { force: true, recursive: true });
         await session.close();

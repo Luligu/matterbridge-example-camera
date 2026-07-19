@@ -25,7 +25,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createSocket } from 'node:dgram';
 import { constants } from 'node:fs';
 import { access, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import path from 'node:path';
 
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264, useOPUS, usePCMU, useVP8 } from 'werift';
 import { navigator } from 'werift/nonstandard';
@@ -133,16 +133,16 @@ export class WeriftWebRtcSession {
     const candidates: string[] = [];
 
     if (commandName === 'ffmpeg' && process.env.LOCALAPPDATA) {
-      const wingetPackages = join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Packages');
+      const wingetPackages = path.join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Packages');
       try {
         const packageDirs = await readdir(wingetPackages, { withFileTypes: true });
         for (const packageDir of packageDirs) {
           if (!packageDir.isDirectory() || !packageDir.name.startsWith('Gyan.FFmpeg_')) continue;
-          const packagePath = join(wingetPackages, packageDir.name);
+          const packagePath = path.join(wingetPackages, packageDir.name);
           try {
             const versionDirs = await readdir(packagePath, { withFileTypes: true });
             for (const versionDir of versionDirs) {
-              if (versionDir.isDirectory() && versionDir.name.startsWith('ffmpeg-')) candidates.push(join(packagePath, versionDir.name, 'bin', executable));
+              if (versionDir.isDirectory() && versionDir.name.startsWith('ffmpeg-')) candidates.push(path.join(packagePath, versionDir.name, 'bin', executable));
             }
           } catch {
             // Ignore incomplete winget package directories.
@@ -155,7 +155,7 @@ export class WeriftWebRtcSession {
 
     for (const programFiles of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
       if (!programFiles) continue;
-      candidates.push(join(programFiles, 'ffmpeg', 'bin', executable), join(programFiles, 'Gyan', 'FFmpeg', 'bin', executable));
+      candidates.push(path.join(programFiles, 'ffmpeg', 'bin', executable), path.join(programFiles, 'Gyan', 'FFmpeg', 'bin', executable));
     }
     return candidates;
   }
