@@ -46,6 +46,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [webrtc]: `ProvideOfferResponse`/`SolicitOfferResponse` now echo back the deprecated `videoStreamId`/`audioStreamId` fields when the request used them, as required by the Matter specification's conformance rules. Revision 1 clients (e.g. Home Assistant) send these fields as `null` to request automatic stream selection, and rely on the echoed value to learn which stream was selected; without it, they could not determine that a stream had in fact been negotiated.
 - [camera]: Fix `Camera` to provide default `snapshotCapabilities` and `allocatedSnapshotStreams` values for the CameraAvStreamManagement Snapshot feature, which was enabled but left the `SnapshotCapabilities` attribute as an empty list.
+- [snapshot]: `CaptureSnapshot` calibration cards were 480×270 and 960×540, which don't match any standard camera resolution. Regenerated the two cards as basic SMPTE color-bars test patterns (mires) at 640×480 and 1280×720, matching the resolutions the webcam capture path actually negotiates alongside the existing 1920×1080 card. `Camera` and `SnapshotCamera` now default `snapshotCapabilities` to advertise all three resolutions, since `CaptureSnapshot` can genuinely serve a matching calibration card for each.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
 

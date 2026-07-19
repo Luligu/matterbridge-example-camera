@@ -111,7 +111,7 @@ export class Camera extends MatterbridgeEndpoint {
    *  - imageFlipHorizontal: false
    *  - imageFlipVertical: false
    *  - microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
-   *  - snapshotCapabilities: [{ resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false }]
+   *  - snapshotCapabilities: [{ resolution: 640x480 }, { resolution: 1280x720 }, { resolution: 1920x1080 }], each with maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false
    *  - allocatedSnapshotStreams: []
    *
    * @returns {Camera} The Camera instance.
@@ -134,12 +134,9 @@ export class Camera extends MatterbridgeEndpoint {
       viewport = { x1: 0, y1: 0, x2: videoSensorParams.sensorWidth, y2: videoSensorParams.sensorHeight },
       microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
       snapshotCapabilities = [
-        {
-          resolution: { width: 1280, height: 720 },
-          maxFrameRate: 10,
-          imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-          requiresEncodedPixels: false,
-        },
+        { resolution: { width: 640, height: 480 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+        { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+        { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
       allocatedSnapshotStreams = [],
     } = options;

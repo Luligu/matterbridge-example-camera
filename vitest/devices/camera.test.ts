@@ -143,7 +143,9 @@ describe('Camera', () => {
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
     expect(device.getAttribute(CameraAvStreamManagement, 'snapshotCapabilities')).toEqual([
+      { resolution: { width: 640, height: 480 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+      { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
     ]);
     expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([]);
   });

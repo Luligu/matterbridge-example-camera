@@ -22,7 +22,7 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
-import { MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
+import { cameraColorTestJpegForResolution, MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
 import { Camera } from '../../src/devices/camera.js';
 import { SnapshotCamera } from '../../src/devices/snapshotCamera.js';
 
@@ -157,6 +157,27 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     ).resolves.toBeUndefined();
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Capturing snapshot auto'));
+  });
+
+  it.each([
+    [
+      { width: 640, height: 480 },
+      { width: 640, height: 480 },
+    ],
+    [
+      { width: 1280, height: 720 },
+      { width: 1280, height: 720 },
+    ],
+    [
+      { width: 1920, height: 1080 },
+      { width: 1920, height: 1080 },
+    ],
+  ])('should return the calibration card matching a requested resolution of %o', (requestedResolution, expectedResolution) => {
+    expect(cameraColorTestJpegForResolution(requestedResolution).resolution).toEqual(expectedResolution);
+  });
+
+  it('should fall back to the 640x480 calibration card for a non-standard requested resolution', () => {
+    expect(cameraColorTestJpegForResolution({ width: 800, height: 600 }).resolution).toEqual({ width: 640, height: 480 });
   });
 
   it('should create and register a snapshot camera with no allocated streams for setStreamPriorities validation', async () => {
