@@ -29,9 +29,9 @@ import { CameraAvStreamManagementServer } from 'matterbridge/matter/behaviors';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
-const cameraColorTestJpeg = readFileSync(new URL('../../assets/camera-color-test-480-270.jpeg', import.meta.url));
-const cameraColorTestWidth = 480;
-const cameraColorTestHeight = 270;
+const cameraColorTestJpeg = readFileSync(new URL('../../assets/camera-color-test-640-480.jpeg', import.meta.url));
+const cameraColorTestWidth = 640;
+const cameraColorTestHeight = 480;
 
 /**
  * CameraAvStreamManagement server, specialized for the Snapshot feature only, that implements the

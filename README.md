@@ -122,9 +122,9 @@ The `assets` directory contains deterministic three-second media fixtures for ex
 - `test-video.h264`: raw H.264 Constrained Baseline video, 640×360 at 15 FPS, with a moving test pattern. Use this elementary stream when implementing H.264 NAL-unit parsing and RTP packetization.
 - `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a 1 kHz test tone. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
 - `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track. The werift test transfers the complete file over its SCTP data channel and verifies its integrity. This exercises binary file transport, not a WebRTC video RTP track.
-- `camera-color-test-1920-1080.jpeg`: 1920×1080 broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command. It contains color bars, grayscale references, geometry targets, focus patterns, safe-area guides, and near-black/near-white patches for inspecting hue, saturation, brightness, contrast, geometry, overscan, and focus.
-- `camera-color-test-960-540.jpeg`: 960×540 broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command.
-- `camera-color-test-480-270.jpeg`: 480×270 broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command.
+- `camera-color-test-1920-1080.jpeg`: 1920×1080 (16:9) broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command. It contains color bars, grayscale references, geometry targets, focus patterns, safe-area guides, and near-black/near-white patches for inspecting hue, saturation, brightness, contrast, geometry, overscan, and focus.
+- `camera-color-test-1280-720.jpeg`: 1280×720 (16:9) version of the same calibration card, matching the `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION` HD option.
+- `camera-color-test-640-480.jpeg`: 640×480 (4:3) version of the same calibration card, matching the default `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION` and the image returned by `CaptureSnapshot`.
 
 WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they do not send an MP4, Ogg, or MPEG container directly. The current MP4 transfer deliberately uses the separate data-channel path. A future video-track test should parse the relevant elementary frames, packetize them as RTP, call werift's media track `writeRtp()`, and verify reception through `onTrack` and `onReceiveRtp`.
 

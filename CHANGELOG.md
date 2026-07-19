@@ -27,6 +27,12 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [Unreleased]
+
+### Changed
+
+- [Snapshot]: Regenerate the `camera-color-test` calibration cards at the standard camera resolutions (640×480, 1280×720, 1920×1080) used elsewhere in the plugin, replacing the previous non-standard 480×270 and 960×540 sizes. `CaptureSnapshot` now returns the 640×480 card.
+
 ## [0.0.3] - 2026-07-17
 
 ### Breaking changes
