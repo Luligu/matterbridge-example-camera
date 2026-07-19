@@ -30,6 +30,10 @@ If you like this project and find it useful, please consider giving it a star on
 
 ## [0.0.5] - Dev branch
 
+## Added
+
+- [wirift]: Add codec negotiation and ffmpeg windows path.
+
 ## Changed
 
 - [package]: Update dependencies.
