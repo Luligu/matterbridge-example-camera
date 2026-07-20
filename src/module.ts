@@ -121,8 +121,8 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleFloodlightCamera = new FloodlightCamera('Floodlight Camera', 'FLOODLIGHTCAMERA-001', {
       powerSourceType: 'Wired',
       cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
+      lightOptions: { name: 'Floodlight' },
     });
-    exampleFloodlightCamera.addLight('Floodlight');
     await this.registerDevice(exampleFloodlightCamera);
 
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', { mode: 'server' });

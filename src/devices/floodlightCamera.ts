@@ -41,6 +41,20 @@ import { type CameraOptions, createDefaultCameraAvStreamManagementClusterServer 
 export type FloodlightCameraCameraOptions = Omit<CameraOptions, 'id' | 'number' | 'tagList' | 'mode' | 'powerSourceType'>;
 
 /**
+ * Options for the mandatory On/Off Light child endpoint created by {@link FloodlightCamera}.
+ */
+export interface FloodlightCameraLightOptions {
+  /** The name of the light. Default: 'Light' */
+  name?: string;
+
+  /** The tagList associated with the light, for disambiguation when more lights are added with {@link FloodlightCamera.addLight}. Default: no tags */
+  tagList?: Semtag[];
+
+  /** The initial state of the light. Default: false */
+  onOff?: boolean;
+}
+
+/**
  * Options for configuring a {@link FloodlightCamera} instance.
  */
 export interface FloodlightCameraOptions extends MatterbridgeEndpointOptions {
@@ -49,6 +63,9 @@ export interface FloodlightCameraOptions extends MatterbridgeEndpointOptions {
 
   /** Options for the mandatory Camera child endpoint. Missing fields use the same defaults as {@link Camera}. */
   cameraOptions?: FloodlightCameraCameraOptions;
+
+  /** Options for the mandatory On/Off Light child endpoint. Missing fields use the defaults documented on {@link FloodlightCameraLightOptions}. */
+  lightOptions?: FloodlightCameraLightOptions;
 }
 
 /**
@@ -61,9 +78,10 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
    *
    * A Floodlight Camera device is a composite device which combines a camera and a light, primarily used in
    * security use cases. It is always defined via endpoint composition: the constructor creates the composed root
-   * endpoint (Basic Information and, unless disabled, Power Source only) and the single mandatory Camera child
-   * endpoint, wired the same way as the standalone {@link Camera} device. Use {@link addLight} to add one or more
-   * On/Off Light child endpoints, as required by the Matter specification for this device type.
+   * endpoint (Basic Information and, unless disabled, Power Source only), the single mandatory Camera child
+   * endpoint, wired the same way as the standalone {@link Camera} device, and the mandatory On/Off Light child
+   * endpoint required by the Matter specification for this device type. Use {@link addLight} to add further
+   * On/Off Light child endpoints, if needed.
    *
    * @param {string} name - The name of the floodlight camera.
    * @param {string} serial - The serial number of the floodlight camera.
@@ -72,11 +90,12 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
    * Options defaults:
    *  - powerSourceType: Wired (with None, the Power Source cluster will not be created)
    *  - cameraOptions: see {@link Camera} for the full list of defaults
+   *  - lightOptions: see {@link FloodlightCameraLightOptions} for the full list of defaults
    *
    * @returns {FloodlightCamera} The FloodlightCamera instance.
    */
   constructor(name: string, serial: string, options: FloodlightCameraOptions = {}) {
-    const { powerSourceType = 'Wired', cameraOptions = {}, id, number, tagList, mode } = options;
+    const { powerSourceType = 'Wired', cameraOptions = {}, lightOptions = {}, id, number, tagList, mode } = options;
     super(powerSourceType === 'None' ? [floodlightCamera] : [floodlightCamera, powerSource], {
       id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`,
       number,
@@ -151,6 +170,9 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
     createDefaultWebRtcTransportProviderClusterServer(cameraChild);
     addWebRtcTransportRequestorClient(cameraChild);
     cameraChild.addRequiredClusters();
+
+    const { name: lightName = 'Light', tagList: lightTagList = [], onOff: lightOnOff = false } = lightOptions;
+    this.addLight(lightName, lightTagList, lightOnOff);
   }
 
   /**
@@ -164,8 +186,8 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
    *
    * @remarks
    * 16.2.4 A Floodlight Camera SHALL be composed of at least one endpoint with the On/Off Light (0x0100) device
-   * type. Call this method at least once after construction to satisfy the Matter specification for this device
-   * type.
+   * type. The constructor already creates that mandatory light; call this method to add further lights, for
+   * example to disambiguate multiple floodlights with a tagList.
    */
   addLight(name: string, tagList: Semtag[] = [], onOff: boolean = false): MatterbridgeEndpoint {
     const light = this.addChildDeviceType(name, onOffLight, tagList.length > 0 ? { tagList } : {});

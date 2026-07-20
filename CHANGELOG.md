@@ -32,9 +32,9 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
-- [floodlight camera]: Add the Floodlight Camera device type. It is a composed device: the root endpoint carries Basic Information and, unless disabled, Power Source, the mandatory Camera child endpoint is created automatically with the same CameraAvStreamManagement/WebRtcTransportProvider wiring as the standalone `Camera` device, and `addLight()` adds one or more On/Off Light child endpoints, as required by Matter specs 1.6.0 chapter 16.2.
-- [platform]: Register a Floodlight Camera example device with one light in `onStart`, and verify it's registered in `onConfigure`.
-- [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, camera identify, power source variants, multiple tagged lights, and custom stream usages; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path.
+- [floodlight camera]: Add the Floodlight Camera device type. It is a composed device: the root endpoint carries Basic Information and, unless disabled, Power Source; the mandatory Camera child endpoint and the mandatory On/Off Light child endpoint required by Matter specs 1.6.0 chapter 16.2 are both created automatically by the constructor, the Camera child with the same CameraAvStreamManagement/WebRtcTransportProvider wiring as the standalone `Camera` device; `addLight()` adds further On/Off Light child endpoints beyond the mandatory one.
+- [platform]: Register a Floodlight Camera example device in `onStart`, and verify it's registered in `onConfigure`.
+- [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, custom `lightOptions`, camera identify, power source variants, additional tagged lights, and custom stream usages; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path.
 
 ### Fixed
 

@@ -93,10 +93,10 @@ Features:
 
 Features:
 
-- A composite device type, always defined via endpoint composition: the root endpoint exposes Basic Information and, unless disabled, a Power Source cluster; the mandatory Camera child endpoint is created automatically by the constructor, wired the same way as the standalone Camera device (CameraAvStreamManagement with the Video, Audio, Snapshot and ImageControl features, and the WebRtcTransportProvider cluster and WebRtcTransportRequestor client).
-- Exposes `addLight()` to add one or more On/Off Light child endpoints, as required by the Matter specification for this device type. Each light gets its own Identify and OnOff (Lighting feature) cluster servers, with an optional tagList for disambiguation when more than one light is present.
+- A composite device type, always defined via endpoint composition: the root endpoint exposes Basic Information and, unless disabled, a Power Source cluster; the mandatory Camera child endpoint and the mandatory On/Off Light child endpoint required by the Matter specification for this device type are both created automatically by the constructor. The Camera child is wired the same way as the standalone Camera device (CameraAvStreamManagement with the Video, Audio, Snapshot and ImageControl features, and the WebRtcTransportProvider cluster and WebRtcTransportRequestor client). Each light gets its own Identify and OnOff (Lighting feature) cluster servers.
+- Exposes `addLight()` to add further On/Off Light child endpoints beyond the mandatory one, with an optional tagList for disambiguation when more than one light is present.
 - Configurable Power Source cluster type on the root endpoint: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
-- The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device.
+- The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device. The mandatory light's name, tagList, and initial state can be customized via the `lightOptions` constructor option.
 
 ## WebRTC test video injection
 

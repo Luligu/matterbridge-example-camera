@@ -62,17 +62,17 @@ describe('FloodlightCamera', () => {
     vi.restoreAllMocks();
   });
 
-  it('should create a floodlight camera device with default options and a light', async () => {
+  it('should create a floodlight camera device with default options and the mandatory light', async () => {
     const device = new FloodlightCamera('Floodlight Camera Default', 'FLOODLIGHT-CAMERA-DEFAULT');
     expect(device.id).toBe('FloodlightCameraDefault-FLOODLIGHT-CAMERA-DEFAULT');
     expect(device.deviceName).toBe('Floodlight Camera Default');
     expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
     expect(device.hasClusterServer(Identify.id)).toBeFalsy();
 
-    const light = device.addLight('Floodlight');
-    expect(light.id).toBe('Floodlight');
-    expect(light.hasClusterServer(Identify.id)).toBeTruthy();
-    expect(light.hasClusterServer(OnOff.id)).toBeTruthy();
+    const light = device.getChildEndpointById('Light');
+    expect(light).toBeDefined();
+    expect(light?.hasClusterServer(Identify.id)).toBeTruthy();
+    expect(light?.hasClusterServer(OnOff.id)).toBeTruthy();
 
     const cameraChild = device.getChildEndpointById('Camera');
     expect(cameraChild).toBeDefined();
@@ -87,16 +87,26 @@ describe('FloodlightCamera', () => {
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
     expect(device.getAttribute(FixedLabel, 'labelList')).toEqual([{ label: 'composed', value: 'FloodlightCamera' }]);
-    expect(light.getAttribute(OnOff, 'onOff')).toBe(false);
+    expect(light?.getAttribute(OnOff, 'onOff')).toBe(false);
     expect(cameraChild?.getAttribute(CameraAvStreamManagement, 'maxContentBufferSize')).toBe(4_194_304);
     expect(cameraChild?.getAttribute(CameraAvStreamManagement, 'maxNetworkBandwidth')).toBe(10_000_000);
+  });
+
+  it('should create the mandatory light with custom lightOptions', async () => {
+    const device = new FloodlightCamera('Floodlight Camera Light Options', 'FLOODLIGHT-CAMERA-LIGHT-OPTIONS', {
+      lightOptions: { name: 'Front Floodlight', tagList: [{ mfgCode: null, namespaceId: 8, tag: 0, label: 'Front' }], onOff: true },
+    });
+    const light = device.getChildEndpointById('FrontFloodlight');
+    expect(light).toBeDefined();
+
+    expect(await addDevice(aggregator, device)).toBeTruthy();
+    expect(light?.getAttribute(OnOff, 'onOff')).toBe(true);
   });
 
   it('should create a floodlight camera device with the camera identify enabled', async () => {
     const device = new FloodlightCamera('Floodlight Camera Identify', 'FLOODLIGHT-CAMERA-IDENTIFY', {
       cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
     });
-    device.addLight('Floodlight Identify');
     const cameraChild = device.getChildEndpointById('Camera');
     expect(cameraChild?.hasClusterServer(Identify.id)).toBeTruthy();
 
@@ -111,7 +121,6 @@ describe('FloodlightCamera', () => {
     ['Battery', PowerSource.BatChargeLevel.Ok],
   ] as const)('should create a floodlight camera device with a %s power source', async (powerSourceType, expectedChargeLevel) => {
     const device = new FloodlightCamera(`Floodlight Camera ${powerSourceType}`, `FLOODLIGHT-CAMERA-${powerSourceType.toUpperCase()}`, { powerSourceType });
-    device.addLight('Floodlight');
     expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
@@ -120,13 +129,12 @@ describe('FloodlightCamera', () => {
 
   it('should create a floodlight camera device with no power source', async () => {
     const device = new FloodlightCamera('Floodlight Camera None', 'FLOODLIGHT-CAMERA-NONE', { powerSourceType: 'None' });
-    device.addLight('Floodlight');
     expect(device.hasClusterServer(PowerSource.id)).toBeFalsy();
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
   });
 
-  it('should add more than one light with tags and a custom initial state', async () => {
+  it('should add additional lights with tags and a custom initial state', async () => {
     const device = new FloodlightCamera('Floodlight Camera Multi Light', 'FLOODLIGHT-CAMERA-MULTI-LIGHT');
     const left = device.addLight('Left Floodlight', [{ mfgCode: null, namespaceId: 8, tag: 0, label: 'Left' }], true);
     const right = device.addLight('Right Floodlight', [{ mfgCode: null, namespaceId: 8, tag: 1, label: 'Right' }]);
@@ -145,7 +153,6 @@ describe('FloodlightCamera', () => {
         streamUsagePriorities: [StreamUsage.LiveView],
       },
     });
-    device.addLight('Floodlight');
     const cameraChild = device.getChildEndpointById('Camera');
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
