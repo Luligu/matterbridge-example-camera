@@ -41,6 +41,15 @@ import { MatterbridgeCameraAvStreamManagementServer } from './cameraAvStreamMana
 const DEFERRED_INVOKE_DELAY_MS = 250;
 
 /**
+ * Per-candidate timeout for {@link MatterbridgeWebRtcTransportProviderServer.provideIceCandidates}. mDNS host
+ * candidates (`*.local`) are resolved by werift-ice via a real multicast DNS query before being applied (see the
+ * method's doc comment), so this must leave enough headroom for a multicast round trip on the LAN in addition to
+ * the candidate application itself, while still failing well before werift-ice's own 10s internal mDNS timeout so
+ * a candidate that truly can't be resolved (e.g. no multicast routing between subnets) is reported promptly.
+ */
+const ICE_CANDIDATE_APPLY_TIMEOUT_MS = 5000;
+
+/**
  * The subset of a remote command context's session used by {@link MatterbridgeWebRtcTransportProviderServer.#getPeerInfo}.
  */
 interface RemoteActorSessionContext {
@@ -451,6 +460,11 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * Records the ICE candidates gathered for a session and applies them to that session's real werift peer
    * connection (see {@link WeriftWebRtcSession}), if one was created by {@link solicitOffer} or {@link provideOffer}.
    *
+   * mDNS host candidates (`*.local`, e.g. from a browser with WebRTC IP obfuscation enabled) are applied like any
+   * other candidate: werift-ice resolves them via a real multicast DNS query before pairing them (see
+   * `IceGatherer.addRemoteCandidate` in the werift-ice dependency), so this method does not need to special-case
+   * them itself.
+   *
    * @param {WebRtcTransportProvider.ProvideIceCandidatesRequest} request - ProvideIceCandidates request payload.
    * @returns {Promise<void>} Resolves once the candidates have been recorded and, if applicable, applied.
    * @throws {StatusResponseError} With status NotFound if webRtcSessionId is not present in currentSessions.
@@ -468,15 +482,6 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     if (webRtcPeer) {
       for (const [index, candidate] of request.iceCandidates.entries()) {
         const startedAt = Date.now();
-        const isMdnsHostCandidate = /\.local\s+\d+\s+typ\s+host\b/i.test(candidate.candidate);
-        if (isMdnsHostCandidate) {
-          device.log.debug(
-            `Skipping mDNS host ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
-              `(mid=${candidate.sdpMid ?? 'null'}, mLine=${candidate.sdpmLineIndex ?? 'null'}) ` +
-              `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-          );
-          continue;
-        }
         device.log.debug(
           `Applying ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
             `(mid=${candidate.sdpMid ?? 'null'}, mLine=${candidate.sdpmLineIndex ?? 'null'}, endOfCandidates=${candidate.candidate.trim() === ''}) ` +
@@ -485,7 +490,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
         try {
           await Promise.race([
             webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
-            new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error('ICE candidate apply timeout after 2000ms')), 2000)),
+            new Promise<never>((_resolve, reject) =>
+              setTimeout(() => reject(new Error(`ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)), ICE_CANDIDATE_APPLY_TIMEOUT_MS),
+            ),
           ]);
           device.log.debug(
             `Applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +

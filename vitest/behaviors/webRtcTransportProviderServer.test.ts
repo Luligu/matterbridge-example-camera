@@ -311,15 +311,22 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received 1 ICE candidate(s) for session 0'));
   });
 
-  it('should skip mDNS host ICE candidates without applying them', async () => {
+  it('should apply mDNS host ICE candidates by delegating mDNS resolution to werift-ice', async () => {
+    const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
+    const webRtcPeer = internal?.sessions.get(0);
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
+    const addIceCandidateSpy = vi.spyOn(webRtcPeer!, 'addIceCandidate').mockResolvedValueOnce();
+
+    const candidate = 'candidate:1 1 UDP 1 8f4f3af1-a0a0-4f2c-9276-c6b423a3d2fd.local 54321 typ host';
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
         webRtcSessionId: 0,
-        iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 8f4f3af1-a0a0-4f2c-9276-c6b423a3d2fd.local 54321 typ host', sdpMid: null, sdpmLineIndex: null }],
+        iceCandidates: [{ candidate, sdpMid: null, sdpmLineIndex: null }],
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping mDNS host ICE candidate'));
+    expect(addIceCandidateSpy).toHaveBeenCalledWith(candidate, null, null);
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('Applying ICE candidate 1/1'));
   });
 
   it('should log a warning when applying an ICE candidate fails', async () => {
@@ -351,10 +358,10 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
         webRtcSessionId: 0,
         iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: 0 }],
       });
-      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(5000);
 
       await expect(invocation).resolves.toBeUndefined();
-      expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ICE candidate apply timeout after 2000ms'));
+      expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ICE candidate apply timeout after 5000ms'));
       loggerWarnSpy.mockClear();
     } finally {
       vi.useRealTimers();

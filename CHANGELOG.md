@@ -30,7 +30,12 @@ If you like this project and find it useful, please consider giving it a star on
 
 ## [0.0.6] - Dev branch
 
-<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+### Fixed
+
+- [webrtc]: `provideIceCandidates` unconditionally skipped every mDNS host ICE candidate (`*.local`), so a peer that only offers mDNS-obfuscated candidates (the Chromium/Edge default) left the werift peer connection with zero usable remote candidates — signaling succeeded but the stream stayed black. werift-ice already resolves `.local` candidates via a real multicast DNS query before pairing them, so candidates are no longer skipped and that resolution is allowed to run; the per-candidate apply timeout is bumped from 2000ms to 5000ms to leave headroom for the mDNS round trip. Verified against a real Edge client: the mDNS candidate resolved and applied in 98ms and video streamed correctly. See the new "Known limitation: Firefox may only offer a link-local address on a non-HTTPS page" note in the README for a related, separate client-side issue this does not fix.
+- [snapshot]: README asset docs still described the pre-#15 `camera-color-test-*.jpeg` names; `CaptureSnapshot` now reads `camera-color-{640-480,1280-720,1920-1080}.jpeg`. Also documented why all three calibration cards are kept under the ~65535-byte Matter message-size ceiling (AES-CCM's 13-byte nonce) and why it can't be worked around by tuning TCP.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
 ## [0.0.5] - 2026-07-20
 
