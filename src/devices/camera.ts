@@ -39,7 +39,7 @@ import { MatterbridgeWebRtcTransportProviderServer } from '../behaviors/webRtcTr
  * are implemented; only the Answer/End invocations on the WebRtcTransportRequestor client (Offer invocation only is
  * implemented), required by the Matter specification for a fully compliant Camera device type, are not part of this example.
  */
-export interface CameraOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+export interface CameraOptions extends MatterbridgeEndpointOptions {
   /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
   /** Identify type. Default: Identify.IdentifyType.None (the Identify cluster will not be created) */
@@ -139,10 +139,12 @@ export class Camera extends MatterbridgeEndpoint {
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
       allocatedSnapshotStreams = [],
+      id,
+      number,
       tagList,
       mode,
     } = options;
-    super(powerSourceType === 'None' ? [camera] : [camera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
+    super(powerSourceType === 'None' ? [camera] : [camera, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }

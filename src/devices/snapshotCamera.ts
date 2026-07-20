@@ -31,7 +31,7 @@ import { MatterbridgeCameraAvStreamManagementServer } from '../behaviors/cameraA
 /**
  * Options for configuring a {@link SnapshotCamera} instance.
  */
-export interface SnapshotCameraOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+export interface SnapshotCameraOptions extends MatterbridgeEndpointOptions {
   /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
   /** Identify type. Default: Identify.IdentifyType.None (the Identify cluster will not be created) */
@@ -110,10 +110,12 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
       supportedStreamUsages = [StreamUsage.Recording],
       allocatedSnapshotStreams = [],
       streamUsagePriorities = [StreamUsage.Recording],
+      id,
+      number,
       tagList,
       mode,
     } = options;
-    super(powerSourceType === 'None' ? [snapshotCamera] : [snapshotCamera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
+    super(powerSourceType === 'None' ? [snapshotCamera] : [snapshotCamera, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }

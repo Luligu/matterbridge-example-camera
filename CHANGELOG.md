@@ -43,7 +43,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [package]: Upgrade package.
 - [camera]: Use the shared `addWebRtcTransportRequestorClient` helper from `clients.ts` instead of a local duplicate.
 - [doorbell]: Use the shared `addChimeClient` helper from `clients.ts` instead of inline binding code.
-- [devices]: `DoorbellOptions`, `AudioDoorbellOptions`, `ChimeOptions`, `CameraOptions`, and `SnapshotCameraOptions` now extend `Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'>`, forwarding `tagList`/`mode` to the underlying `MatterbridgeEndpoint`, and document the default value of each `identifyTime`/`identifyType`/`powerSourceType` option in JSDoc.
+- [devices]: `DoorbellOptions`, `AudioDoorbellOptions`, `ChimeOptions`, `CameraOptions`, and `SnapshotCameraOptions` now extend `MatterbridgeEndpointOptions`, forwarding `id`/`number`/`tagList`/`mode` to the underlying `MatterbridgeEndpoint` (`id` defaults to `${name}-${serial}` when not provided), and document the default value of each `identifyTime`/`identifyType`/`powerSourceType` option in JSDoc.
 - [module]: Register the `AudioDoorbell` example device in `onStart` and verify it's registered in `onConfigure`, alongside the existing `Chime`, `Doorbell`, `SnapshotCamera`, and `Camera` example devices.
 - [tests]: Add `vitest/module.test.ts` coverage for the `AudioDoorbell` and `Camera` "device not registered" `onConfigure` error paths, and for the `animationInterval` configuration option (periodic `animationHandler` execution, phase wraparound, and interval cleanup on shutdown).
 

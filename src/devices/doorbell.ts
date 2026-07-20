@@ -31,7 +31,7 @@ import { addChimeClient } from '../behaviors/clients.js';
 /**
  * Options for configuring a {@link Doorbell} instance.
  */
-export interface DoorbellOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+export interface DoorbellOptions extends MatterbridgeEndpointOptions {
   /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
   /** Identify type. The Identify cluster is always created because it is a required server cluster for the Doorbell device type. Default: Identify.IdentifyType.None */
@@ -65,8 +65,8 @@ export class Doorbell extends MatterbridgeEndpoint {
    * @returns {Doorbell} The Doorbell instance.
    */
   constructor(name: string, serial: string, options: DoorbellOptions = {}) {
-    const { identifyTime = 0, identifyType = Identify.IdentifyType.None, powerSourceType = 'Wired', tagList, mode } = options;
-    super(powerSourceType === 'None' ? [doorbell] : [doorbell, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
+    const { identifyTime = 0, identifyType = Identify.IdentifyType.None, powerSourceType = 'Wired', id, number, tagList, mode } = options;
+    super(powerSourceType === 'None' ? [doorbell] : [doorbell, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     this.createDefaultBasicInformationClusterServer(name, serial, 0xfff1, 'Matterbridge', 0x8000, 'Matterbridge Doorbell');
     switch (powerSourceType) {

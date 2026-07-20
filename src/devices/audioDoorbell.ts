@@ -33,7 +33,7 @@ import { createDefaultWebRtcTransportProviderClusterServer } from '../behaviors/
 /**
  * Options for configuring an {@link AudioDoorbell} instance.
  */
-export interface AudioDoorbellOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+export interface AudioDoorbellOptions extends MatterbridgeEndpointOptions {
   /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
   /** Identify type. The Identify cluster is always created because it is a required server cluster for the Audio Doorbell device type. Default: Identify.IdentifyType.None */
@@ -104,10 +104,12 @@ export class AudioDoorbell extends MatterbridgeEndpoint {
       supportedStreamUsages = [StreamUsage.LiveView],
       streamUsagePriorities = supportedStreamUsages,
       microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
+      id,
+      number,
       tagList,
       mode,
     } = options;
-    super(powerSourceType === 'None' ? [audioDoorbell] : [audioDoorbell, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
+    super(powerSourceType === 'None' ? [audioDoorbell] : [audioDoorbell, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     this.createDefaultBasicInformationClusterServer(name, serial, 0xfff1, 'Matterbridge', 0x8000, 'Matterbridge Audio Doorbell');
     switch (powerSourceType) {

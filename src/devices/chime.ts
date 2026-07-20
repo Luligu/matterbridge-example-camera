@@ -35,7 +35,7 @@ export type ChimeId = number;
  *
  * All temperatures in °C. Typical valid range 0–50 unless otherwise noted.
  */
-export interface ChimeOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+export interface ChimeOptions extends MatterbridgeEndpointOptions {
   /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
   /** Identify type. Default: Identify.IdentifyType.None (the Identify cluster will not be created) */
@@ -90,10 +90,12 @@ export class Chime extends MatterbridgeEndpoint {
       ],
       selectedChime = 0,
       enabled = true,
+      id,
+      number,
       tagList,
       mode,
     } = options;
-    super(powerSourceType === 'None' ? [chime] : [chime, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
+    super(powerSourceType === 'None' ? [chime] : [chime, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }
