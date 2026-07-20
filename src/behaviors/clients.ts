@@ -1,6 +1,6 @@
 /**
  * @file src/behaviors/clients.ts
- * @description This file contains helpers that wire required cluster client behaviors (Chime, WebRtcTransportRequestor) onto a MatterbridgeEndpoint.
+ * @description This file contains helpers that wire required cluster client behaviors (Chime, WebRtcTransportRequestor, WebRtcTransportProvider) onto a MatterbridgeEndpoint.
  * @author Luca Liguori
  * @created 2026-07-20
  * @version 1.0.0
@@ -23,8 +23,8 @@
 
 import type { MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
-import { ChimeClient, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
-import { Chime, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
+import { ChimeClient, WebRtcTransportProviderClient, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
+import { Chime, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import type { ClusterId } from 'matterbridge/matter/types';
 
 /**
@@ -81,5 +81,27 @@ export function addChimeClient(endpoint: MatterbridgeEndpoint): MatterbridgeEndp
 export function addWebRtcTransportRequestorClient(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
   addBindingClientListEntry(endpoint, WebRtcTransportRequestor.id);
   endpoint.type.clientClusters.webRtcTransportRequestor ??= WebRtcTransportRequestorClient;
+  return endpoint;
+}
+
+/**
+ * Registers the WebRtcTransportProvider client cluster on the given endpoint, so the Descriptor cluster's ClientList
+ * declares it as required by the Matter specification. Used by device types that act as both provider and requestor
+ * of WebRTC transports (e.g. Intercom), which must be able to invoke commands on a peer's WebRtcTransportProvider in
+ * addition to hosting their own.
+ *
+ * Matterbridge core does not map WebRtcTransportProvider's client behavior type yet (see
+ * getBehaviourTypeFromClusterClientId in matterbridgeEndpointHelpers.ts), so the generic addRequiredClusterClients()
+ * only records the cluster id in MatterbridgeBindingServer's clientList (which is what populates the Descriptor's
+ * ClientList) without wiring the actual WebRtcTransportProviderClient behavior type into the endpoint. This helper
+ * does that wiring directly, mirroring what addClusterClients does internally for clusters Matterbridge core already
+ * maps, and what {@link addWebRtcTransportRequestorClient} does for the requestor client.
+ *
+ * @param {MatterbridgeEndpoint} endpoint - The endpoint to register the WebRtcTransportProvider client cluster on.
+ * @returns {MatterbridgeEndpoint} The endpoint with the WebRtcTransportProvider client cluster registered.
+ */
+export function addWebRtcTransportProviderClient(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
+  addBindingClientListEntry(endpoint, WebRtcTransportProvider.id);
+  endpoint.type.clientClusters.webRtcTransportProvider ??= WebRtcTransportProviderClient;
   return endpoint;
 }

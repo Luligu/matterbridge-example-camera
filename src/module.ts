@@ -34,6 +34,7 @@ import { AudioDoorbell } from './devices/audioDoorbell.js';
 import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
 import { Doorbell } from './devices/doorbell.js';
+import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
@@ -117,6 +118,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleCamera = new Camera('Camera', 'CAMERA-001');
     await this.registerDevice(exampleCamera);
 
+    const exampleIntercom = new Intercom('Intercom', 'INTERCOM-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Replaceable',
+    });
+    await this.registerDevice(exampleIntercom);
+
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', { mode: 'server' });
     await this.registerDevice(serverChime);
 
@@ -151,6 +159,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
     if (!exampleCamera) throw new Error(`Camera device not found. Please ensure the device is registered before configuration.`);
 
+    const exampleIntercom: Intercom | undefined = this.getDeviceById('Intercom-INTERCOM-001');
+    if (!exampleIntercom) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
+
     if (this.config.animationInterval > 0) {
       clearInterval(this.animationInterval);
       this.animationInterval = setInterval(() => void this.animationHandler(), this.config.animationInterval * 1000);
@@ -176,6 +187,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleAudioDoorbell: AudioDoorbell | undefined = this.getDeviceById('AudioDoorbell-AUDIODOORBELL-001');
     const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001');
     const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
+    const exampleIntercom: Intercom | undefined = this.getDeviceById('Intercom-INTERCOM-001');
     */
   }
 

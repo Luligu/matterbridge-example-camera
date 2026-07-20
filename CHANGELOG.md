@@ -28,6 +28,16 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.0.6] - Dev branch
+
+### Added
+
+- [intercom]: Add the Intercom device type with the Camera AV Stream Management (Audio feature), WebRtcTransportProvider, and WebRtcTransportRequestor server clusters, plus the WebRtcTransportProvider, WebRtcTransportRequestor, and Chime client clusters, Identify, and Power Source support.
+- [clients]: Add `addWebRtcTransportProviderClient` helper to `src/behaviors/clients.ts`, shared by `Intercom`, mirroring `addWebRtcTransportRequestorClient`.
+- [behaviors]: Add `src/behaviors/webRtcTransportRequestorServer.ts` with `createDefaultWebRtcTransportRequestorClusterServer`, using matter.js's default `WebRtcTransportRequestorServer` implementation directly.
+- [tests]: Add `vitest/devices/intercom.test.ts`, and extend `vitest/behaviors/clients.test.ts` to cover `addWebRtcTransportProviderClient`.
+- [platform]: Add an Intercom to test binding.
+
 ## [0.0.5] - 2026-07-20
 
 ### Added

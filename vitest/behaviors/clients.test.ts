@@ -1,6 +1,6 @@
 /**
  * @file vitest/behaviors/clients.test.ts
- * @description This file contains the tests for the addChimeClient/addWebRtcTransportRequestorClient helpers.
+ * @description This file contains the tests for the addChimeClient/addWebRtcTransportRequestorClient/addWebRtcTransportProviderClient helpers.
  * @author Luca Liguori
  */
 
@@ -10,13 +10,14 @@ const MATTER_CREATE_ONLY = true;
 
 import { doorbell, MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
-import { ChimeClient, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
-import { Chime, Identify, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
+import { ChimeClient, WebRtcTransportProviderClient, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
+import { Chime, Identify, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import { createServerNode, createTestEnvironment, destroyTestEnvironment, flushServerNode, startServerNode, stopServerNode } from 'matterbridge/vitest-utils/matter';
 
-import { addChimeClient, addWebRtcTransportRequestorClient } from '../../src/behaviors/clients.js';
+import { addChimeClient, addWebRtcTransportProviderClient, addWebRtcTransportRequestorClient } from '../../src/behaviors/clients.js';
 import { Camera } from '../../src/devices/camera.js';
+import { Intercom } from '../../src/devices/intercom.js';
 
 await setupTest(NAME);
 
@@ -140,6 +141,51 @@ describe('clients', () => {
 
       const clientList = (device.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
       expect(clientList).toEqual([WebRtcTransportRequestor.id]);
+    });
+  });
+
+  describe('addWebRtcTransportProviderClient', () => {
+    it('should create MatterbridgeBindingServer when missing and register the WebRtcTransportProvider client', () => {
+      const endpoint = new MatterbridgeEndpoint([doorbell], { id: 'WebRtcProviderClientCreateBinding' });
+
+      expect(endpoint.behaviors.has(MatterbridgeBindingServer)).toBeFalsy();
+      expect(addWebRtcTransportProviderClient(endpoint)).toBe(endpoint);
+      expect(endpoint.behaviors.has(MatterbridgeBindingServer)).toBeTruthy();
+
+      const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
+      expect(clientList).toEqual([WebRtcTransportProvider.id]);
+      expect(endpoint.type.clientClusters['webRtcTransportProvider']).toBe(WebRtcTransportProviderClient);
+    });
+
+    it('should add WebRtcTransportProvider to an existing MatterbridgeBindingServer clientList', () => {
+      const endpoint = new MatterbridgeEndpoint([doorbell], { id: 'WebRtcProviderClientMerge' });
+      endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [Identify.id] });
+
+      expect(addWebRtcTransportProviderClient(endpoint)).toBe(endpoint);
+
+      const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
+      expect(clientList).toEqual([Identify.id, WebRtcTransportProvider.id]);
+    });
+
+    it('should add WebRtcTransportProvider when an existing MatterbridgeBindingServer has no clientList option', () => {
+      const endpoint = new MatterbridgeEndpoint([doorbell], { id: 'WebRtcProviderClientNoOptions' });
+      endpoint.behaviors.require(MatterbridgeBindingServer);
+
+      expect(addWebRtcTransportProviderClient(endpoint)).toBe(endpoint);
+
+      const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
+      expect(clientList).toEqual([WebRtcTransportProvider.id]);
+    });
+
+    it('should add WebRtcTransportProvider to an endpoint that already has it registered', () => {
+      // The Intercom constructor already calls addWebRtcTransportProviderClient once; calling it again should
+      // return the same endpoint without duplicating the clientList entry or the clientClusters mapping.
+      const device = new Intercom('Clients WebRtc Provider', 'CLIENTS-WEBRTC-PROVIDER');
+
+      expect(addWebRtcTransportProviderClient(device)).toBe(device);
+
+      const clientList = (device.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
+      expect(clientList).toEqual([WebRtcTransportProvider.id, WebRtcTransportRequestor.id, Chime.id]);
     });
   });
 });
