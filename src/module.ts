@@ -117,6 +117,12 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleCamera = new Camera('Camera', 'CAMERA-001');
     await this.registerDevice(exampleCamera);
 
+    const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', { mode: 'server' });
+    await this.registerDevice(serverChime);
+
+    const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', { mode: 'server' });
+    await this.registerDevice(serverDoorbell);
+
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
 
