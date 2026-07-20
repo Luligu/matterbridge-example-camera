@@ -89,6 +89,15 @@ Features:
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 - Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around a matter.js bug where the ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one shall be present" choice conformance is enforced unconditionally instead of only when ImageControl is enabled (see the JSDoc in `src/devices/audioDoorbell.ts`).
 
+### Floodlight Camera
+
+Features:
+
+- A composite device type, always defined via endpoint composition: the root endpoint exposes Basic Information and, unless disabled, a Power Source cluster; the mandatory Camera child endpoint is created automatically by the constructor, wired the same way as the standalone Camera device (CameraAvStreamManagement with the Video, Audio, Snapshot and ImageControl features, and the WebRtcTransportProvider cluster and WebRtcTransportRequestor client).
+- Exposes `addLight()` to add one or more On/Off Light child endpoints, as required by the Matter specification for this device type. Each light gets its own Identify and OnOff (Lighting feature) cluster servers, with an optional tagList for disambiguation when more than one light is present.
+- Configurable Power Source cluster type on the root endpoint: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+- The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device.
+
 ## WebRTC test video injection
 
 `WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video track into the negotiated connection, so the end-to-end media path can be validated without a real camera capture pipeline.

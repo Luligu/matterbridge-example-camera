@@ -28,6 +28,14 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.0.6] - Dev branch
+
+### Added
+
+- [floodlight camera]: Add the Floodlight Camera device type. It is a composed device: the root endpoint carries Basic Information and, unless disabled, Power Source, the mandatory Camera child endpoint is created automatically with the same CameraAvStreamManagement/WebRtcTransportProvider wiring as the standalone `Camera` device, and `addLight()` adds one or more On/Off Light child endpoints, as required by Matter specs 1.6.0 chapter 16.2.
+- [platform]: Register a Floodlight Camera example device with one light in `onStart`, and verify it's registered in `onConfigure`.
+- [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, camera identify, power source variants, multiple tagged lights, and custom stream usages; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path.
+
 ## [0.0.5] - 2026-07-20
 
 ### Added
