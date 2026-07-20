@@ -1,6 +1,6 @@
 {
   "name": "matterbridge-example-camera",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Matterbridge camera example plugin",
   "author": "https://github.com/Luligu",
   "license": "Apache-2.0",
@@ -71,7 +71,7 @@
     "jest": false,
     "vitest": true,
     "native": true,
-    "git": false,
+    "git": true,
     "version": false,
     "publish": false,
     "coverage": {
