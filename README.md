@@ -162,6 +162,16 @@ The `assets` directory contains deterministic three-second media fixtures for ex
 - `camera-color-640-480.jpeg`: 640×480 simplified ffmpeg-generated color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
 - `camera-color-test-1920-1080.jpeg`, `camera-color-test-1280-720.jpeg`, `camera-color-test-960-540.jpeg`, `camera-color-test-640-480.jpeg`, and `camera-color-test-480-270.jpeg`: additional SMPTE color-bars snapshot fixtures.
 
+#### Why the snapshot calibration cards stay under ~64 KB
+
+All three calibration cards above are kept well under the Matter message size ceiling, which caps at **65535 bytes** for a single message and cannot be worked around by tuning TCP:
+
+- Every Matter message is encrypted with AES-128-CCM, using a 13-byte nonce built from the security flags, message counter, and node ID (`Session.generateNonce`, part of the Matter message-security spec, not a matter.js choice).
+- AES-CCM (RFC 3610 / NIST SP 800-38C) requires the nonce length `N` and the length-field size `L` to satisfy `N + L = 15` bytes for a 128-bit block cipher. With `N = 13`, that leaves `L = 2`.
+- A 2-byte length field caps the plaintext of a single CCM-encrypted message at `2^16 - 1 = 65535` bytes — a cryptographic ceiling, not a networking one. matter.js's `DEFAULT_MAX_TCP_MESSAGE_SIZE` (64000) is just a round number kept safely under that limit.
+
+A `CaptureSnapshot` response whose `data` field doesn't fit fails to send: the client gets a generic invoke failure instead of an image, since the encoder cannot represent the required plaintext length in the message header. `CameraAvStreamManagement.CaptureSnapshot` returns its image as a single field of a single command response, so it inherits this ceiling directly. Matter has a dedicated mechanism for transferring larger payloads — BDX (Bulk Data Exchange), used for OTA updates and diagnostic logs — which splits big content across a sequence of acknowledged messages instead of one oversized one, but `CaptureSnapshot` doesn't use it.
+
 WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they do not send an MP4, Ogg, or MPEG container directly. The current MP4 transfer deliberately uses the separate data-channel path. A future video-track test should parse the relevant elementary frames, packetize them as RTP, call werift's media track `writeRtp()`, and verify reception through `onTrack` and `onReceiveRtp`.
 
 ## Chip tests
