@@ -22,6 +22,7 @@ import {
 } from 'matterbridge/vitest-utils/matter';
 
 import { AudioDoorbell } from '../src/devices/audioDoorbell.js';
+import { Camera } from '../src/devices/camera.js';
 import { Chime } from '../src/devices/chime.js';
 import { Doorbell } from '../src/devices/doorbell.js';
 import { SnapshotCamera } from '../src/devices/snapshotCamera.js';
@@ -159,12 +160,40 @@ describe('TestPlatform', () => {
     await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Camera device not found. Please ensure the device is registered before configuration.');
   });
 
+  it('should throw error in onConfigure when the intercom device is not registered', async () => {
+    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
+    const chime = new Chime('Chime', 'CHIME-001');
+    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
+    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
+    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
+    const audioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001');
+    const snapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOTCAMERA-001');
+    const camera = new Camera('Camera', 'CAMERA-001');
+    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) =>
+      id === 'Chime-CHIME-001'
+        ? chime
+        : id === 'Doorbell-DOORBELL-001'
+          ? doorbell
+          : id === 'AudioDoorbell-AUDIODOORBELL-001'
+            ? audioDoorbell
+            : id === 'SnapshotCamera-SNAPSHOTCAMERA-001'
+              ? snapshotCamera
+              : id === 'Camera-CAMERA-001'
+                ? camera
+                : undefined,
+    );
+    addMatterbridge(unconfiguredPlatform);
+
+    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Intercom device not found. Please ensure the device is registered before configuration.');
+  });
+
   it('should call onStart with reason', async () => {
     await platform.onStart('Test reason');
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Starting platform ${config.name} with reason: Test reason...`);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} started successfully`);
     expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
+    expect(platform.getDeviceById('Intercom-INTERCOM-001')).toBeDefined();
   });
 
   it('should call onConfigure', async () => {
