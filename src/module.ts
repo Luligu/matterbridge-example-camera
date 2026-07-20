@@ -30,10 +30,17 @@ import type { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import type { AnsiLogger } from 'matterbridge/logger';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 
+import { AudioDoorbell } from './devices/audioDoorbell.js';
 import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
 import { Doorbell } from './devices/doorbell.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
+
+export type CameraPlatformConfig = PlatformConfig & {
+  whiteList: string[];
+  blackList: string[];
+  animationInterval: number;
+};
 
 /**
  * This is the standard interface for Matterbridge plugins.
@@ -44,12 +51,19 @@ import { SnapshotCamera } from './devices/snapshotCamera.js';
  * @param {PlatformConfig} config - The platform configuration.
  * @returns {ExampleMatterbridgeCameraPlatform} - An instance of the ExampleMatterbridgeCameraPlatform. This is the main interface for interacting with the camera example plugin.
  */
-export default function initializePlugin(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: PlatformConfig): ExampleMatterbridgeCameraPlatform {
+export default function initializePlugin(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: CameraPlatformConfig): ExampleMatterbridgeCameraPlatform {
   return new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
 }
 
 export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatform {
-  constructor(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: PlatformConfig) {
+  animationPhase: number = 0;
+  animationInterval: NodeJS.Timeout | undefined;
+
+  constructor(
+    matterbridge: PlatformMatterbridge,
+    log: AnsiLogger,
+    override config: CameraPlatformConfig,
+  ) {
     super(matterbridge, log, config);
 
     // Verify that Matterbridge is the correct version
@@ -86,7 +100,14 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.registerDevice(exampleDoorbell);
 
-    const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOT-001', {
+    const exampleAudioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Replaceable',
+    });
+    await this.registerDevice(exampleAudioDoorbell);
+
+    const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOTCAMERA-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Wired',
@@ -115,15 +136,49 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleDoorbell: Doorbell | undefined = this.getDeviceById('Doorbell-DOORBELL-001');
     if (!exampleDoorbell) throw new Error(`Doorbell device not found. Please ensure the device is registered before configuration.`);
 
-    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOT-001');
+    const exampleAudioDoorbell: AudioDoorbell | undefined = this.getDeviceById('AudioDoorbell-AUDIODOORBELL-001');
+    if (!exampleAudioDoorbell) throw new Error(`Audio doorbell device not found. Please ensure the device is registered before configuration.`);
+
+    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001');
     if (!exampleSnapshotCamera) throw new Error(`Snapshot camera device not found. Please ensure the device is registered before configuration.`);
 
+    const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
+    if (!exampleCamera) throw new Error(`Camera device not found. Please ensure the device is registered before configuration.`);
+
+    if (this.config.animationInterval > 0) {
+      clearInterval(this.animationInterval);
+      this.animationInterval = setInterval(() => void this.animationHandler(), this.config.animationInterval * 1000);
+    }
+
     this.log.info(`Platform ${this.config.name} configured successfully`);
+  }
+
+  /** Handles the animation logic for the platform.
+   * This method is called at regular intervals defined by the animationInterval configuration.
+   *
+   * @returns {Promise<void>} A promise that resolves when the animation handling is complete.
+   */
+  // oxlint-disable-next-line typescript/require-await
+  async animationHandler(): Promise<void> {
+    this.animationPhase = this.animationPhase + 1;
+    this.animationPhase = this.animationPhase > 10 ? 0 : this.animationPhase;
+    this.log.info(`Platform ${this.config.name} animation phase: ${this.animationPhase}`);
+
+    /*
+    const exampleChime: Chime | undefined = this.getDeviceById('Chime-CHIME-001');
+    const exampleDoorbell: Doorbell | undefined = this.getDeviceById('Doorbell-DOORBELL-001');
+    const exampleAudioDoorbell: AudioDoorbell | undefined = this.getDeviceById('AudioDoorbell-AUDIODOORBELL-001');
+    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001');
+    const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
+    */
   }
 
   override async onShutdown(reason?: string): Promise<void> {
     await super.onShutdown(reason);
     this.log.info(`Shutting down platform ${this.config.name} with reason: ${reason ?? 'No reason provided'}...`);
+
+    clearInterval(this.animationInterval);
+    this.animationInterval = undefined;
 
     if (this.config.unregisterOnShutdown) await this.unregisterAllDevices();
 

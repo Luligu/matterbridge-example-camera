@@ -8,7 +8,7 @@ const NAME = 'Platform';
 const MATTER_PORT = 6000;
 const MATTER_CREATE_ONLY = true;
 
-import type { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
+import type { PlatformMatterbridge } from 'matterbridge';
 import { log, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setDebug, setupTest } from 'matterbridge/vitest-utils';
 import {
   addMatterbridge,
@@ -21,9 +21,11 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
+import { AudioDoorbell } from '../src/devices/audioDoorbell.js';
 import { Chime } from '../src/devices/chime.js';
 import { Doorbell } from '../src/devices/doorbell.js';
-import initializePlugin, { ExampleMatterbridgeCameraPlatform } from '../src/module.js';
+import { SnapshotCamera } from '../src/devices/snapshotCamera.js';
+import initializePlugin, { type CameraPlatformConfig, ExampleMatterbridgeCameraPlatform } from '../src/module.js';
 
 await setupTest(NAME);
 
@@ -31,10 +33,13 @@ describe('TestPlatform', () => {
   let matterbridge: PlatformMatterbridge;
   let platform: ExampleMatterbridgeCameraPlatform;
 
-  const config: PlatformConfig = {
+  const config: CameraPlatformConfig = {
     name: 'matterbridge-example-camera',
     type: 'DynamicPlatform',
     version: '1.0.0',
+    whiteList: [],
+    blackList: [],
+    animationInterval: 0,
     debug: false,
     unregisterOnShutdown: false,
   };
@@ -103,7 +108,7 @@ describe('TestPlatform', () => {
     await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Doorbell device not found. Please ensure the device is registered before configuration.');
   });
 
-  it('should throw error in onConfigure when the snapshot camera device is not registered', async () => {
+  it('should throw error in onConfigure when the audio doorbell device is not registered', async () => {
     const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
     const chime = new Chime('Chime', 'CHIME-001');
     vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
@@ -112,13 +117,53 @@ describe('TestPlatform', () => {
     vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) => (id === 'Chime-CHIME-001' ? chime : id === 'Doorbell-DOORBELL-001' ? doorbell : undefined));
     addMatterbridge(unconfiguredPlatform);
 
+    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Audio doorbell device not found. Please ensure the device is registered before configuration.');
+  });
+
+  it('should throw error in onConfigure when the snapshot camera device is not registered', async () => {
+    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
+    const chime = new Chime('Chime', 'CHIME-001');
+    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
+    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
+    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
+    const audioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001');
+    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) =>
+      id === 'Chime-CHIME-001' ? chime : id === 'Doorbell-DOORBELL-001' ? doorbell : id === 'AudioDoorbell-AUDIODOORBELL-001' ? audioDoorbell : undefined,
+    );
+    addMatterbridge(unconfiguredPlatform);
+
     await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Snapshot camera device not found. Please ensure the device is registered before configuration.');
+  });
+
+  it('should throw error in onConfigure when the camera device is not registered', async () => {
+    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
+    const chime = new Chime('Chime', 'CHIME-001');
+    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
+    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
+    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
+    const audioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001');
+    const snapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOTCAMERA-001');
+    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) =>
+      id === 'Chime-CHIME-001'
+        ? chime
+        : id === 'Doorbell-DOORBELL-001'
+          ? doorbell
+          : id === 'AudioDoorbell-AUDIODOORBELL-001'
+            ? audioDoorbell
+            : id === 'SnapshotCamera-SNAPSHOTCAMERA-001'
+              ? snapshotCamera
+              : undefined,
+    );
+    addMatterbridge(unconfiguredPlatform);
+
+    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Camera device not found. Please ensure the device is registered before configuration.');
   });
 
   it('should call onStart with reason', async () => {
     await platform.onStart('Test reason');
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Starting platform ${config.name} with reason: Test reason...`);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} started successfully`);
+    expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
   });
 
@@ -156,5 +201,39 @@ describe('TestPlatform', () => {
     expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Endpoint number for device'));
     loggerWarnSpy.mockClear();
     expect(unregisterSpy).toHaveBeenCalled();
+  });
+
+  it('should run animationHandler on the configured interval and clear it on shutdown', async () => {
+    vi.useFakeTimers();
+    try {
+      // The previous test left unregisterAllDevices mocked as a no-op on the shared platform; restore it and
+      // clean up its devices for real before registering a fresh set under this test's own config.
+      vi.mocked(platform.unregisterAllDevices).mockRestore();
+      await platform.unregisterAllDevices();
+
+      const animatedConfig: CameraPlatformConfig = { ...config, animationInterval: 5 };
+      platform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, animatedConfig);
+      addMatterbridge(platform);
+      await platform.onStart();
+      await platform.onConfigure();
+
+      // Advance past the phase wraparound (phase > 10 resets to 0) to cover both branches
+      for (let i = 0; i < 12; i++) {
+        await vi.advanceTimersByTimeAsync(5000);
+      }
+      expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('animation phase: 10'));
+      expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('animation phase: 0'));
+
+      await platform.onShutdown();
+      // The devices were re-registered above with new endpoint numbers, so onShutdown's checkEndpointNumbers() warns about the change
+      loggerWarnSpy.mockClear();
+      loggerInfoSpy.mockClear();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(loggerInfoSpy).not.toHaveBeenCalledWith(expect.stringContaining('animation phase'));
+
+      await platform.unregisterAllDevices();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

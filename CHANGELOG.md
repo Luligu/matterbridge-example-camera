@@ -30,19 +30,22 @@ If you like this project and find it useful, please consider giving it a star on
 
 ## [0.0.5] - Dev branch
 
-## Added
+### Added
 
 - [wirift]: Add codec negotiation and ffmpeg windows path.
 - [audio doorbell]: Add the Audio Doorbell device type with the required Identify, Switch (MomentarySwitch feature), Camera AV Stream Management (Audio feature), and WebRtcTransportProvider clusters, plus the Chime and WebRtcTransportRequestor client clusters, and Power Source support.
 - [clients]: Add `src/behaviors/clients.ts` with `addChimeClient`/`addWebRtcTransportRequestorClient` helpers, shared by `Doorbell`, `AudioDoorbell`, and `Camera`.
 - [tests]: Add `vitest/behaviors/clients.test.ts` covering `addChimeClient`/`addWebRtcTransportRequestorClient`, and assert in `doorbell.test.ts`, `camera.test.ts`, and `audioDoorbell.test.ts` that the required client clusters are registered in `MatterbridgeBindingServer`'s `clientList` and `type.clientClusters`.
 
-## Changed
+### Changed
 
 - [package]: Update dependencies.
 - [package]: Upgrade package.
 - [camera]: Use the shared `addWebRtcTransportRequestorClient` helper from `clients.ts` instead of a local duplicate.
 - [doorbell]: Use the shared `addChimeClient` helper from `clients.ts` instead of inline binding code.
+- [devices]: `DoorbellOptions`, `AudioDoorbellOptions`, `ChimeOptions`, `CameraOptions`, and `SnapshotCameraOptions` now extend `Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'>`, forwarding `tagList`/`mode` to the underlying `MatterbridgeEndpoint`, and document the default value of each `identifyTime`/`identifyType`/`powerSourceType` option in JSDoc.
+- [module]: Register the `AudioDoorbell` example device in `onStart` and verify it's registered in `onConfigure`, alongside the existing `Chime`, `Doorbell`, `SnapshotCamera`, and `Camera` example devices.
+- [tests]: Add `vitest/module.test.ts` coverage for the `AudioDoorbell` and `Camera` "device not registered" `onConfigure` error paths, and for the `animationInterval` configuration option (periodic `animationHandler` execution, phase wraparound, and interval cleanup on shutdown).
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
 
