@@ -109,7 +109,12 @@ export class AudioDoorbell extends MatterbridgeEndpoint {
       tagList,
       mode,
     } = options;
-    super(powerSourceType === 'None' ? [audioDoorbell] : [audioDoorbell, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
+    super(powerSourceType === 'None' ? [audioDoorbell] : [audioDoorbell, powerSource], {
+      id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`,
+      number,
+      tagList,
+      mode,
+    });
     this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     this.createDefaultBasicInformationClusterServer(name, serial, 0xfff1, 'Matterbridge', 0x8000, 'Matterbridge Audio Doorbell');
     switch (powerSourceType) {
