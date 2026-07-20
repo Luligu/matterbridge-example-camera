@@ -93,7 +93,7 @@ Features:
 
 Features:
 
-- Exposes the Camera AV Stream Management cluster with the Audio feature only (the Video and Snapshot features are not present, per the Matter specification for this device type; see Camera for a device implementing those).
+- Exposes the Camera AV Stream Management cluster with the Audio and Speaker features (the Video and Snapshot features are not present, per the Matter specification for this device type; see Camera for a device implementing those). The Speaker feature is what makes an Intercom genuinely two-way: unlike Audio Doorbell, it can both capture and play back audio. Configurable speaker capabilities (codec, sample rates, channels) and two-way talk support (NotSupported, HalfDuplex, FullDuplex; default FullDuplex).
 - Unlike Camera and Audio Doorbell, an Intercom both hosts and invokes WebRtcTransportProvider and WebRtcTransportRequestor: it exposes both cluster servers, and registers both as client clusters via `addWebRtcTransportProviderClient`/`addWebRtcTransportRequestorClient`, so it can both receive and solicit WebRTC offers to/from a peer intercom.
 - Adds the optional Chime client cluster automatically via `addChimeClient`, so a bound Chime device can be triggered.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.

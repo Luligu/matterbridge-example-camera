@@ -32,7 +32,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
-- [intercom]: Add the Intercom device type with the Camera AV Stream Management (Audio feature), WebRtcTransportProvider, and WebRtcTransportRequestor server clusters, plus the WebRtcTransportProvider, WebRtcTransportRequestor, and Chime client clusters, Identify, and Power Source support.
+- [intercom]: Add the Intercom device type with the Camera AV Stream Management (Audio and Speaker features, for genuine two-way audio), WebRtcTransportProvider, and WebRtcTransportRequestor server clusters, plus the WebRtcTransportProvider, WebRtcTransportRequestor, and Chime client clusters, Identify, and Power Source support.
 - [clients]: Add `addWebRtcTransportProviderClient` helper to `src/behaviors/clients.ts`, shared by `Intercom`, mirroring `addWebRtcTransportRequestorClient`.
 - [behaviors]: Add `src/behaviors/webRtcTransportRequestorServer.ts` with `createDefaultWebRtcTransportRequestorClusterServer`, using matter.js's default `WebRtcTransportRequestorServer` implementation directly.
 - [tests]: Add `vitest/devices/intercom.test.ts`, and extend `vitest/behaviors/clients.test.ts` to cover `addWebRtcTransportProviderClient`.

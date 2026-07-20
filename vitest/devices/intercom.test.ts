@@ -91,6 +91,14 @@ describe('Intercom', () => {
       supportedSampleRates: [48000],
       supportedBitDepths: [16],
     });
+    expect(device.getAttribute(CameraAvStreamManagement, 'speakerCapabilities')).toEqual({
+      maxNumberOfChannels: 1,
+      supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus],
+      supportedSampleRates: [48000],
+      supportedBitDepths: [16],
+    });
+    expect(device.getAttribute(CameraAvStreamManagement, 'twoWayTalkSupport')).toBe(CameraAvStreamManagement.TwoWayTalkSupportType.FullDuplex);
+    expect(device.getAttribute(CameraAvStreamManagement, 'speakerMuted')).toBe(false);
     expect(device.getAttribute(WebRtcTransportProvider, 'currentSessions')).toEqual([]);
     expect(device.getAttribute(WebRtcTransportRequestor, 'currentSessions')).toEqual([]);
   });

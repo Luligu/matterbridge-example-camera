@@ -26,10 +26,10 @@ import { intercom, MatterbridgeEndpoint, type MatterbridgeEndpointOptions, power
 import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
 
+import { MatterbridgeCameraAvStreamManagementServer } from '../behaviors/cameraAvStreamManagementServer.js';
 import { addChimeClient, addWebRtcTransportProviderClient, addWebRtcTransportRequestorClient } from '../behaviors/clients.js';
 import { createDefaultWebRtcTransportProviderClusterServer } from '../behaviors/webRtcTransportProviderServer.js';
 import { createDefaultWebRtcTransportRequestorClusterServer } from '../behaviors/webRtcTransportRequestorServer.js';
-import { createDefaultAudioCameraAvStreamManagementClusterServer } from './audioDoorbell.js';
 
 /**
  * Options for configuring an {@link Intercom} instance.
@@ -53,6 +53,10 @@ export interface IntercomOptions extends MatterbridgeEndpointOptions {
   streamUsagePriorities?: StreamUsage[];
   /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
   microphoneCapabilities?: CameraAvStreamManagement.AudioCapabilities;
+  /** Indicates the audio capabilities of the speaker in terms of the codec used, supported sample rates and the number of channels */
+  speakerCapabilities?: CameraAvStreamManagement.AudioCapabilities;
+  /** Indicates the type of two-way talk support the device has. Default: FullDuplex */
+  twoWayTalkSupport?: CameraAvStreamManagement.TwoWayTalkSupportType;
 }
 
 /**
@@ -65,9 +69,9 @@ export class Intercom extends MatterbridgeEndpoint {
    *
    * An Intercom device provides two-way on demand communication facilities between devices (e.g. room to room
    * systems, or an entry door to individual units in a multi-tenant building). The CameraAvStreamManagement cluster
-   * is created with the Audio feature only, as required by the Matter specification for this device type (the Video
-   * and Snapshot features are not present; see Camera for a device implementing those). Unlike Camera and Audio
-   * Doorbell, an Intercom both hosts and invokes WebRtcTransportProvider and WebRtcTransportRequestor: the required
+   * is created with the Audio and Speaker features, as required for genuine two-way audio (the Video and Snapshot
+   * features are not present; see Camera for a device implementing those). Unlike Camera and Audio Doorbell, an
+   * Intercom both hosts and invokes WebRtcTransportProvider and WebRtcTransportRequestor: the required
    * WebRtcTransportProvider and WebRtcTransportRequestor server clusters are created on this endpoint, and the
    * required WebRtcTransportProvider and WebRtcTransportRequestor client clusters are added automatically by
    * {@link addWebRtcTransportProviderClient}/{@link addWebRtcTransportRequestorClient}, so this endpoint can both
@@ -76,12 +80,12 @@ export class Intercom extends MatterbridgeEndpoint {
    *
    * Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled
    * here, even though the specification only allows it when the Video or Snapshot feature is present (neither of
-   * which applies to this Audio-only device). This works around a matter.js bug where the
+   * which applies to this Audio/Speaker-only device). This works around a matter.js bug where the
    * ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one of these three shall be present" choice
    * conformance is enforced unconditionally, instead of only when ImageControl is enabled, making an Audio-only
    * CameraAvStreamManagement server otherwise impossible to construct. See
-   * {@link createDefaultAudioCameraAvStreamManagementClusterServer} in `src/devices/audioDoorbell.ts`. Remove once
-   * matter.js fixes this upstream.
+   * {@link createDefaultIntercomCameraAvStreamManagementClusterServer} below. Remove once matter.js fixes this
+   * upstream.
    *
    * @param {string} name - The name of the intercom.
    * @param {string} serial - The serial number of the intercom.
@@ -97,6 +101,8 @@ export class Intercom extends MatterbridgeEndpoint {
    *  - supportedStreamUsages: [StreamUsage.LiveView]
    *  - streamUsagePriorities: same as supportedStreamUsages
    *  - microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
+   *  - speakerCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
+   *  - twoWayTalkSupport: CameraAvStreamManagement.TwoWayTalkSupportType.FullDuplex
    *
    * @returns {Intercom} The Intercom instance.
    */
@@ -110,6 +116,8 @@ export class Intercom extends MatterbridgeEndpoint {
       supportedStreamUsages = [StreamUsage.LiveView],
       streamUsagePriorities = supportedStreamUsages,
       microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
+      speakerCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
+      twoWayTalkSupport = CameraAvStreamManagement.TwoWayTalkSupportType.FullDuplex,
       id,
       number,
       tagList,
@@ -142,12 +150,14 @@ export class Intercom extends MatterbridgeEndpoint {
         break;
       // No default
     }
-    createDefaultAudioCameraAvStreamManagementClusterServer(this, {
+    createDefaultIntercomCameraAvStreamManagementClusterServer(this, {
       maxContentBufferSize,
       maxNetworkBandwidth,
       supportedStreamUsages,
       streamUsagePriorities,
       microphoneCapabilities,
+      speakerCapabilities,
+      twoWayTalkSupport,
     });
     createDefaultWebRtcTransportProviderClusterServer(this);
     createDefaultWebRtcTransportRequestorClusterServer(this);
@@ -156,4 +166,75 @@ export class Intercom extends MatterbridgeEndpoint {
     addChimeClient(this);
     this.addRequiredClusters();
   }
+}
+
+/**
+ * Initial state accepted by {@link createDefaultIntercomCameraAvStreamManagementClusterServer}.
+ */
+export interface IntercomCameraAvStreamManagementClusterOptions {
+  /** Indicates the maximum size, in bytes, of the content buffer used for pre-roll, queued transmissions and metadata */
+  maxContentBufferSize: number;
+  /** Indicates the maximum network bandwidth, in bits per second, that the device would consume for the transmission of its media streams */
+  maxNetworkBandwidth: number;
+  /** Indicates the list of stream usages that are supported by the intercom */
+  supportedStreamUsages: StreamUsage[];
+  /** Indicates the ranked stream usage priorities; only usages found in supportedStreamUsages can be included */
+  streamUsagePriorities: StreamUsage[];
+  /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
+  microphoneCapabilities: CameraAvStreamManagement.AudioCapabilities;
+  /** Indicates the audio capabilities of the speaker in terms of the codec used, supported sample rates and the number of channels */
+  speakerCapabilities: CameraAvStreamManagement.AudioCapabilities;
+  /** Indicates the type of two-way talk support the device has */
+  twoWayTalkSupport: CameraAvStreamManagement.TwoWayTalkSupportType;
+}
+
+/**
+ * Creates a default CameraAvStreamManagement cluster server, specialized for the Audio and Speaker features, on the
+ * given endpoint. The Video and Snapshot features are not enabled, as required by the Matter specification for the
+ * Intercom device type. Unlike {@link createDefaultAudioCameraAvStreamManagementClusterServer} in
+ * `src/devices/audioDoorbell.ts` (Audio only, one-way from the visitor to the resident), the Intercom needs the
+ * Speaker feature too so it can both capture and play back audio for genuine two-way communication.
+ *
+ * The ImageControl feature is enabled as well, even though the Matter specification only allows it when Video or
+ * Snapshot is present (neither of which applies here). This is a deliberate deviation from the specification, needed
+ * to work around a matter.js bug: the ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one of these
+ * three shall be present" choice conformance is enforced unconditionally, instead of only when ImageControl is
+ * enabled, which otherwise makes it impossible to construct an Audio-only CameraAvStreamManagement server (the three
+ * attributes can neither be provided nor omitted). Remove imageRotation/imageFlipVertical/imageFlipHorizontal below,
+ * and CameraAvStreamManagement.Feature.ImageControl above, once matter.js fixes this upstream.
+ *
+ * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
+ * @param {IntercomCameraAvStreamManagementClusterOptions} options - The initial state of the CameraAvStreamManagement cluster server.
+ * @returns {MatterbridgeEndpoint} The endpoint with the CameraAvStreamManagement cluster server created.
+ */
+export function createDefaultIntercomCameraAvStreamManagementClusterServer(
+  endpoint: MatterbridgeEndpoint,
+  options: IntercomCameraAvStreamManagementClusterOptions,
+): MatterbridgeEndpoint {
+  endpoint.behaviors.require(
+    MatterbridgeCameraAvStreamManagementServer.with(
+      CameraAvStreamManagement.Feature.Audio,
+      CameraAvStreamManagement.Feature.Speaker,
+      CameraAvStreamManagement.Feature.ImageControl,
+    ),
+    {
+      ...options,
+      hardPrivacyModeOn: false,
+      statusLightEnabled: false,
+      allocatedAudioStreams: [],
+      microphoneMuted: false,
+      microphoneVolumeLevel: 128,
+      microphoneMaxLevel: 254,
+      microphoneMinLevel: 0,
+      microphoneAgcEnabled: false,
+      speakerMuted: false,
+      speakerVolumeLevel: 128,
+      speakerMaxLevel: 254,
+      speakerMinLevel: 0,
+      imageRotation: 0,
+      imageFlipVertical: false,
+      imageFlipHorizontal: false,
+    },
+  );
+  return endpoint;
 }
