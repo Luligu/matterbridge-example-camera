@@ -33,11 +33,15 @@ If you like this project and find it useful, please consider giving it a star on
 ## Added
 
 - [wirift]: Add codec negotiation and ffmpeg windows path.
+- [audio doorbell]: Add the Audio Doorbell device type with the required Identify, Switch (MomentarySwitch feature), Camera AV Stream Management (Audio feature), and WebRtcTransportProvider clusters, plus the Chime and WebRtcTransportRequestor client clusters, and Power Source support.
+- [clients]: Add `src/behaviors/clients.ts` with `addChimeClient`/`addWebRtcTransportRequestorClient` helpers, shared by `Doorbell`, `AudioDoorbell`, and `Camera`.
 
 ## Changed
 
 - [package]: Update dependencies.
 - [package]: Upgrade package.
+- [camera]: Use the shared `addWebRtcTransportRequestorClient` helper from `clients.ts` instead of a local duplicate.
+- [doorbell]: Use the shared `addChimeClient` helper from `clients.ts` instead of inline binding code.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
 

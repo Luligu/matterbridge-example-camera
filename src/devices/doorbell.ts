@@ -24,9 +24,9 @@
 
 // Matterbridge
 import { doorbell, MatterbridgeEndpoint, powerSource } from 'matterbridge';
-import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
-import { ChimeClient } from 'matterbridge/matter/behaviors';
-import { Chime, Identify } from 'matterbridge/matter/clusters';
+import { Identify } from 'matterbridge/matter/clusters';
+
+import { addChimeClient } from '../behaviors/clients.js';
 
 /**
  * Options for configuring a {@link Doorbell} instance.
@@ -50,7 +50,7 @@ export class Doorbell extends MatterbridgeEndpoint {
    *
    * A Doorbell device is a switch which when pressed usually causes a Chime to activate. The Switch cluster
    * is created with the MomentarySwitch feature only, as required by the Matter specification for this device
-   * type, and the required Chime client cluster is added automatically by addRequiredClusters().
+   * type, and the required Chime client cluster is added automatically by {@link addChimeClient}.
    *
    * @param {string} name - The name of the doorbell.
    * @param {string} serial - The serial number of the doorbell.
@@ -86,8 +86,7 @@ export class Doorbell extends MatterbridgeEndpoint {
       // No default
     }
     this.createDefaultMomentarySwitchClusterServer();
-    this.behaviors.require(MatterbridgeBindingServer, { clientList: [Chime.id] });
-    this.type.clientClusters['chime'] ??= ChimeClient;
+    addChimeClient(this);
     this.addRequiredClusters();
   }
 }

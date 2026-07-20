@@ -9,9 +9,8 @@ const MATTER_PORT = 6005;
 const MATTER_CREATE_ONLY = true;
 
 import { camera, internalFor, MatterbridgeEndpoint } from 'matterbridge';
-import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { Node } from 'matterbridge/matter';
-import { CameraAvStreamManagement, Identify, WebRtcTransportDefinitions, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
+import { CameraAvStreamManagement, WebRtcTransportDefinitions, WebRtcTransportProvider } from 'matterbridge/matter/clusters';
 import { EndpointNumber, FabricIndex, NodeId, StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
 import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
@@ -26,11 +25,7 @@ import {
 } from 'matterbridge/vitest-utils/matter';
 
 import { MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
-import {
-  addWebRtcTransportRequestorClient,
-  createDefaultWebRtcTransportProviderClusterServer,
-  MatterbridgeWebRtcTransportProviderServer,
-} from '../../src/behaviors/webRtcTransportProviderServer.js';
+import { createDefaultWebRtcTransportProviderClusterServer, MatterbridgeWebRtcTransportProviderServer } from '../../src/behaviors/webRtcTransportProviderServer.js';
 import { Camera } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
@@ -603,42 +598,5 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     await expect(
       endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
     ).resolves.toBeUndefined();
-  });
-
-  it('should add addWebRtcTransportRequestorClient to an endpoint that already has it registered', () => {
-    // The Camera constructor already calls addWebRtcTransportRequestorClient once; calling it again should return the
-    // same endpoint without duplicating the clientList entry or the clientClusters mapping.
-    expect(addWebRtcTransportRequestorClient(device)).toBe(device);
-  });
-
-  it('should add WebRtcTransportRequestor to an existing MatterbridgeBindingServer clientList', () => {
-    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientMerge' });
-    endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [Identify.id] });
-
-    expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
-
-    const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
-    expect(clientList).toEqual([Identify.id, WebRtcTransportRequestor.id]);
-  });
-
-  it('should add WebRtcTransportRequestor when an existing MatterbridgeBindingServer has no clientList option', () => {
-    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientNoOptions' });
-    endpoint.behaviors.require(MatterbridgeBindingServer);
-
-    expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
-
-    const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
-    expect(clientList).toEqual([WebRtcTransportRequestor.id]);
-  });
-
-  it('should create MatterbridgeBindingServer when missing and register WebRtcTransportRequestor', () => {
-    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcRequestorClientCreateBinding' });
-
-    expect(endpoint.behaviors.has(MatterbridgeBindingServer)).toBeFalsy();
-    expect(addWebRtcTransportRequestorClient(endpoint)).toBe(endpoint);
-    expect(endpoint.behaviors.has(MatterbridgeBindingServer)).toBeTruthy();
-
-    const clientList = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
-    expect(clientList).toEqual([WebRtcTransportRequestor.id]);
   });
 });

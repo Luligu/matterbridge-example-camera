@@ -24,13 +24,12 @@
 
 // Matterbridge
 import { camera, MatterbridgeEndpoint, powerSource } from 'matterbridge';
-import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
-import { WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
-import { CameraAvStreamManagement, Identify, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
+import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
 import { StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
 import type { Viewport } from 'matterbridge/matter/types';
 
 import { MatterbridgeCameraAvStreamManagementServer } from '../behaviors/cameraAvStreamManagementServer.js';
+import { addWebRtcTransportRequestorClient } from '../behaviors/clients.js';
 import { MatterbridgeWebRtcTransportProviderServer } from '../behaviors/webRtcTransportProviderServer.js';
 
 /**
@@ -265,18 +264,5 @@ export function createDefaultCameraAvStreamManagementClusterServer(endpoint: Mat
  */
 export function createDefaultWebRtcTransportProviderClusterServer(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
   endpoint.behaviors.require(MatterbridgeWebRtcTransportProviderServer, { currentSessions: [] });
-  return endpoint;
-}
-
-/**
- * Registers the WebRtcTransportRequestor client cluster on the given endpoint, so MatterbridgeBindingServer can
- * resolve a bound requestor and {@link MatterbridgeWebRtcTransportProviderServer.solicitOffer} can invoke Offer on it.
- *
- * @param {MatterbridgeEndpoint} endpoint - The endpoint to register the WebRtcTransportRequestor client cluster on.
- * @returns {MatterbridgeEndpoint} The endpoint with the WebRtcTransportRequestor client cluster registered.
- */
-export function addWebRtcTransportRequestorClient(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
-  endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [WebRtcTransportRequestor.id] });
-  endpoint.type.clientClusters['webRtcTransportRequestor'] ??= WebRtcTransportRequestorClient;
   return endpoint;
 }

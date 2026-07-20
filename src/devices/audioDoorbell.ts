@@ -1,0 +1,194 @@
+/**
+ * @file src/devices/audioDoorbell.ts
+ * @description This file contains the AudioDoorbell class.
+ * @author Luca Liguori
+ * @created 2026-07-20
+ * @version 1.0.0
+ * @license Apache-2.0
+ *
+ * Copyright 2026, 2027, 2028 Luca Liguori.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Matterbridge
+import { audioDoorbell, MatterbridgeEndpoint, powerSource } from 'matterbridge';
+import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
+import { StreamUsage } from 'matterbridge/matter/types';
+
+import { MatterbridgeCameraAvStreamManagementServer } from '../behaviors/cameraAvStreamManagementServer.js';
+import { addChimeClient, addWebRtcTransportRequestorClient } from '../behaviors/clients.js';
+import { createDefaultWebRtcTransportProviderClusterServer } from '../behaviors/webRtcTransportProviderServer.js';
+
+/**
+ * Options for configuring an {@link AudioDoorbell} instance.
+ */
+export interface AudioDoorbellOptions {
+  /** Identify time in seconds */
+  identifyTime?: number;
+  /** Identify type. The Identify cluster is always created because it is a required server cluster for the Audio Doorbell device type. */
+  identifyType?: Identify.IdentifyType;
+  /** Power source type */
+  powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
+
+  /** Indicates the maximum size, in bytes, of the content buffer used for pre-roll, queued transmissions and metadata */
+  maxContentBufferSize?: number;
+  /** Indicates the maximum network bandwidth, in bits per second, that the device would consume for the transmission of its media streams */
+  maxNetworkBandwidth?: number;
+  /** Indicates the list of stream usages that are supported by the audio doorbell */
+  supportedStreamUsages?: StreamUsage[];
+  /** Indicates the ranked stream usage priorities; only usages found in supportedStreamUsages can be included */
+  streamUsagePriorities?: StreamUsage[];
+  /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
+  microphoneCapabilities?: CameraAvStreamManagement.AudioCapabilities;
+}
+
+/**
+ * Matterbridge endpoint representing an audio doorbell device.
+ * Matter specs 1.6.0 chapter 16.5.
+ */
+export class AudioDoorbell extends MatterbridgeEndpoint {
+  /**
+   * Creates an instance of the AudioDoorbell class.
+   *
+   * An Audio Doorbell device is composed in all cases with a generic switch to provide a doorbell with Audio only
+   * streaming. The Switch cluster is created with the MomentarySwitch feature only, and the CameraAvStreamManagement
+   * cluster is created with the Audio feature only (the Video and Snapshot features are not present in this device
+   * type). The required Chime and WebRtcTransportRequestor client clusters are added automatically by
+   * {@link addRequiredClusters}/{@link addWebRtcTransportRequestorClient}, so a bound Chime device can be triggered
+   * when the doorbell button is pressed and a bound controller can be solicited for a WebRTC offer.
+   *
+   * Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled here,
+   * even though the specification only allows it when the Video or Snapshot feature is present (neither of which
+   * applies to this Audio-only device). This works around a matter.js bug where the ImageRotation/ImageFlipHorizontal/
+   * ImageFlipVertical "at least one of these three shall be present" choice conformance is enforced unconditionally,
+   * instead of only when ImageControl is enabled, making an Audio-only CameraAvStreamManagement server otherwise
+   * impossible to construct. See {@link createDefaultAudioCameraAvStreamManagementClusterServer}. Remove once
+   * matter.js fixes this upstream.
+   *
+   * @param {string} name - The name of the audio doorbell.
+   * @param {string} serial - The serial number of the audio doorbell.
+   * @param {AudioDoorbellOptions} [options] - Optional configuration values. Missing fields use defaults.
+   *
+   * Options defaults:
+   *  - identifyTime: 0
+   *  - identifyType: Identify.IdentifyType.None
+   *  - powerSourceType: Wired (with None, the Power Source cluster will not be created)
+   *
+   *  - maxContentBufferSize: 65536 (64 KB)
+   *  - maxNetworkBandwidth: 128000 (128 kbps)
+   *  - supportedStreamUsages: [StreamUsage.LiveView]
+   *  - streamUsagePriorities: same as supportedStreamUsages
+   *  - microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
+   *
+   * @returns {AudioDoorbell} The AudioDoorbell instance.
+   */
+  constructor(name: string, serial: string, options: AudioDoorbellOptions = {}) {
+    const {
+      identifyTime = 0,
+      identifyType = Identify.IdentifyType.None,
+      powerSourceType = 'Wired',
+      maxContentBufferSize = 65_536,
+      maxNetworkBandwidth = 128_000,
+      supportedStreamUsages = [StreamUsage.LiveView],
+      streamUsagePriorities = supportedStreamUsages,
+      microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
+    } = options;
+    super(powerSourceType === 'None' ? [audioDoorbell] : [audioDoorbell, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
+    this.createDefaultBasicInformationClusterServer(name, serial, 0xfff1, 'Matterbridge', 0x8000, 'Matterbridge Audio Doorbell');
+    switch (powerSourceType) {
+      case 'Rechargeable':
+        this.createDefaultPowerSourceRechargeableBatteryClusterServer();
+        break;
+      case 'Replaceable':
+        this.createDefaultPowerSourceReplaceableBatteryClusterServer();
+        break;
+      case 'Battery':
+        this.createDefaultPowerSourceBatteryClusterServer();
+        break;
+      case 'Wired':
+        this.createDefaultPowerSourceWiredClusterServer();
+        break;
+      case 'None':
+        break;
+      // No default
+    }
+    this.createDefaultMomentarySwitchClusterServer();
+    createDefaultAudioCameraAvStreamManagementClusterServer(this, {
+      maxContentBufferSize,
+      maxNetworkBandwidth,
+      supportedStreamUsages,
+      streamUsagePriorities,
+      microphoneCapabilities,
+    });
+    createDefaultWebRtcTransportProviderClusterServer(this);
+    addChimeClient(this);
+    addWebRtcTransportRequestorClient(this);
+    this.addRequiredClusters();
+  }
+}
+
+/**
+ * Initial state accepted by {@link createDefaultAudioCameraAvStreamManagementClusterServer}.
+ */
+export interface AudioCameraAvStreamManagementClusterOptions {
+  /** Indicates the maximum size, in bytes, of the content buffer used for pre-roll, queued transmissions and metadata */
+  maxContentBufferSize: number;
+  /** Indicates the maximum network bandwidth, in bits per second, that the device would consume for the transmission of its media streams */
+  maxNetworkBandwidth: number;
+  /** Indicates the list of stream usages that are supported by the audio doorbell */
+  supportedStreamUsages: StreamUsage[];
+  /** Indicates the ranked stream usage priorities; only usages found in supportedStreamUsages can be included */
+  streamUsagePriorities: StreamUsage[];
+  /** Indicates the audio capabilities of the microphone in terms of the codec used, supported sample rates and the number of channels */
+  microphoneCapabilities: CameraAvStreamManagement.AudioCapabilities;
+}
+
+/**
+ * Creates a default CameraAvStreamManagement cluster server, specialized for the Audio feature only, on the given
+ * endpoint. The Video and Snapshot features are not enabled, as required by the Matter specification for the Audio
+ * Doorbell device type.
+ *
+ * The ImageControl feature is enabled as well, even though the Matter specification only allows it when Video or
+ * Snapshot is present (neither of which applies here). This is a deliberate deviation from the specification, needed
+ * to work around a matter.js bug: the ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one of these
+ * three shall be present" choice conformance is enforced unconditionally, instead of only when ImageControl is
+ * enabled, which otherwise makes it impossible to construct an Audio-only CameraAvStreamManagement server (the three
+ * attributes can neither be provided nor omitted). Remove imageRotation/imageFlipVertical/imageFlipHorizontal below,
+ * and CameraAvStreamManagement.Feature.ImageControl above, once matter.js fixes this upstream.
+ *
+ * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
+ * @param {AudioCameraAvStreamManagementClusterOptions} options - The initial state of the CameraAvStreamManagement cluster server.
+ * @returns {MatterbridgeEndpoint} The endpoint with the CameraAvStreamManagement cluster server created.
+ */
+export function createDefaultAudioCameraAvStreamManagementClusterServer(
+  endpoint: MatterbridgeEndpoint,
+  options: AudioCameraAvStreamManagementClusterOptions,
+): MatterbridgeEndpoint {
+  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Audio, CameraAvStreamManagement.Feature.ImageControl), {
+    ...options,
+    hardPrivacyModeOn: false,
+    statusLightEnabled: false,
+    allocatedAudioStreams: [],
+    microphoneMuted: false,
+    microphoneVolumeLevel: 128,
+    microphoneMaxLevel: 254,
+    microphoneMinLevel: 0,
+    microphoneAgcEnabled: false,
+    imageRotation: 0,
+    imageFlipVertical: false,
+    imageFlipHorizontal: false,
+  });
+  return endpoint;
+}
