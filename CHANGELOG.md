@@ -35,6 +35,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [wirift]: Add codec negotiation and ffmpeg windows path.
 - [audio doorbell]: Add the Audio Doorbell device type with the required Identify, Switch (MomentarySwitch feature), Camera AV Stream Management (Audio feature), and WebRtcTransportProvider clusters, plus the Chime and WebRtcTransportRequestor client clusters, and Power Source support.
 - [clients]: Add `src/behaviors/clients.ts` with `addChimeClient`/`addWebRtcTransportRequestorClient` helpers, shared by `Doorbell`, `AudioDoorbell`, and `Camera`.
+- [tests]: Add `vitest/behaviors/clients.test.ts` covering `addChimeClient`/`addWebRtcTransportRequestorClient`, and assert in `doorbell.test.ts`, `camera.test.ts`, and `audioDoorbell.test.ts` that the required client clusters are registered in `MatterbridgeBindingServer`'s `clientList` and `type.clientClusters`.
 
 ## Changed
 

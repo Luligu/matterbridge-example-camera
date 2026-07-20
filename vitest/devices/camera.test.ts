@@ -8,7 +8,9 @@ const NAME = 'CameraDevice';
 const MATTER_PORT = 6003;
 const MATTER_CREATE_ONLY = true;
 
-import { CameraAvStreamManagement, Identify, PowerSource } from 'matterbridge/matter/clusters';
+import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
+import { WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
+import { CameraAvStreamManagement, Identify, PowerSource, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
 import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
@@ -65,6 +67,12 @@ describe('Camera', () => {
     expect(device.id).toBe('CameraDefault-CAMERA-DEFAULT');
     expect(device.hasClusterServer(Identify.id)).toBeFalsy();
     expect(device.hasClusterServer(CameraAvStreamManagement.id)).toBeTruthy();
+
+    // The required WebRtcTransportRequestor client cluster is added automatically and should not trigger a "no
+    // client behavior found" warning.
+    const clientList = (device.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
+    expect(clientList).toEqual([WebRtcTransportRequestor.id]);
+    expect(device.type.clientClusters['webRtcTransportRequestor']).toBe(WebRtcTransportRequestorClient);
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
     expect(device.getAttribute(CameraAvStreamManagement, 'maxContentBufferSize')).toBe(4_194_304);
