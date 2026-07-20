@@ -1,0 +1,9 @@
+{
+  "name": "matterbridge-example-camera",
+  "type": "DynamicPlatform",
+  "whiteList": [],
+  "blackList": [],
+  "animationInterval": 60,
+  "debug": false,
+  "unregisterOnShutdown": false
+}
