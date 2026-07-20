@@ -22,7 +22,7 @@
  */
 
 // Matterbridge
-import { audioDoorbell, MatterbridgeEndpoint, powerSource } from 'matterbridge';
+import { audioDoorbell, MatterbridgeEndpoint, type MatterbridgeEndpointOptions, powerSource } from 'matterbridge';
 import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
 
@@ -33,12 +33,13 @@ import { createDefaultWebRtcTransportProviderClusterServer } from '../behaviors/
 /**
  * Options for configuring an {@link AudioDoorbell} instance.
  */
-export interface AudioDoorbellOptions {
-  /** Identify time in seconds */
+export interface AudioDoorbellOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+  /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
-  /** Identify type. The Identify cluster is always created because it is a required server cluster for the Audio Doorbell device type. */
+  /** Identify type. The Identify cluster is always created because it is a required server cluster for the Audio Doorbell device type. Default: Identify.IdentifyType.None */
   identifyType?: Identify.IdentifyType;
-  /** Power source type */
+
+  /** Power source type. Default: Wired (with None, the Power Source cluster will not be created) */
   powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
 
   /** Indicates the maximum size, in bytes, of the content buffer used for pre-roll, queued transmissions and metadata */
@@ -103,8 +104,10 @@ export class AudioDoorbell extends MatterbridgeEndpoint {
       supportedStreamUsages = [StreamUsage.LiveView],
       streamUsagePriorities = supportedStreamUsages,
       microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
+      tagList,
+      mode,
     } = options;
-    super(powerSourceType === 'None' ? [audioDoorbell] : [audioDoorbell, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    super(powerSourceType === 'None' ? [audioDoorbell] : [audioDoorbell, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
     this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     this.createDefaultBasicInformationClusterServer(name, serial, 0xfff1, 'Matterbridge', 0x8000, 'Matterbridge Audio Doorbell');
     switch (powerSourceType) {

@@ -23,7 +23,7 @@
  */
 
 // Matterbridge
-import { camera, MatterbridgeEndpoint, powerSource } from 'matterbridge';
+import { camera, MatterbridgeEndpoint, type MatterbridgeEndpointOptions, powerSource } from 'matterbridge';
 import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
 import { StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
 import type { Viewport } from 'matterbridge/matter/types';
@@ -39,12 +39,13 @@ import { MatterbridgeWebRtcTransportProviderServer } from '../behaviors/webRtcTr
  * are implemented; only the Answer/End invocations on the WebRtcTransportRequestor client (Offer invocation only is
  * implemented), required by the Matter specification for a fully compliant Camera device type, are not part of this example.
  */
-export interface CameraOptions {
-  /** Identify time in seconds */
+export interface CameraOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+  /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
-  /** Identify type */
+  /** Identify type. Default: Identify.IdentifyType.None (the Identify cluster will not be created) */
   identifyType?: Identify.IdentifyType;
-  /** Power source type */
+
+  /** Power source type. Default: Wired (with None, the Power Source cluster will not be created) */
   powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
 
   /** Indicates the maximum size, in bytes, of the content buffer used for pre-roll, queued transmissions and metadata */
@@ -138,8 +139,10 @@ export class Camera extends MatterbridgeEndpoint {
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
       allocatedSnapshotStreams = [],
+      tagList,
+      mode,
     } = options;
-    super(powerSourceType === 'None' ? [camera] : [camera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    super(powerSourceType === 'None' ? [camera] : [camera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }

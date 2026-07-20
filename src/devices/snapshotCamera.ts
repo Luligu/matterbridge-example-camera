@@ -22,7 +22,7 @@
  */
 
 // Matterbridge
-import { MatterbridgeEndpoint, powerSource, snapshotCamera } from 'matterbridge';
+import { MatterbridgeEndpoint, type MatterbridgeEndpointOptions, powerSource, snapshotCamera } from 'matterbridge';
 import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
 
@@ -31,13 +31,13 @@ import { MatterbridgeCameraAvStreamManagementServer } from '../behaviors/cameraA
 /**
  * Options for configuring a {@link SnapshotCamera} instance.
  */
-export interface SnapshotCameraOptions {
-  /** Identify time in seconds */
+export interface SnapshotCameraOptions extends Pick<MatterbridgeEndpointOptions, 'tagList' | 'mode'> {
+  /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
-  /** Identify type */
+  /** Identify type. Default: Identify.IdentifyType.None (the Identify cluster will not be created) */
   identifyType?: Identify.IdentifyType;
 
-  /** Power source type */
+  /** Power source type. Default: Wired (with None, the Power Source cluster will not be created) */
   powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
 
   /** Maximum number of concurrent encoders supported by the camera */
@@ -110,8 +110,10 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
       supportedStreamUsages = [StreamUsage.Recording],
       allocatedSnapshotStreams = [],
       streamUsagePriorities = [StreamUsage.Recording],
+      tagList,
+      mode,
     } = options;
-    super(powerSourceType === 'None' ? [snapshotCamera] : [snapshotCamera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    super(powerSourceType === 'None' ? [snapshotCamera] : [snapshotCamera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, tagList, mode });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }
