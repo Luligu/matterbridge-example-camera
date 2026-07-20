@@ -123,6 +123,7 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
     fireAndForget(this.addFixedLabel('composed', 'FloodlightCamera'), this.log, 'Error adding composed label to floodlight camera');
     this.addRequiredClusters();
 
+    /** Camera child endpoint */
     const {
       identifyTime = 0,
       identifyType = Identify.IdentifyType.None,
@@ -171,6 +172,7 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
     addWebRtcTransportRequestorClient(cameraChild);
     cameraChild.addRequiredClusters();
 
+    /** First mandatory Light child endpoint */
     const { name: lightName = 'Light', tagList: lightTagList = [], onOff: lightOnOff = false } = lightOptions;
     this.addLight(lightName, lightTagList, lightOnOff);
   }
