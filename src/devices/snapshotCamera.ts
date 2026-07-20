@@ -115,7 +115,12 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
       tagList,
       mode,
     } = options;
-    super(powerSourceType === 'None' ? [snapshotCamera] : [snapshotCamera, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
+    super(powerSourceType === 'None' ? [snapshotCamera] : [snapshotCamera, powerSource], {
+      id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`,
+      number,
+      tagList,
+      mode,
+    });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }
