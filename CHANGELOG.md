@@ -30,6 +30,14 @@ If you like this project and find it useful, please consider giving it a star on
 
 ## [0.0.6] - Dev branch
 
+## [0.0.6] - Dev branch
+
+### Added
+
+- [floodlight camera]: Add the Floodlight Camera device type. It is a composed device: the root endpoint carries Basic Information and, unless disabled, Power Source; the mandatory Camera child endpoint and the mandatory On/Off Light child endpoint required by Matter specs 1.6.0 chapter 16.2 are both created automatically by the constructor, the Camera child with the same CameraAvStreamManagement/WebRtcTransportProvider wiring as the standalone `Camera` device; `addLight()` adds further On/Off Light child endpoints beyond the mandatory one.
+- [platform]: Register a Floodlight Camera example device in `onStart`, and verify it's registered in `onConfigure`.
+- [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, custom `lightOptions`, camera identify, power source variants, additional tagged lights, and custom stream usages; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path.
+
 ### Fixed
 
 - [webrtc]: `provideIceCandidates` unconditionally skipped every mDNS host ICE candidate (`*.local`), so a peer that only offers mDNS-obfuscated candidates (the Chromium/Edge default) left the werift peer connection with zero usable remote candidates — signaling succeeded but the stream stayed black. werift-ice already resolves `.local` candidates via a real multicast DNS query before pairing them, so candidates are no longer skipped and that resolution is allowed to run; the per-candidate apply timeout is bumped from 2000ms to 5000ms to leave headroom for the mDNS round trip. Verified against a real Edge client: the mDNS candidate resolved and applied in 98ms and video streamed correctly. See the new "Known limitation: Firefox may only offer a link-local address on a non-HTTPS page" note in the README for a related, separate client-side issue this does not fix.
