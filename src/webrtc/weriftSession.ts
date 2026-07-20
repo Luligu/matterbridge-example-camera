@@ -24,9 +24,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createSocket } from 'node:dgram';
 import { constants } from 'node:fs';
-import { access } from 'node:fs/promises';
+import { access, readdir } from 'node:fs/promises';
+import path from 'node:path';
 
-import { RTCPeerConnection, RTCRtpCodecParameters } from 'werift';
+import { RTCPeerConnection, RTCRtpCodecParameters, useH264, useOPUS, usePCMU, useVP8 } from 'werift';
 import { navigator } from 'werift/nonstandard';
 
 export type WeriftSessionLogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -77,7 +78,7 @@ export class WeriftWebRtcSession {
   private testVideoAttached = false;
 
   constructor(logger?: WeriftSessionLogger, label = 'WebRTC session') {
-    this.peerConnection = new RTCPeerConnection();
+    this.peerConnection = new RTCPeerConnection({ codecs: { audio: [useOPUS(), usePCMU()], video: [useVP8(), useH264()] } });
     this.logger = logger;
     this.label = label;
     this.log('debug', 'Created RTCPeerConnection');
@@ -124,8 +125,43 @@ export class WeriftWebRtcSession {
     return false;
   }
 
+  private async getWindowsCommandCandidates(command: string): Promise<string[]> {
+    if (process.platform !== 'win32') return [];
+
+    const commandName = command.toLowerCase().replace(/\.exe$/, '');
+    const executable = command.toLowerCase().endsWith('.exe') ? command : `${command}.exe`;
+    const candidates: string[] = [];
+
+    if (commandName === 'ffmpeg' && process.env.LOCALAPPDATA) {
+      const wingetPackages = path.join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Packages');
+      try {
+        const packageDirs = await readdir(wingetPackages, { withFileTypes: true });
+        for (const packageDir of packageDirs) {
+          if (!packageDir.isDirectory() || !packageDir.name.startsWith('Gyan.FFmpeg_')) continue;
+          const packagePath = path.join(wingetPackages, packageDir.name);
+          try {
+            const versionDirs = await readdir(packagePath, { withFileTypes: true });
+            for (const versionDir of versionDirs) {
+              if (versionDir.isDirectory() && versionDir.name.startsWith('ffmpeg-')) candidates.push(path.join(packagePath, versionDir.name, 'bin', executable));
+            }
+          } catch {
+            // Ignore incomplete winget package directories.
+          }
+        }
+      } catch {
+        // Ignore missing winget package storage; PATH probing still runs below.
+      }
+    }
+
+    for (const programFiles of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
+      if (!programFiles) continue;
+      candidates.push(path.join(programFiles, 'ffmpeg', 'bin', executable), path.join(programFiles, 'Gyan', 'FFmpeg', 'bin', executable));
+    }
+    return candidates;
+  }
+
   private async resolveCommand(command: string): Promise<string | undefined> {
-    const candidates = [command, `/usr/bin/${command}`, `/bin/${command}`, `/usr/local/bin/${command}`];
+    const candidates = [command, `/usr/bin/${command}`, `/bin/${command}`, `/usr/local/bin/${command}`, ...(await this.getWindowsCommandCandidates(command))];
     for (const candidate of candidates) {
       if (candidate.includes('/')) {
         try {

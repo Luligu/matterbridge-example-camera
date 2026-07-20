@@ -23,14 +23,13 @@
  */
 
 // Matterbridge
-import { camera, MatterbridgeEndpoint, powerSource } from 'matterbridge';
-import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
-import { WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
-import { CameraAvStreamManagement, Identify, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
+import { camera, MatterbridgeEndpoint, type MatterbridgeEndpointOptions, powerSource } from 'matterbridge';
+import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
 import { StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
 import type { Viewport } from 'matterbridge/matter/types';
 
 import { MatterbridgeCameraAvStreamManagementServer } from '../behaviors/cameraAvStreamManagementServer.js';
+import { addWebRtcTransportRequestorClient } from '../behaviors/clients.js';
 import { MatterbridgeWebRtcTransportProviderServer } from '../behaviors/webRtcTransportProviderServer.js';
 
 /**
@@ -40,12 +39,13 @@ import { MatterbridgeWebRtcTransportProviderServer } from '../behaviors/webRtcTr
  * are implemented; only the Answer/End invocations on the WebRtcTransportRequestor client (Offer invocation only is
  * implemented), required by the Matter specification for a fully compliant Camera device type, are not part of this example.
  */
-export interface CameraOptions {
-  /** Identify time in seconds */
+export interface CameraOptions extends MatterbridgeEndpointOptions {
+  /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
-  /** Identify type */
+  /** Identify type. Default: Identify.IdentifyType.None (the Identify cluster will not be created) */
   identifyType?: Identify.IdentifyType;
-  /** Power source type */
+
+  /** Power source type. Default: Wired (with None, the Power Source cluster will not be created) */
   powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
 
   /** Indicates the maximum size, in bytes, of the content buffer used for pre-roll, queued transmissions and metadata */
@@ -139,8 +139,12 @@ export class Camera extends MatterbridgeEndpoint {
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
       allocatedSnapshotStreams = [],
+      id,
+      number,
+      tagList,
+      mode,
     } = options;
-    super(powerSourceType === 'None' ? [camera] : [camera, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    super(powerSourceType === 'None' ? [camera] : [camera, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }
@@ -265,18 +269,5 @@ export function createDefaultCameraAvStreamManagementClusterServer(endpoint: Mat
  */
 export function createDefaultWebRtcTransportProviderClusterServer(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
   endpoint.behaviors.require(MatterbridgeWebRtcTransportProviderServer, { currentSessions: [] });
-  return endpoint;
-}
-
-/**
- * Registers the WebRtcTransportRequestor client cluster on the given endpoint, so MatterbridgeBindingServer can
- * resolve a bound requestor and {@link MatterbridgeWebRtcTransportProviderServer.solicitOffer} can invoke Offer on it.
- *
- * @param {MatterbridgeEndpoint} endpoint - The endpoint to register the WebRtcTransportRequestor client cluster on.
- * @returns {MatterbridgeEndpoint} The endpoint with the WebRtcTransportRequestor client cluster registered.
- */
-export function addWebRtcTransportRequestorClient(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
-  endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [WebRtcTransportRequestor.id] });
-  endpoint.type.clientClusters['webRtcTransportRequestor'] ??= WebRtcTransportRequestorClient;
   return endpoint;
 }

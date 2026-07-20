@@ -77,6 +77,18 @@ Features:
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 
+### Audio Doorbell
+
+Features:
+
+- Exposes the Switch cluster with the MomentarySwitch feature only, as required by the Matter specification for this device type.
+- Exposes the Camera AV Stream Management cluster with the Audio feature only (the Video and Snapshot features are not present, per the Matter specification for this device type; see Camera for a device implementing those).
+- Exposes the WebRtcTransportProvider cluster and registers a WebRtcTransportRequestor client, so a bound controller can solicit and receive WebRTC offers, same as Camera.
+- Adds the required Chime client cluster automatically via `addChimeClient`, so a bound Chime device can be triggered when the doorbell button is pressed.
+- Identify cluster is always created (it is a required server cluster for this device type), with configurable identify time and type.
+- Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+- Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around a matter.js bug where the ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one shall be present" choice conformance is enforced unconditionally instead of only when ImageControl is enabled (see the JSDoc in `src/devices/audioDoorbell.ts`).
+
 ## WebRTC test video injection
 
 `WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video track into the negotiated connection, so the end-to-end media path can be validated without a real camera capture pipeline.
@@ -90,7 +102,7 @@ The video source defaults to a synthetic SMPTE bars test pattern, or can be swit
 
 A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
 
-Requires `ffmpeg` to be installed and reachable on `PATH` (or under `/usr/bin`, `/bin`, or `/usr/local/bin`).
+Requires `ffmpeg` to be installed. The resolver first tries `PATH`, then `/usr/bin/ffmpeg`, `/bin/ffmpeg`, and `/usr/local/bin/ffmpeg`. On Windows it also checks winget/Gyan installs under `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_*\ffmpeg-*\bin\ffmpeg.exe`, plus `%ProgramFiles%\ffmpeg\bin\ffmpeg.exe`, `%ProgramFiles%\Gyan\FFmpeg\bin\ffmpeg.exe`, `%ProgramFiles(x86)%\ffmpeg\bin\ffmpeg.exe`, and `%ProgramFiles(x86)%\Gyan\FFmpeg\bin\ffmpeg.exe`.
 
 Example, capturing from a real Linux webcam at 720p:
 
@@ -145,9 +157,10 @@ The `assets` directory contains deterministic three-second media fixtures for ex
 - `test-video.h264`: raw H.264 Constrained Baseline video, 640×360 at 15 FPS, with a moving test pattern. Use this elementary stream when implementing H.264 NAL-unit parsing and RTP packetization.
 - `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a 1 kHz test tone. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
 - `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track. The werift test transfers the complete file over its SCTP data channel and verifies its integrity. This exercises binary file transport, not a WebRTC video RTP track.
-- `camera-color-1920-1080.jpeg`: 1920×1080 broadcast-style snapshot calibration card returned by the example's `CaptureSnapshot` command. It contains color bars, grayscale references, geometry targets, focus patterns, safe-area guides, and near-black/near-white patches for inspecting hue, saturation, brightness, contrast, geometry, overscan, and focus. Recompressed to ~50 KB so it stays under the Matter message-size ceiling — see below.
-- `camera-color-1280-720.jpeg`: 1280×720 SMPTE color-bars test pattern (mire) returned by the example's `CaptureSnapshot` command, generated with `ffmpeg -f lavfi -i smptebars=size=1280x720`.
-- `camera-color-640-480.jpeg`: 640×480 SMPTE color-bars test pattern (mire) returned by the example's `CaptureSnapshot` command, generated with `ffmpeg -f lavfi -i smptebars=size=640x480`.
+- `camera-color-1920-1080.jpeg`: 1920×1080 simplified ffmpeg-generated color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
+- `camera-color-1280-720.jpeg`: 1280×720 simplified ffmpeg-generated color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
+- `camera-color-640-480.jpeg`: 640×480 simplified ffmpeg-generated color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
+- `camera-color-test-1920-1080.jpeg`, `camera-color-test-1280-720.jpeg`, `camera-color-test-960-540.jpeg`, `camera-color-test-640-480.jpeg`, and `camera-color-test-480-270.jpeg`: additional SMPTE color-bars snapshot fixtures.
 
 #### Why the snapshot calibration cards stay under ~64 KB
 

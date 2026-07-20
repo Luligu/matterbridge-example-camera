@@ -28,13 +28,27 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
-## [Unreleased]
+## [0.0.5] - 2026-07-20
 
-### Fixed
+### Added
 
-- [snapshot]: README asset docs still described the pre-#15 `camera-color-test-*.jpeg` names; `CaptureSnapshot` now reads `camera-color-{640-480,1280-720,1920-1080}.jpeg`. Also documented why all three calibration cards are kept under the ~65535-byte Matter message-size ceiling (AES-CCM's 13-byte nonce) and why it can't be worked around by tuning TCP.
+- [wirift]: Add codec negotiation and ffmpeg windows path.
+- [audio doorbell]: Add the Audio Doorbell device type with the required Identify, Switch (MomentarySwitch feature), Camera AV Stream Management (Audio feature), and WebRtcTransportProvider clusters, plus the Chime and WebRtcTransportRequestor client clusters, and Power Source support.
+- [clients]: Add `src/behaviors/clients.ts` with `addChimeClient`/`addWebRtcTransportRequestorClient` helpers, shared by `Doorbell`, `AudioDoorbell`, and `Camera`.
+- [tests]: Add `vitest/behaviors/clients.test.ts` covering `addChimeClient`/`addWebRtcTransportRequestorClient`, and assert in `doorbell.test.ts`, `camera.test.ts`, and `audioDoorbell.test.ts` that the required client clusters are registered in `MatterbridgeBindingServer`'s `clientList` and `type.clientClusters`.
+- [platform]: Add a server Chime and Doorbell to test binding.
 
-<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Upgrade package.
+- [camera]: Use the shared `addWebRtcTransportRequestorClient` helper from `clients.ts` instead of a local duplicate.
+- [doorbell]: Use the shared `addChimeClient` helper from `clients.ts` instead of inline binding code.
+- [devices]: `DoorbellOptions`, `AudioDoorbellOptions`, `ChimeOptions`, `CameraOptions`, and `SnapshotCameraOptions` now extend `MatterbridgeEndpointOptions`, forwarding `id`/`number`/`tagList`/`mode` to the underlying `MatterbridgeEndpoint` (`id` defaults to `${name}-${serial}` when not provided), and document the default value of each `identifyTime`/`identifyType`/`powerSourceType` option in JSDoc.
+- [module]: Register the `AudioDoorbell` example device in `onStart` and verify it's registered in `onConfigure`, alongside the existing `Chime`, `Doorbell`, `SnapshotCamera`, and `Camera` example devices.
+- [tests]: Add `vitest/module.test.ts` coverage for the `AudioDoorbell` and `Camera` "device not registered" `onConfigure` error paths, and for the `animationInterval` configuration option (periodic `animationHandler` execution, phase wraparound, and interval cleanup on shutdown).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
 
 ## [0.0.4] - 2026-07-19
 

@@ -23,7 +23,7 @@
  */
 
 // Matterbridge
-import { chime, MatterbridgeEndpoint, powerSource } from 'matterbridge';
+import { chime, MatterbridgeEndpoint, type MatterbridgeEndpointOptions, powerSource } from 'matterbridge';
 import { Identify, type Chime as ChimeCluster } from 'matterbridge/matter/clusters';
 
 import { MatterbridgeChimeServer } from '../behaviors/chimeServer.js';
@@ -35,12 +35,13 @@ export type ChimeId = number;
  *
  * All temperatures in °C. Typical valid range 0–50 unless otherwise noted.
  */
-export interface ChimeOptions {
-  /** Identify time in seconds */
+export interface ChimeOptions extends MatterbridgeEndpointOptions {
+  /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
-  /** Identify type */
+  /** Identify type. Default: Identify.IdentifyType.None (the Identify cluster will not be created) */
   identifyType?: Identify.IdentifyType;
-  /** Power source type */
+
+  /** Power source type. Default: Wired (with None, the Power Source cluster will not be created) */
   powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
 
   /** Installed chime sounds */
@@ -89,8 +90,12 @@ export class Chime extends MatterbridgeEndpoint {
       ],
       selectedChime = 0,
       enabled = true,
+      id,
+      number,
+      tagList,
+      mode,
     } = options;
-    super(powerSourceType === 'None' ? [chime] : [chime, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    super(powerSourceType === 'None' ? [chime] : [chime, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     if (identifyType !== Identify.IdentifyType.None) {
       this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     }

@@ -22,11 +22,10 @@
  */
 
 import type { MatterbridgeEndpoint } from 'matterbridge';
-import { MatterbridgeBindingServer, MatterbridgeServer } from 'matterbridge/behaviors';
+import { MatterbridgeServer } from 'matterbridge/behaviors';
 import type { Endpoint, ServerNode } from 'matterbridge/matter';
 import { Node } from 'matterbridge/matter';
 import { WebRtcTransportProviderServer, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
-import { WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import type { WebRtcTransportProvider } from 'matterbridge/matter/clusters';
 import { EndpointNumber, FabricIndex, NodeId, StreamUsage, Status, StatusResponseError } from 'matterbridge/matter/types';
 
@@ -553,40 +552,5 @@ export namespace MatterbridgeWebRtcTransportProviderServer {
  */
 export function createDefaultWebRtcTransportProviderClusterServer(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
   endpoint.behaviors.require(MatterbridgeWebRtcTransportProviderServer, { currentSessions: [] });
-  return endpoint;
-}
-
-/**
- * Registers the WebRtcTransportRequestor client cluster on the given endpoint, so the Descriptor cluster's ClientList
- * declares it as required by the Matter specification. {@link MatterbridgeWebRtcTransportProviderServer} does not
- * resolve this client via a Binding at runtime — see
- * {@link MatterbridgeWebRtcTransportProviderServer.#resolvePeerRequestorEndpoint} — but the endpoint must still
- * declare the client cluster it invokes on peers.
- *
- * Matterbridge core does not map WebRtcTransportRequestor's client behavior type yet (see
- * getBehaviourTypeFromClusterClientId in matterbridgeEndpointHelpers.ts), so the generic addRequiredClusterClients()
- * only records the cluster id in MatterbridgeBindingServer's clientList (which is what populates the Descriptor's
- * ClientList) without wiring the actual WebRtcTransportRequestorClient behavior type into the endpoint. This helper
- * does that wiring directly, mirroring what addClusterClients does internally for clusters Matterbridge core already
- * maps.
- *
- * @param {MatterbridgeEndpoint} endpoint - The endpoint to register the WebRtcTransportRequestor client cluster on.
- * @returns {MatterbridgeEndpoint} The endpoint with the WebRtcTransportRequestor client cluster registered.
- */
-export function addWebRtcTransportRequestorClient(endpoint: MatterbridgeEndpoint): MatterbridgeEndpoint {
-  if (endpoint.behaviors.has(MatterbridgeBindingServer)) {
-    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
-    const existing = (endpoint.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] } | undefined)?.clientList ?? [];
-    if (!existing.includes(WebRtcTransportRequestor.id)) {
-      endpoint.behaviors.inject(MatterbridgeBindingServer, { clientList: [...existing, WebRtcTransportRequestor.id] });
-    }
-  } else {
-    endpoint.behaviors.require(MatterbridgeBindingServer, { clientList: [WebRtcTransportRequestor.id] });
-  }
-  // intentional any: endpoint.type.clientClusters is a plain writable {} on the underlying matter.js MutableEndpoint,
-  // not exposed with a public TypeScript type; see this function's doc comment above.
-  // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-type-assertion
-  const clientClusters = (endpoint.type as any).clientClusters;
-  clientClusters.webRtcTransportRequestor ??= WebRtcTransportRequestorClient;
   return endpoint;
 }

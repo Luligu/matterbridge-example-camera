@@ -23,20 +23,21 @@
  */
 
 // Matterbridge
-import { doorbell, MatterbridgeEndpoint, powerSource } from 'matterbridge';
-import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
-import { ChimeClient } from 'matterbridge/matter/behaviors';
-import { Chime, Identify } from 'matterbridge/matter/clusters';
+import { doorbell, MatterbridgeEndpoint, type MatterbridgeEndpointOptions, powerSource } from 'matterbridge';
+import { Identify } from 'matterbridge/matter/clusters';
+
+import { addChimeClient } from '../behaviors/clients.js';
 
 /**
  * Options for configuring a {@link Doorbell} instance.
  */
-export interface DoorbellOptions {
-  /** Identify time in seconds */
+export interface DoorbellOptions extends MatterbridgeEndpointOptions {
+  /** Identify time in seconds. Default: 0 */
   identifyTime?: number;
-  /** Identify type. The Identify cluster is always created because it is a required server cluster for the Doorbell device type. */
+  /** Identify type. The Identify cluster is always created because it is a required server cluster for the Doorbell device type. Default: Identify.IdentifyType.None */
   identifyType?: Identify.IdentifyType;
-  /** Power source type */
+
+  /** Power source type. Default: Wired (with None, the Power Source cluster will not be created) */
   powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
 }
 
@@ -50,7 +51,7 @@ export class Doorbell extends MatterbridgeEndpoint {
    *
    * A Doorbell device is a switch which when pressed usually causes a Chime to activate. The Switch cluster
    * is created with the MomentarySwitch feature only, as required by the Matter specification for this device
-   * type, and the required Chime client cluster is added automatically by addRequiredClusters().
+   * type, and the required Chime client cluster is added automatically by {@link addChimeClient}.
    *
    * @param {string} name - The name of the doorbell.
    * @param {string} serial - The serial number of the doorbell.
@@ -64,8 +65,8 @@ export class Doorbell extends MatterbridgeEndpoint {
    * @returns {Doorbell} The Doorbell instance.
    */
   constructor(name: string, serial: string, options: DoorbellOptions = {}) {
-    const { identifyTime = 0, identifyType = Identify.IdentifyType.None, powerSourceType = 'Wired' } = options;
-    super(powerSourceType === 'None' ? [doorbell] : [doorbell, powerSource], { id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}` });
+    const { identifyTime = 0, identifyType = Identify.IdentifyType.None, powerSourceType = 'Wired', id, number, tagList, mode } = options;
+    super(powerSourceType === 'None' ? [doorbell] : [doorbell, powerSource], { id: id ?? `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`, number, tagList, mode });
     this.createDefaultIdentifyClusterServer(identifyTime, identifyType);
     this.createDefaultBasicInformationClusterServer(name, serial, 0xfff1, 'Matterbridge', 0x8000, 'Matterbridge Doorbell');
     switch (powerSourceType) {
@@ -86,8 +87,7 @@ export class Doorbell extends MatterbridgeEndpoint {
       // No default
     }
     this.createDefaultMomentarySwitchClusterServer();
-    this.behaviors.require(MatterbridgeBindingServer, { clientList: [Chime.id] });
-    this.type.clientClusters['chime'] ??= ChimeClient;
+    addChimeClient(this);
     this.addRequiredClusters();
   }
 }

@@ -8,7 +8,9 @@ const NAME = 'DoorbellDevice';
 const MATTER_PORT = 6006;
 const MATTER_CREATE_ONLY = true;
 
-import { Identify, PowerSource, Switch } from 'matterbridge/matter/clusters';
+import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
+import { ChimeClient } from 'matterbridge/matter/behaviors';
+import { Chime, Identify, PowerSource, Switch } from 'matterbridge/matter/clusters';
 import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
@@ -67,6 +69,10 @@ describe('Doorbell', () => {
     expect(device.hasClusterServer(Switch.id)).toBeTruthy();
 
     // The required Chime client cluster is added automatically and should not trigger a "no client behavior found" warning.
+    const clientList = (device.behaviors.optionsFor(MatterbridgeBindingServer) as { clientList?: number[] })?.clientList ?? [];
+    expect(clientList).toEqual([Chime.id]);
+    expect(device.type.clientClusters['chime']).toBe(ChimeClient);
+
     expect(await addDevice(aggregator, device)).toBeTruthy();
     expect(device.getAttribute(Switch, 'numberOfPositions')).toBe(2);
     expect(device.getAttribute(Switch, 'currentPosition')).toBe(0);
