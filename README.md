@@ -121,6 +121,12 @@ Example, capturing from a real Linux webcam at 720p:
 MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=/dev/video0 MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=1280x720 npm start
 ```
 
+### Known limitation: Firefox may only offer a link-local address on a non-HTTPS page
+
+`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates` applies every ICE candidate it receives, including mDNS-obfuscated `*.local` host candidates (the Chromium/Edge default): werift-ice resolves those via a real multicast DNS query before pairing them, so no special handling is needed here.
+
+This relies on the client machine actually offering a usable address in the first place. Firefox has been observed advertising only a non-routable IPv6 link-local (`fe80::...`) address — instead of its real LAN IP — when the WebRTC-consuming page is loaded over plain HTTP from a non-`localhost` origin (i.e. not a secure context: not `https://`, not `http://localhost`/`127.0.0.1`), even with `media.peerconnection.ice.obfuscate_host_addresses` disabled in `about:config`. A link-local address can never be reached by a remote peer, so the connection stays black-screen no matter how the candidate is resolved. Chromium-based browsers (Edge, Chrome) were unaffected under the same conditions. If a stream stays black specifically with Firefox, check whether the page serving the WebRTC client is a secure context (`window.isSecureContext` in devtools, or `about:webrtc` for the actual candidates gathered) before assuming a bug in this plugin — serving that page over HTTPS, or via `localhost`, is the fix.
+
 ## Werift integration test
 
 The `vitest/werift.test.ts` integration test creates local client and server peers and verifies SDP offer/answer negotiation, ICE candidate exchange, a bidirectional data-channel transfer, and connection teardown with `werift`.
