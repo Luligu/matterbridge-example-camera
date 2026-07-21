@@ -43,6 +43,7 @@ export type CameraPlatformConfig = PlatformConfig & {
   generator: 'none' | 'test' | 'webcam';
   webcam?: string;
   webcamResolution: '640x480' | '1280x720' | '1920x1080';
+  webcamBitrate: number;
   animationInterval: number;
 };
 
@@ -82,6 +83,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     this.config.blackList ??= [];
     this.config.generator ??= 'none';
     this.config.webcamResolution ??= '640x480';
+    this.config.webcamBitrate ??= 1000;
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;
     this.config.unregisterOnShutdown ??= false;
@@ -89,6 +91,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     if (this.config.webcam === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
     else process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = this.config.webcam;
     process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = this.config.webcamResolution;
+    process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE = String(this.config.webcamBitrate);
 
     this.log.info(`Platform ${this.config.name} initialized successfully`);
   }

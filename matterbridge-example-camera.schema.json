@@ -44,7 +44,7 @@
     },
     "generator": {
       "title": "Video Generator",
-      "description": "Select the WebRTC video source: none disables track injection, test generates SMPTE test bars, and webcam captures from the configured local webcam.",
+      "description": "Select the WebRTC video source: none disables track injection, test generates a synthetic moving test pattern, and webcam captures from the configured local webcam.",
       "type": "string",
       "enum": ["none", "test", "webcam"],
       "default": "none"
@@ -60,6 +60,12 @@
       "type": "string",
       "enum": ["640x480", "1280x720", "1920x1080"],
       "default": "640x480"
+    },
+    "webcamBitrate": {
+      "title": "Webcam Bitrate",
+      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam, regardless of resolution.",
+      "type": "number",
+      "default": 1000
     },
     "debug": {
       "title": "Enable Debug",

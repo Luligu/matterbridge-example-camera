@@ -57,8 +57,8 @@ export interface WeriftOfferOptions {
  * offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded.
  *
  * In addition to SDP/ICE negotiation, this session can inject a video source using werift/nonstandard + ffmpeg so an
- * end-to-end media path can be validated without a real camera capture pipeline. The source is a synthetic SMPTE
- * bars test pattern when `MATTERBRIDGE_CAMERA_VIDEO_SOURCE=test`, a local webcam capture device when the source is
+ * end-to-end media path can be validated without a real camera capture pipeline. The source is a synthetic moving
+ * test pattern when `MATTERBRIDGE_CAMERA_VIDEO_SOURCE=test`, a local webcam capture device when the source is
  * `webcam`, or no injected track when the source is unset or `none`. MATTERBRIDGE_CAMERA_WEBCAM_DEVICE identifies the
  * webcam device (e.g. /dev/video0 on Linux, an avfoundation index on macOS, or a dshow device name on Windows). The
  * webcam capture resolution defaults to 640x480 and can be set to 1280x720 or 1920x1080 with
@@ -288,17 +288,29 @@ export class WeriftWebRtcSession {
   private static readonly SUPPORTED_WEBCAM_RESOLUTIONS = ['640x480', '1280x720', '1920x1080'];
 
   /**
-   * Target encoder bitrate (kbps) per resolution. Without an explicit -b:v, ffmpeg falls back to a generic ~200kbps
-   * default that is far too low for 720p/1080p and produces heavy blocking artifacts. 1920x1080 is capped lower
-   * than a naive linear scale-up would suggest: at this camera's actual capture rate (~5fps at 1080p), a higher
-   * target let individual encoded frames balloon past 150-200KB, which is too large to reliably fragment/deliver
-   * over the local RTP hop and resulted in a black (never-decoded) video.
+   * Default target encoder bitrate (kbps), used for the test pattern and as the fallback when
+   * MATTERBRIDGE_CAMERA_WEBCAM_BITRATE is unset or invalid. Without an explicit -b:v, ffmpeg falls back to a generic
+   * ~200kbps default that is far too low even at 640x480 and produces heavy blocking artifacts.
    */
-  private static readonly BITRATE_KBPS_BY_RESOLUTION: Record<string, number> = {
-    '640x480': 1000,
-    '1280x720': 2500,
-    '1920x1080': 2000,
-  };
+  private static readonly DEFAULT_BITRATE_KBPS = 1000;
+
+  /**
+   * Resolves the configured webcam capture bitrate (kbps) from MATTERBRIDGE_CAMERA_WEBCAM_BITRATE, applied
+   * regardless of the capture resolution; falls back to {@link DEFAULT_BITRATE_KBPS} (with a warning) if unset or
+   * not a positive number.
+   *
+   * @returns {number} The target encoder bitrate in kbps.
+   */
+  private getConfiguredWebcamBitrate(): number {
+    const configured = process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE;
+    if (!configured) return WeriftWebRtcSession.DEFAULT_BITRATE_KBPS;
+    const bitrateKbps = Number(configured);
+    if (!Number.isFinite(bitrateKbps) || bitrateKbps <= 0) {
+      this.log.warn(`Invalid MATTERBRIDGE_CAMERA_WEBCAM_BITRATE "${configured}"; falling back to ${WeriftWebRtcSession.DEFAULT_BITRATE_KBPS}kbps`);
+      return WeriftWebRtcSession.DEFAULT_BITRATE_KBPS;
+    }
+    return bitrateKbps;
+  }
 
   /**
    * Resolves the webcam capture resolution to use, preferring the requested per-session resolution (typically the
@@ -355,10 +367,12 @@ export class WeriftWebRtcSession {
   /**
    * Resolves the ffmpeg input arguments and a human-readable description for the configured video source.
    *
-   * Uses the synthetic SMPTE bars test pattern for `test`, or MATTERBRIDGE_CAMERA_WEBCAM_DEVICE for `webcam`; falls
+   * Uses the synthetic moving test pattern for `test`, or MATTERBRIDGE_CAMERA_WEBCAM_DEVICE for `webcam`; falls
    * back to the test pattern (logging a warning) if the device is missing or webcam capture isn't supported on this
    * platform. The webcam capture resolution defaults to 640x480 and can be overridden with
    * MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION (640x480, 1280x720, or 1920x1080), or per-session via requestedResolution.
+   * The webcam capture bitrate defaults to {@link DEFAULT_BITRATE_KBPS} and can be overridden with
+   * MATTERBRIDGE_CAMERA_WEBCAM_BITRATE, regardless of resolution.
    *
    * @param {'test' | 'webcam'} videoSource - The configured video source after `none` has been handled by the caller.
    * @param {string} [requestedResolution] - The per-session preferred webcam resolution; see {@link getConfiguredWebcamResolution}.
@@ -366,11 +380,14 @@ export class WeriftWebRtcSession {
    */
   private buildFfmpegVideoInputArgs(videoSource: 'test' | 'webcam', requestedResolution?: string): { args: string[]; description: string; bitrateKbps: number } {
     const testPatternInput = {
-      args: ['-re', '-stream_loop', '-1', '-f', 'lavfi', '-i', 'smptebars=size=640x480:rate=10'],
-      description: 'synthetic SMPTE bars test',
-      bitrateKbps: WeriftWebRtcSession.BITRATE_KBPS_BY_RESOLUTION['640x480'],
+      args: ['-re', '-f', 'lavfi', '-i', 'testsrc=size=640x480:rate=10'],
+      description: 'synthetic moving test pattern',
+      bitrateKbps: WeriftWebRtcSession.DEFAULT_BITRATE_KBPS,
     };
-    if (videoSource === 'test') return testPatternInput;
+    if (videoSource === 'test') {
+      this.log.debug(`Test pattern params: resolution=640x480, description="${testPatternInput.description}", bitrateKbps=${testPatternInput.bitrateKbps}`);
+      return testPatternInput;
+    }
 
     const device = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
     if (!device) {
@@ -378,12 +395,13 @@ export class WeriftWebRtcSession {
       return testPatternInput;
     }
 
-    const resolution = this.getConfiguredWebcamResolution(requestedResolution);
-    const bitrateKbps = WeriftWebRtcSession.BITRATE_KBPS_BY_RESOLUTION[resolution];
+    const resolution = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION ?? this.getConfiguredWebcamResolution(requestedResolution);
+    const bitrateKbps = this.getConfiguredWebcamBitrate();
     const description = `local webcam (${device}, ${resolution})`;
+    this.log.debug(`Webcam capture params: device=${device}, resolution=${resolution}, description="${description}", bitrateKbps=${bitrateKbps}`);
     switch (process.platform) {
       case 'linux':
-        return { args: ['-f', 'v4l2', '-input_format', 'yuyv422', '-video_size', resolution, '-framerate', '30', '-i', device], description, bitrateKbps };
+        return { args: ['-f', 'v4l2', '-video_size', resolution, '-framerate', '30', '-i', device], description, bitrateKbps };
       case 'darwin':
         return { args: ['-f', 'avfoundation', '-video_size', resolution, '-framerate', '30', '-i', device], description, bitrateKbps };
       case 'win32':
@@ -437,7 +455,7 @@ export class WeriftWebRtcSession {
           ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', '20', '-b:v', bitrate, '-maxrate', bitrate, '-bufsize', bitrate]
           : ['-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '4', '-pix_fmt', 'yuv420p', '-g', '20', '-b:v', bitrate, '-maxrate', bitrate, '-bufsize', bitrate];
 
-      const generator = spawn(ffmpegCommand, [
+      const ffmpegArgs = [
         '-hide_banner',
         '-loglevel',
         'error',
@@ -449,7 +467,9 @@ export class WeriftWebRtcSession {
         '-payload_type',
         String(selectedPayloadType),
         `rtp://127.0.0.1:${udpPort}`,
-      ]);
+      ];
+      this.log.debug(`Spawning ffmpeg: ${ffmpegCommand} ${ffmpegArgs.join(' ')}`);
+      const generator = spawn(ffmpegCommand, ffmpegArgs);
 
       /* v8 ignore start -- requires the spawned ffmpeg process itself to fail after resolveCommand already verified
        * it runs (e.g. the binary is removed between the check and this spawn), which this harness can't simulate

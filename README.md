@@ -105,7 +105,7 @@ Features:
 
 The platform configuration controls WebRTC video injection with these properties:
 
-- `generator` is required and accepts `none`, `test`, or `webcam`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects synthetic SMPTE bars, while `webcam` captures from the configured local webcam.
+- `generator` is required and accepts `none`, `test`, or `webcam`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects a synthetic moving test pattern, while `webcam` captures from the configured local webcam.
 - `webcam` is optional and has no default. It contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). Selecting the `webcam` generator without this property falls back to the test pattern with a warning.
 - `webcamResolution` is required and accepts `640x480`, `1280x720`, or `1920x1080`. It defaults to `640x480`. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
 
@@ -139,11 +139,19 @@ Example, capturing from a real Windows webcam at 720p:
 }
 ```
 
-### Known limitation: Firefox may only offer a link-local address on a non-HTTPS page
+### Known limitation: mDNS ICE candidates can't be resolved across a Docker Desktop host boundary
 
-`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates` applies every ICE candidate it receives, including mDNS-obfuscated `*.local` host candidates (the Chromium/Edge default): werift-ice resolves those via a real multicast DNS query before pairing them, so no special handling is needed here.
+When matterbridge runs in a container (e.g. via Docker Desktop on Windows/macOS) and the WebRTC-consuming page runs in a browser on the host machine — for example the matterjs-server dashboard — `provideIceCandidates` can fail every candidate with `ICE candidate apply timeout after 5000ms`, even though matterbridge and the Matter controller container can reach each other fine.
 
-This relies on the client machine actually offering a usable address in the first place. Firefox has been observed advertising only a non-routable IPv6 link-local (`fe80::...`) address — instead of its real LAN IP — when the WebRTC-consuming page is loaded over plain HTTP from a non-`localhost` origin (i.e. not a secure context: not `https://`, not `http://localhost`/`127.0.0.1`), even with `media.peerconnection.ice.obfuscate_host_addresses` disabled in `about:config`. A link-local address can never be reached by a remote peer, so the connection stays black-screen no matter how the candidate is resolved. Chromium-based browsers (Edge, Chrome) were unaffected under the same conditions. If a stream stays black specifically with Firefox, check whether the page serving the WebRTC client is a secure context (`window.isSecureContext` in devtools, or `about:webrtc` for the actual candidates gathered) before assuming a bug in this plugin — serving that page over HTTPS, or via `localhost`, is the fix.
+The cause: Chromium-based browsers (Edge, Chrome) hide the page's real local IP behind a random `<uuid>.local` mDNS name in ICE host candidates by default. Resolving that name requires a real multicast DNS query/response over the LAN (see the Firefox limitation above). Docker Desktop's virtualized networking (WSL2/Hyper-V) does not forward multicast traffic between a container's network and the Windows/macOS host, so matterbridge's mDNS query for the browser's candidate name never reaches the browser, and the candidate can never resolve — no matter how the container networking is otherwise configured.
+
+Packet captures confirm this: the query correctly leaves the matterbridge container and even reaches other containers on the same Docker network, but never reaches a browser running on the host, and no reply is ever seen.
+
+The fix is on the browser side, not in this plugin: disable mDNS obfuscation of local ICE candidates so the browser advertises its real LAN IP instead of a `.local` name, which skips mDNS resolution entirely.
+
+- **Edge**: go to `edge://flags/#enable-webrtc-hide-local-ips-with-mdns`, set **"Anonymize local IPs exposed by WebRTC"** to **Disabled**, then relaunch the browser.
+- **Chrome**: the same flag is at `chrome://flags/#enable-webrtc-hide-local-ips-with-mdns`.
+- **Firefox**: open `about:config` and set `media.peerconnection.ice.obfuscate_host_addresses` to `false`. Note this alone may not be enough — per the Firefox limitation above, Firefox can still fall back to a useless link-local address on a non-secure-context page even with this preference disabled, so the page also needs to be served over HTTPS or via `localhost`.
 
 ## Werift integration test
 

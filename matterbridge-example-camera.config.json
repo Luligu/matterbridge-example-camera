@@ -5,6 +5,7 @@
   "blackList": [],
   "generator": "none",
   "webcamResolution": "640x480",
+  "webcamBitrate": 1000,
   "animationInterval": 60,
   "debug": false,
   "unregisterOnShutdown": false

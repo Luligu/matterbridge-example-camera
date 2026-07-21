@@ -203,7 +203,7 @@ describe('WeriftWebRtcSession', () => {
       await session.close();
     });
 
-    it('should attach the synthetic SMPTE bars track when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=test', async () => {
+    it('should attach the synthetic moving test pattern track when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=test', async () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'test';
       const session = new WeriftWebRtcSession(1);
 

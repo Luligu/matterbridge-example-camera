@@ -105,7 +105,7 @@ interface RemoteActorSessionContext {
  * - EndSession closes the session's peer connection.
  *
  * This implementation has no mechanism to send a deferred Offer/Answer later once the peer becomes reachable after
- * the fact. The underlying WeriftWebRtcSession can inject a synthetic SMPTE bars video track for end-to-end media
+ * the fact. The underlying WeriftWebRtcSession can inject a synthetic moving test pattern video track for end-to-end media
  * validation when video is negotiated.
  *
  * Known upstream limitation: matter.js's fabric-index injection for fabric-scoped command invokes

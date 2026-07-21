@@ -42,6 +42,7 @@ describe('TestPlatform', () => {
     blackList: [],
     generator: 'none',
     webcamResolution: '640x480',
+    webcamBitrate: 1000,
     animationInterval: 0,
     debug: false,
     unregisterOnShutdown: false,
