@@ -6,6 +6,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   cacheDir: '.cache/vitest',
+  envDir: false,
   test: {
     include: ['**/vitest/**/*.{spec,test}.{ts,mts,cts}'],
     exclude: [

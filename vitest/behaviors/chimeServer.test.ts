@@ -2,6 +2,7 @@
  * @file vitest/behaviors/chimeServer.test.ts
  * @description This file contains the tests for the MatterbridgeChimeServer behavior.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'ChimeServerBehavior';

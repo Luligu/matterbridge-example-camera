@@ -2,6 +2,7 @@
  * @file vitest/devices/audioDoorbell.test.ts
  * @description This file contains the tests for the AudioDoorbell device.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'AudioDoorbellDevice';

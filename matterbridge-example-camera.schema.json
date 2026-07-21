@@ -2,7 +2,7 @@
   "title": "Matterbridge example camera plugin",
   "description": "matterbridge-example-camera v. 1.0.0 by https://github.com/Luligu",
   "type": "object",
-  "required": [],
+  "required": ["generator", "webcamResolution"],
   "properties": {
     "name": {
       "description": "Plugin Name",
@@ -41,6 +41,31 @@
       "description": "Interval to refresh the devices (in seconds). Use 0 to disable the animation.",
       "type": "number",
       "default": 60
+    },
+    "generator": {
+      "title": "Video Generator",
+      "description": "Select the WebRTC video source: none disables track injection, test generates a synthetic moving test pattern, and webcam captures from the configured local webcam.",
+      "type": "string",
+      "enum": ["none", "test", "webcam"],
+      "default": "none"
+    },
+    "webcam": {
+      "title": "Webcam Device",
+      "description": "OS-specific ffmpeg webcam identifier, such as /dev/video0 on Linux, 0 on macOS, or Integrated Camera on Windows.",
+      "type": "string"
+    },
+    "webcamResolution": {
+      "title": "Webcam Resolution",
+      "description": "Resolution used when capturing from the configured webcam.",
+      "type": "string",
+      "enum": ["640x480", "1280x720", "1920x1080"],
+      "default": "640x480"
+    },
+    "webcamBitrate": {
+      "title": "Webcam Bitrate",
+      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam, regardless of resolution.",
+      "type": "number",
+      "default": 1000
     },
     "debug": {
       "title": "Enable Debug",

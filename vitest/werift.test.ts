@@ -1,7 +1,8 @@
 /**
  * @file vitest/werift.test.ts
  * @description This file tests a complete local client/server WebRTC flow with werift.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 import { createHash } from 'node:crypto';

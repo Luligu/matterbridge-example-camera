@@ -2,6 +2,7 @@
  * @file vitest/rootNode.test.ts
  * @description This file contains the tests for the addRootNodeCamera() helper.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'RootNode';

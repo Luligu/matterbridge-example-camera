@@ -42,9 +42,9 @@ export interface CameraColorTestJpeg {
 const DEFAULT_CAMERA_COLOR_TEST_RESOLUTION = '640x480';
 
 const cameraColorTestJpegs: Record<string, CameraColorTestJpeg> = {
-  '640x480': { data: readFileSync(new URL('../../assets/camera-color-640-480.jpeg', import.meta.url)), resolution: { width: 640, height: 480 } },
-  '1280x720': { data: readFileSync(new URL('../../assets/camera-color-1280-720.jpeg', import.meta.url)), resolution: { width: 1280, height: 720 } },
-  '1920x1080': { data: readFileSync(new URL('../../assets/camera-color-1920-1080.jpeg', import.meta.url)), resolution: { width: 1920, height: 1080 } },
+  '640x480': { data: readFileSync(new URL('../../assets/camera-color-test-640-480.jpeg', import.meta.url)), resolution: { width: 640, height: 480 } },
+  '1280x720': { data: readFileSync(new URL('../../assets/camera-color-test-1280-720.jpeg', import.meta.url)), resolution: { width: 1280, height: 720 } },
+  '1920x1080': { data: readFileSync(new URL('../../assets/camera-color-test-1920-1080.jpeg', import.meta.url)), resolution: { width: 1920, height: 1080 } },
 };
 
 /**

@@ -1,7 +1,8 @@
 /**
  * @file vitest/devices/doorbell.test.ts
  * @description This file contains the tests for the Doorbell device.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'DoorbellDevice';
