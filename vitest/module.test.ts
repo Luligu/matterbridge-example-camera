@@ -21,11 +21,6 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
-import { AudioDoorbell } from '../src/devices/audioDoorbell.js';
-import { Camera } from '../src/devices/camera.js';
-import { Chime } from '../src/devices/chime.js';
-import { Doorbell } from '../src/devices/doorbell.js';
-import { SnapshotCamera } from '../src/devices/snapshotCamera.js';
 import initializePlugin, { type CameraPlatformConfig, ExampleMatterbridgeCameraPlatform } from '../src/module.js';
 
 await setupTest(NAME);
@@ -46,8 +41,9 @@ describe('TestPlatform', () => {
   };
 
   beforeAll(async () => {
-    // Create Matterbridge environment
+    // Setup the Matter test environment
     await createTestEnvironment();
+    // Create the server node and aggregator
     await createServerNode(MATTER_PORT);
     // Start the server node if not in create-only mode
     if (!MATTER_CREATE_ONLY) await startServerNode();
@@ -69,10 +65,10 @@ describe('TestPlatform', () => {
   });
 
   afterAll(async () => {
-    // Destroy Matterbridge environment
     // Stop or flush the server node depending on the create-only mode
     if (MATTER_CREATE_ONLY) await flushServerNode();
     else await stopServerNode();
+    // Destroy the Matter test environment
     await destroyTestEnvironment();
     // Restore all mocks
     vi.restoreAllMocks();
@@ -84,6 +80,38 @@ describe('TestPlatform', () => {
     );
   });
 
+  it('should add empty selection lists when the config omits them', async () => {
+    const emptyConfig: CameraPlatformConfig = { ...config };
+    delete emptyConfig.whiteList;
+    delete emptyConfig.blackList;
+    const emptyConfigPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, emptyConfig);
+    addMatterbridge(emptyConfigPlatform);
+    vi.spyOn(emptyConfigPlatform, 'registerDevice').mockResolvedValue();
+
+    try {
+      await emptyConfigPlatform.onStart();
+
+      expect(emptyConfigPlatform.config.whiteList).toEqual([]);
+      expect(emptyConfigPlatform.config.blackList).toEqual([]);
+      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(8);
+    } finally {
+      await emptyConfigPlatform.onShutdown();
+    }
+  });
+
+  it('should not create devices when none match the whitelist', async () => {
+    const filteredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, whiteList: ['No devices'] });
+    addMatterbridge(filteredPlatform);
+
+    try {
+      await filteredPlatform.onStart();
+
+      expect(filteredPlatform.size()).toBe(0);
+    } finally {
+      await filteredPlatform.onShutdown();
+    }
+  });
+
   it('should initialize platform with config name', () => {
     platform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
     addMatterbridge(platform);
@@ -91,109 +119,19 @@ describe('TestPlatform', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} initialized successfully`);
   });
 
-  it('should throw error in onConfigure when the chime device is not registered', async () => {
-    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
-    addMatterbridge(unconfiguredPlatform);
-
-    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Chime device not found. Please ensure the device is registered before configuration.');
-  });
-
-  it('should throw error in onConfigure when the doorbell device is not registered', async () => {
-    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
-    const chime = new Chime('Chime', 'CHIME-001');
-    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
-    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
-    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) => (id === 'Chime-CHIME-001' ? chime : undefined));
-    addMatterbridge(unconfiguredPlatform);
-
-    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Doorbell device not found. Please ensure the device is registered before configuration.');
-  });
-
-  it('should throw error in onConfigure when the audio doorbell device is not registered', async () => {
-    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
-    const chime = new Chime('Chime', 'CHIME-001');
-    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
-    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
-    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
-    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) => (id === 'Chime-CHIME-001' ? chime : id === 'Doorbell-DOORBELL-001' ? doorbell : undefined));
-    addMatterbridge(unconfiguredPlatform);
-
-    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Audio doorbell device not found. Please ensure the device is registered before configuration.');
-  });
-
-  it('should throw error in onConfigure when the snapshot camera device is not registered', async () => {
-    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
-    const chime = new Chime('Chime', 'CHIME-001');
-    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
-    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
-    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
-    const audioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001');
-    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) =>
-      id === 'Chime-CHIME-001' ? chime : id === 'Doorbell-DOORBELL-001' ? doorbell : id === 'AudioDoorbell-AUDIODOORBELL-001' ? audioDoorbell : undefined,
-    );
-    addMatterbridge(unconfiguredPlatform);
-
-    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Snapshot camera device not found. Please ensure the device is registered before configuration.');
-  });
-
-  it('should throw error in onConfigure when the camera device is not registered', async () => {
-    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
-    const chime = new Chime('Chime', 'CHIME-001');
-    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
-    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
-    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
-    const audioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001');
-    const snapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOTCAMERA-001');
-    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) =>
-      id === 'Chime-CHIME-001'
-        ? chime
-        : id === 'Doorbell-DOORBELL-001'
-          ? doorbell
-          : id === 'AudioDoorbell-AUDIODOORBELL-001'
-            ? audioDoorbell
-            : id === 'SnapshotCamera-SNAPSHOTCAMERA-001'
-              ? snapshotCamera
-              : undefined,
-    );
-    addMatterbridge(unconfiguredPlatform);
-
-    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Camera device not found. Please ensure the device is registered before configuration.');
-  });
-
-  it('should throw error in onConfigure when the floodlight camera device is not registered', async () => {
-    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
-    const chime = new Chime('Chime', 'CHIME-001');
-    vi.spyOn(chime, 'setCluster').mockResolvedValue(true);
-    vi.spyOn(chime, 'setAttribute').mockResolvedValue(true);
-    const doorbell = new Doorbell('Doorbell', 'DOORBELL-001');
-    const audioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001');
-    const snapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOTCAMERA-001');
-    const camera = new Camera('Camera', 'CAMERA-001');
-    vi.spyOn(unconfiguredPlatform, 'getDeviceById').mockImplementation((id) =>
-      id === 'Chime-CHIME-001'
-        ? chime
-        : id === 'Doorbell-DOORBELL-001'
-          ? doorbell
-          : id === 'AudioDoorbell-AUDIODOORBELL-001'
-            ? audioDoorbell
-            : id === 'SnapshotCamera-SNAPSHOTCAMERA-001'
-              ? snapshotCamera
-              : id === 'Camera-CAMERA-001'
-                ? camera
-                : undefined,
-    );
-    addMatterbridge(unconfiguredPlatform);
-
-    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Floodlight camera device not found. Please ensure the device is registered before configuration.');
-  });
-
   it('should call onStart with reason', async () => {
     await platform.onStart('Test reason');
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Starting platform ${config.name} with reason: Test reason...`);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} started successfully`);
+    expect(platform.getDeviceById('Chime-CHIME-001')).toBeDefined();
+    expect(platform.getDeviceById('Doorbell-DOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
+    expect(platform.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
+    expect(platform.getDeviceById('ServerChime-SERVER-CHIME-001')).toBeDefined();
+    expect(platform.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001')).toBeDefined();
+    expect(platform.size()).toBe(8);
   });
 
   it('should call onConfigure', async () => {
@@ -206,13 +144,11 @@ describe('TestPlatform', () => {
     await platform.onShutdown('Test reason');
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Shutting down platform ${config.name} with reason: Test reason...`);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} shut down successfully`);
+    // Remove the devices for the next test
+    await platform.unregisterAllDevices();
   });
 
   it('should restart and unregister devices if configured', async () => {
-    // Remove the device left behind by the previous onShutdown (unregisterOnShutdown was false) before restarting
-    await platform.unregisterAllDevices();
-    loggerWarnSpy.mockClear();
-
     platform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
     addMatterbridge(platform);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Initializing platform ${config.name}...`);
