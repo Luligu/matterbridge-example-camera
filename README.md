@@ -109,6 +109,39 @@ Features:
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 - Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around the same matter.js bug described above for Audio Doorbell.
 
+#### Pairing two Intercoms for two-way calling
+
+Unlike a Doorbell/Chime pair, where only the Doorbell invokes commands on the Chime, an Intercom both hosts (server) and invokes (client) WebRtcTransportProvider and WebRtcTransportRequestor (see `#resolvePeerRequestorEndpoint` in `src/behaviors/webRtcTransportProviderServer.ts`). Once a peer invokes SolicitOffer/ProvideOffer on an Intercom's WebRtcTransportProvider, that Intercom resolves the caller's WebRtcTransportRequestor endpoint directly from the invoking peer's node id/fabric index carried by the command's CASE session — not via the Binding cluster — so the Offer/Answer "return leg" needs no binding of its own. Only the initiating invoke needs one.
+
+So, to let either Intercom A or Intercom B start a call, on the fabric they share (commission both onto the same controller/ecosystem first, e.g. via chip-tool, Apple Home, or Google Home):
+
+1. **Binding on A → B**, so A knows where to send SolicitOffer/ProvideOffer. Binding on B → A is the mirror, for the other direction:
+
+   ```bash
+   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_B>, "endpoint": <ENDPOINT_B>, "cluster": 1363}]' <NODE_ID_A> <ENDPOINT_A>
+   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_A>, "endpoint": <ENDPOINT_A>, "cluster": 1363}]' <NODE_ID_B> <ENDPOINT_B>
+   ```
+
+   `1363` (`0x553`) is the WebRtcTransportProvider cluster id; `<ENDPOINT_A>`/`<ENDPOINT_B>` are each Intercom's endpoint number (find them from the commissioning output or the Matterbridge frontend).
+
+2. **ACL on B granting A**, and **ACL on A granting B**, Operate access to both WebRtcTransportProvider (`1363`) and WebRtcTransportRequestor (`1364`, `0x554`) — A needs it on B for the initiating invoke, and B needs it on A for the return invoke, regardless of who starts the call:
+
+   ```bash
+   chip-tool accesscontrol write acl '[
+     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
+     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_A>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
+   ]' <NODE_ID_B> 0
+
+   chip-tool accesscontrol write acl '[
+     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
+     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_B>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
+   ]' <NODE_ID_A> 0
+   ```
+
+   The ACL attribute is a full replace, not a merge: keep the existing Administer entry for `<ADMIN_NODE_ID>` (your controller/commissioner) in the list, or you lock yourself out of that node.
+
+With both directions in place, either Intercom can call the other; a call initiated the other way only needs its own binding/ACL pair, already covered above since both were set up symmetrically.
+
 ## WebRTC test video injection
 
 `WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video track into the negotiated connection, so the end-to-end media path can be validated without a real camera capture pipeline.

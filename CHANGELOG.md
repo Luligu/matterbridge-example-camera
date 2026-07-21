@@ -38,6 +38,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [behaviors]: Add `src/behaviors/webRtcTransportRequestorServer.ts` with `createDefaultWebRtcTransportRequestorClusterServer`, using matter.js's default `WebRtcTransportRequestorServer` implementation directly.
 - [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, custom `lightOptions`, camera identify, power source variants, additional tagged lights, and custom stream usages; add `vitest/devices/intercom.test.ts`; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path; extend `vitest/behaviors/clients.test.ts` to cover `addWebRtcTransportProviderClient`.
 - [platform]: Register a Floodlight Camera and an Intercom example device in `onStart`, and verify they're registered in `onConfigure`.
+- [docs]: Document how to pair two Intercom devices for two-way calling (Binding and ACL requirements, with chip-tool examples) in the README.
 
 ### Fixed
 
