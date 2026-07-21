@@ -225,7 +225,7 @@ describe('TestPlatform', () => {
     expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
-    expect(platform.getDeviceById('Intercom-INTERCOM-001')).toBeDefined();
+    expect(platform.getDeviceById('Intercom1-INTERCOM1-001')).toBeDefined();
   });
 
   it('should call onConfigure', async () => {

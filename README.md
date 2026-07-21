@@ -115,31 +115,35 @@ Features:
 
 #### Pairing two Intercoms for two-way calling
 
+`src/module.ts` registers exactly this pair for testing: `Intercom 1` (bridged, under the Matterbridge aggregator) and `Intercom 2` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
+
+`Intercom 2` has to be `mode: 'server'` rather than a second bridged endpoint: peer resolution (see below) identifies the caller from the `peerNodeId`/`fabricIndex` of the command's CASE session, and a CASE session only exists between two distinct node identities on the fabric. Two bridged endpoints share the bridge's single node identity, so there is no CASE session, Binding, or ACL between them to test — invoking one from the other would just be a local, in-process behavior call. `mode: 'server'` is what gives an endpoint its own independent Matter node, which is what a real second, physical Intercom would be.
+
 Unlike a Doorbell/Chime pair, where only the Doorbell invokes commands on the Chime, an Intercom both hosts (server) and invokes (client) WebRtcTransportProvider and WebRtcTransportRequestor (see `#resolvePeerRequestorEndpoint` in `src/behaviors/webRtcTransportProviderServer.ts`). Once a peer invokes SolicitOffer/ProvideOffer on an Intercom's WebRtcTransportProvider, that Intercom resolves the caller's WebRtcTransportRequestor endpoint directly from the invoking peer's node id/fabric index carried by the command's CASE session — not via the Binding cluster — so the Offer/Answer "return leg" needs no binding of its own. Only the initiating invoke needs one.
 
-So, to let either Intercom A or Intercom B start a call, on the fabric they share (commission both onto the same controller/ecosystem first, e.g. via chip-tool, Apple Home, or Google Home):
+So, to let either Intercom 1 or Intercom 2 start a call, on the fabric they share (commission both onto the same controller/ecosystem first, e.g. via chip-tool, Apple Home, or Google Home):
 
-1. **Binding on A → B**, so A knows where to send SolicitOffer/ProvideOffer. Binding on B → A is the mirror, for the other direction:
+1. **Binding on 1 → 2**, so Intercom 1 knows where to send SolicitOffer/ProvideOffer. Binding on 2 → 1 is the mirror, for the other direction:
 
    ```bash
-   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_B>, "endpoint": <ENDPOINT_B>, "cluster": 1363}]' <NODE_ID_A> <ENDPOINT_A>
-   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_A>, "endpoint": <ENDPOINT_A>, "cluster": 1363}]' <NODE_ID_B> <ENDPOINT_B>
+   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_2>, "endpoint": <ENDPOINT_2>, "cluster": 1363}]' <NODE_ID_1> <ENDPOINT_1>
+   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_1>, "endpoint": <ENDPOINT_1>, "cluster": 1363}]' <NODE_ID_2> <ENDPOINT_2>
    ```
 
-   `1363` (`0x553`) is the WebRtcTransportProvider cluster id; `<ENDPOINT_A>`/`<ENDPOINT_B>` are each Intercom's endpoint number (find them from the commissioning output or the Matterbridge frontend).
+   `1363` (`0x553`) is the WebRtcTransportProvider cluster id; `<ENDPOINT_1>`/`<ENDPOINT_2>` are each Intercom's endpoint number (find them from the commissioning output or the Matterbridge frontend).
 
-2. **ACL on B granting A**, and **ACL on A granting B**, Operate access to both WebRtcTransportProvider (`1363`) and WebRtcTransportRequestor (`1364`, `0x554`) — A needs it on B for the initiating invoke, and B needs it on A for the return invoke, regardless of who starts the call:
+2. **ACL on 2 granting 1**, and **ACL on 1 granting 2**, Operate access to both WebRtcTransportProvider (`1363`) and WebRtcTransportRequestor (`1364`, `0x554`) — Intercom 1 needs it on 2 for the initiating invoke, and Intercom 2 needs it on 1 for the return invoke, regardless of who starts the call:
 
    ```bash
    chip-tool accesscontrol write acl '[
      {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
-     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_A>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
-   ]' <NODE_ID_B> 0
+     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_1>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
+   ]' <NODE_ID_2> 0
 
    chip-tool accesscontrol write acl '[
      {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
-     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_B>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
-   ]' <NODE_ID_A> 0
+     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_2>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
+   ]' <NODE_ID_1> 0
    ```
 
    The ACL attribute is a full replace, not a merge: keep the existing Administer entry for `<ADMIN_NODE_ID>` (your controller/commissioner) in the list, or you lock yourself out of that node.

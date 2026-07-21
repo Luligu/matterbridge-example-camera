@@ -126,12 +126,12 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.registerDevice(exampleFloodlightCamera);
 
-    const exampleIntercom = new Intercom('Intercom', 'INTERCOM-001', {
+    const exampleIntercom1 = new Intercom('Intercom 1', 'INTERCOM1-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Replaceable',
     });
-    await this.registerDevice(exampleIntercom);
+    await this.registerDevice(exampleIntercom1);
 
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', { mode: 'server' });
     await this.registerDevice(serverChime);
@@ -139,8 +139,10 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', { mode: 'server' });
     await this.registerDevice(serverDoorbell);
 
-    const serverIntercom = new Intercom('Server Intercom', 'SERVER-INTERCOM-001', { mode: 'server' });
-    await this.registerDevice(serverIntercom);
+    // A separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
+    // be bound to each other to test two-way calling (see the README's Intercom pairing section).
+    const exampleIntercom2 = new Intercom('Intercom 2', 'INTERCOM2-001', { mode: 'server' });
+    await this.registerDevice(exampleIntercom2);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
@@ -173,8 +175,8 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleFloodlightCamera: MatterbridgeEndpoint | undefined = this.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001');
     if (!exampleFloodlightCamera) throw new Error(`Floodlight camera device not found. Please ensure the device is registered before configuration.`);
 
-    const exampleIntercom: Intercom | undefined = this.getDeviceById('Intercom-INTERCOM-001');
-    if (!exampleIntercom) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
+    const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
+    if (!exampleIntercom1) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
 
     if (this.config.animationInterval > 0) {
       clearInterval(this.animationInterval);
@@ -201,7 +203,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleAudioDoorbell: AudioDoorbell | undefined = this.getDeviceById('AudioDoorbell-AUDIODOORBELL-001');
     const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001');
     const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
-    const exampleIntercom: Intercom | undefined = this.getDeviceById('Intercom-INTERCOM-001');
+    const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
     */
   }
 
