@@ -26,6 +26,7 @@ import { createSocket } from 'node:dgram';
 import { constants } from 'node:fs';
 import { access, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264, useOPUS, usePCMU, useVP8 } from 'werift';
 import { navigator } from 'werift/nonstandard';
@@ -76,6 +77,12 @@ export class WeriftWebRtcSession {
   private testVideoUdpDisposer?: () => void;
 
   private testVideoAttached = false;
+
+  private testAudioGenerator?: ChildProcess;
+
+  private testAudioUdpDisposer?: () => void;
+
+  private testAudioAttached = false;
 
   constructor(logger?: WeriftSessionLogger, label = 'WebRTC session') {
     this.peerConnection = new RTCPeerConnection({ codecs: { audio: [useOPUS(), usePCMU()], video: [useVP8(), useH264()] } });
@@ -202,6 +209,15 @@ export class WeriftWebRtcSession {
         const mimeType = codec.mimeType.toLowerCase();
         return mimeType === 'video/vp8' || mimeType === 'video/h264';
       });
+      if (preferredCodec) return preferredCodec;
+    }
+    return undefined;
+  }
+
+  private getPreferredInjectableAudioCodec(): RTCRtpCodecParameters | undefined {
+    for (const transceiver of this.peerConnection.getTransceivers()) {
+      if (transceiver.kind !== 'audio') continue;
+      const preferredCodec = transceiver.codecs.find((codec) => codec.mimeType.toLowerCase() === 'audio/opus');
       if (preferredCodec) return preferredCodec;
     }
     return undefined;
@@ -378,6 +394,99 @@ export class WeriftWebRtcSession {
     /* v8 ignore stop */
   }
 
+  private preferAudioCodecOnTransceivers(mimeType: string): void {
+    let adjustedTransceivers = 0;
+    for (const transceiver of this.peerConnection.getTransceivers()) {
+      if (transceiver.kind !== 'audio') continue;
+      const preferredCodecs = transceiver.codecs.filter((codec) => codec.mimeType.toLowerCase() === mimeType);
+      if (!preferredCodecs.length) continue;
+      transceiver.codecs = preferredCodecs;
+      adjustedTransceivers += 1;
+    }
+    if (adjustedTransceivers > 0) {
+      this.log('info', `Preferred ${mimeType.toUpperCase()} codecs on ${adjustedTransceivers} audio transceiver(s)`);
+    }
+  }
+
+  /** Recorded test-voice clip (espeak-ng synthesized, checked into the repo) looped as the injected audio source. */
+  private static readonly TEST_VOICE_PATH = fileURLToPath(new URL('../../assets/test-voice.opus', import.meta.url));
+
+  /**
+   * Injects the recorded test-voice clip ({@link TEST_VOICE_PATH}) as the audio track for this session, so an
+   * end-to-end audio path (e.g. an Intercom's "Listen" live view) can be verified without a real microphone capture
+   * pipeline. Mirrors {@link ensureTestVideoTrack}; disable with MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1.
+   *
+   * @param {RTCRtpCodecParameters} [codec] - The negotiated Opus codec parameters to encode and send as.
+   * @returns {Promise<void>} Resolves once the track is attached, or once injection is skipped/failed (logged, not thrown).
+   */
+  private async ensureTestAudioTrack(codec?: RTCRtpCodecParameters): Promise<void> {
+    if (this.testAudioAttached) return;
+    if (process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO === '1') {
+      this.log('info', 'Test audio injection disabled by MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1');
+      return;
+    }
+
+    const ffmpegCommand = await this.resolveCommand('ffmpeg');
+    if (!ffmpegCommand) {
+      this.log('warn', 'Cannot inject audio stream: missing dependency ffmpeg');
+      return;
+    }
+
+    const selectedMimeType = (codec?.mimeType ?? 'audio/opus').toLowerCase();
+    const selectedPayloadType = codec?.payloadType ?? 111;
+    const clockRate = codec?.clockRate ?? 48000;
+    const channels = codec?.channels ?? 1;
+    try {
+      const udpPort = await this.getFreeUdpPort();
+      const { track, disposer } = navigator.mediaDevices.getUdpMedia({
+        port: udpPort,
+        codec: new RTCRtpCodecParameters({ mimeType: selectedMimeType, clockRate, channels, payloadType: selectedPayloadType }),
+      });
+      this.peerConnection.addTrack(track);
+
+      const generator = spawn(ffmpegCommand, [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-re',
+        '-stream_loop',
+        '-1',
+        '-i',
+        WeriftWebRtcSession.TEST_VOICE_PATH,
+        '-vn',
+        '-af',
+        'volume=6dB',
+        '-c:a',
+        'libopus',
+        '-b:a',
+        '32k',
+        '-ac',
+        String(channels),
+        '-ar',
+        String(clockRate),
+        '-f',
+        'rtp',
+        '-payload_type',
+        String(selectedPayloadType),
+        `rtp://127.0.0.1:${udpPort}`,
+      ]);
+
+      generator.once('error', (error: unknown) => {
+        this.log('warn', `Audio generator failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+
+      this.testAudioUdpDisposer = disposer;
+      this.testAudioGenerator = generator;
+      this.testAudioAttached = true;
+      this.log(
+        'info',
+        `Attached test-voice audio track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
+      );
+    } catch (error) {
+      this.log('warn', `Failed to attach test-voice audio track: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private cleanupTestVideoArtifacts(): void {
     if (this.testVideoGenerator) {
       this.testVideoGenerator.kill('SIGTERM');
@@ -386,6 +495,16 @@ export class WeriftWebRtcSession {
     this.testVideoUdpDisposer?.();
     this.testVideoUdpDisposer = undefined;
     this.testVideoAttached = false;
+  }
+
+  private cleanupTestAudioArtifacts(): void {
+    if (this.testAudioGenerator) {
+      this.testAudioGenerator.kill('SIGTERM');
+      this.testAudioGenerator = undefined;
+    }
+    this.testAudioUdpDisposer?.();
+    this.testAudioUdpDisposer = undefined;
+    this.testAudioAttached = false;
   }
 
   /**
@@ -442,6 +561,17 @@ export class WeriftWebRtcSession {
       /* v8 ignore stop */
       await this.ensureTestVideoTrack(preferredCodec, videoResolution);
     }
+    const hasAudioTransceiver = this.peerConnection.getTransceivers().some((transceiver) => transceiver.kind === 'audio');
+    this.log('debug', `Remote offer created audio transceiver: ${hasAudioTransceiver}`);
+    if (hasAudioTransceiver) {
+      const preferredAudioCodec = this.getPreferredInjectableAudioCodec();
+      if (preferredAudioCodec) {
+        this.preferAudioCodecOnTransceivers(preferredAudioCodec.mimeType.toLowerCase());
+      } else {
+        this.log('warn', 'No injectable audio codec available on negotiated transceivers (supported: Opus)');
+      }
+      await this.ensureTestAudioTrack(preferredAudioCodec);
+    }
     // Transceivers werift auto-creates from the remote offer default to a direction that answers "inactive" with
     // port 0 when no local track is attached; a port-0 m-section is still listed in a=group:BUNDLE, which peers
     // (e.g. Firefox) reject as invalid. Answering "sendonly" keeps the m-section active even with no track yet.
@@ -491,6 +621,7 @@ export class WeriftWebRtcSession {
     this.log('debug', 'Closing RTCPeerConnection');
     await this.peerConnection.close();
     this.cleanupTestVideoArtifacts();
+    this.cleanupTestAudioArtifacts();
     this.log('info', `RTCPeerConnection closed (connectionState=${this.peerConnection.connectionState})`);
   }
 }
