@@ -2,6 +2,7 @@
  * @file src/devices/audioDoorbell.ts
  * @description This file contains the AudioDoorbell class.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-20
  * @version 1.0.0
  * @license Apache-2.0

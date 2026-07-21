@@ -1,16 +1,22 @@
 /**
  * @file vitest/webrtc/weriftSession.test.ts
  * @description This file contains the tests for the WeriftWebRtcSession class.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
+
+const NAME = 'WeriftSession';
 
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { setupTest } from 'matterbridge/vitest-utils';
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264 } from 'werift';
 
 import { WeriftWebRtcSession } from '../../src/webrtc/weriftSession.js';
+
+await setupTest(NAME);
 
 /**
  * Creates a real SDP offer from a throwaway remote peer connection, to feed into a WeriftWebRtcSession under test as
@@ -61,8 +67,19 @@ async function createRemoteAnswerSdp(offerSdp: string): Promise<string> {
 }
 
 describe('WeriftWebRtcSession', () => {
+  const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+
+  beforeEach(() => {
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'test';
+  });
+
+  afterAll(() => {
+    if (originalVideoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
+  });
+
   it('should create a real SDP offer with a video transceiver when video is requested', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
 
     const sdp = await session.createOffer({ video: true, audio: false });
 
@@ -74,7 +91,7 @@ describe('WeriftWebRtcSession', () => {
   });
 
   it('should create a real SDP offer with both a video and an audio transceiver when both are requested', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
 
     const sdp = await session.createOffer({ video: true, audio: true });
 
@@ -85,7 +102,7 @@ describe('WeriftWebRtcSession', () => {
   });
 
   it('should create a real SDP offer with no media transceivers when neither video nor audio is requested', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
 
     const sdp = await session.createOffer({ video: false, audio: false });
 
@@ -97,14 +114,14 @@ describe('WeriftWebRtcSession', () => {
   });
 
   it('should close without throwing', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
     await session.createOffer({ video: true, audio: false });
 
     await expect(session.close()).resolves.toBeUndefined();
   });
 
   it('should not attach a second test video track when creating a subsequent offer on the same session', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
     await session.createOffer({ video: true, audio: false });
 
     const sdp = await session.createOffer({ video: true, audio: false });
@@ -115,7 +132,7 @@ describe('WeriftWebRtcSession', () => {
   });
 
   it('should create a real SDP answer for a remote SDP offer', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
     const offerSdp = await createRemoteOfferSdp();
 
     const answerSdp = await session.createAnswer(offerSdp);
@@ -128,7 +145,7 @@ describe('WeriftWebRtcSession', () => {
   });
 
   it('should create a real SDP answer for a remote H264-only SDP offer', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
     const offerSdp = await createH264RemoteOfferSdp();
 
     const answerSdp = await session.createAnswer(offerSdp);
@@ -142,7 +159,7 @@ describe('WeriftWebRtcSession', () => {
   });
 
   it('should apply a real remote SDP answer to a local offer', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
     const offerSdp = await session.createOffer({ video: true, audio: false });
     const answerSdp = await createRemoteAnswerSdp(offerSdp);
 
@@ -153,7 +170,7 @@ describe('WeriftWebRtcSession', () => {
   });
 
   it('should apply a remote ICE candidate after a completed offer/answer exchange', async () => {
-    const session = new WeriftWebRtcSession();
+    const session = new WeriftWebRtcSession(1);
     const offerSdp = await session.createOffer({ video: true, audio: false });
     const answerSdp = await createRemoteAnswerSdp(offerSdp);
     await session.applyAnswer(answerSdp);
@@ -174,9 +191,44 @@ describe('WeriftWebRtcSession', () => {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     });
 
+    it('should not inject a video track when MATTERBRIDGE_CAMERA_VIDEO_SOURCE is unset', async () => {
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+      expect((session as unknown as { testVideoAttached: boolean }).testVideoAttached).toBe(false);
+
+      await session.close();
+    });
+
+    it('should attach the synthetic SMPTE bars track when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=test', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'test';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should fall back to no injected track when MATTERBRIDGE_CAMERA_VIDEO_SOURCE is unsupported', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'unsupported';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+      expect((session as unknown as { testVideoAttached: boolean }).testVideoAttached).toBe(false);
+
+      await session.close();
+    });
+
     it('should still attach a video track, falling back to the test pattern, when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam is set without a device', async () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
@@ -194,7 +246,7 @@ describe('WeriftWebRtcSession', () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = device;
       Object.defineProperty(process, 'platform', { value: platform });
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
@@ -207,7 +259,7 @@ describe('WeriftWebRtcSession', () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = resolution;
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
@@ -220,7 +272,7 @@ describe('WeriftWebRtcSession', () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = '4000x3000';
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
@@ -233,7 +285,7 @@ describe('WeriftWebRtcSession', () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = '1280x720';
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '9999x9999' });
 
@@ -243,18 +295,19 @@ describe('WeriftWebRtcSession', () => {
     });
   });
 
-  describe('test video injection toggle', () => {
+  describe('disabled video source', () => {
     afterEach(() => {
-      delete process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO;
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
     });
 
-    it('should still negotiate a video transceiver but not inject a track when MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO=1', async () => {
-      process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO = '1';
-      const session = new WeriftWebRtcSession();
+    it('should still negotiate a video transceiver but not inject a track when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=none', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'none';
+      const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
       expect(sdp).toContain('m=video');
+      expect((session as unknown as { testVideoAttached: boolean }).testVideoAttached).toBe(false);
 
       await session.close();
     });
@@ -262,7 +315,7 @@ describe('WeriftWebRtcSession', () => {
 
   describe('injectable codec selection', () => {
     it('should prefer an already-negotiated injectable codec when creating a subsequent offer', async () => {
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
       transceiver.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/VP8', clockRate: 90000, payloadType: 96 })];
 
@@ -274,7 +327,7 @@ describe('WeriftWebRtcSession', () => {
     });
 
     it('should prefer an already-negotiated H264 codec, using the H264 ffmpeg encoder, when creating a subsequent offer', async () => {
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
       transceiver.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/h264', clockRate: 90000, payloadType: 97 })];
 
@@ -286,7 +339,7 @@ describe('WeriftWebRtcSession', () => {
     });
 
     it('should skip non-video transceivers when selecting and preferring an injectable codec', async () => {
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const remote = new RTCPeerConnection();
       // Audio added before video so the answering session encounters the non-video transceiver first in each loop.
       remote.addTransceiver('audio', { direction: 'sendonly' });
@@ -305,7 +358,7 @@ describe('WeriftWebRtcSession', () => {
     });
 
     it('should not treat a non-injectable codec as preferred when creating an offer for a pre-existing transceiver', async () => {
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
       transceiver.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/VP9', clockRate: 90000, payloadType: 98 })];
 
@@ -317,7 +370,7 @@ describe('WeriftWebRtcSession', () => {
     });
 
     it('should only adjust the video transceiver(s) that actually have the preferred codec available', async () => {
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const withPreferredCodec = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
       withPreferredCodec.codecs = [new RTCRtpCodecParameters({ mimeType: 'video/VP8', clockRate: 90000, payloadType: 96 })];
       const withoutPreferredCodec = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
@@ -333,7 +386,7 @@ describe('WeriftWebRtcSession', () => {
 
   describe('answering an offer with no video media', () => {
     it('should create an SDP answer without attempting video codec selection when the remote offer has no video transceiver', async () => {
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const remote = new RTCPeerConnection();
       remote.addTransceiver('audio', { direction: 'sendonly' });
       const offer = await remote.createOffer();
@@ -359,7 +412,7 @@ describe('WeriftWebRtcSession', () => {
     it('should use the requested per-session resolution when it names a supported resolution', async () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
       process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '1280x720' });
 
@@ -386,7 +439,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should resolve when a spawned command exits successfully', async () => {
       type RunProcess = { runProcess(command: string, args: string[]): Promise<void> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       await expect((session as unknown as RunProcess).runProcess(process.execPath, ['--version'])).resolves.toBeUndefined();
 
@@ -395,7 +448,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should reject when a spawned command exits with a non-zero code', async () => {
       type RunProcess = { runProcess(command: string, args: string[]): Promise<void> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       await expect((session as unknown as RunProcess).runProcess(process.execPath, ['-e', 'process.exit(7)'])).rejects.toThrow('exited with code 7');
 
@@ -404,7 +457,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should report that a command exists when a version probe succeeds', async () => {
       type HasCommand = { hasCommand(command: string): Promise<boolean> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       await expect((session as unknown as HasCommand).hasCommand(process.execPath)).resolves.toBe(true);
 
@@ -413,7 +466,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should fail to resolve a command via the bare PATH lookup when PATH is empty', async () => {
       type HasCommand = { hasCommand(command: string): Promise<boolean> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       process.env.PATH = '';
       const found = await (session as unknown as HasCommand).hasCommand('ffmpeg');
@@ -426,7 +479,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should resolve undefined when a command does not exist on PATH nor at any of its absolute fallback locations', async () => {
       type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const resolved = await (session as unknown as ResolveCommand).resolveCommand('matterbridge-example-camera-test-nonexistent-command');
 
@@ -437,7 +490,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should resolve the first command candidate when its version probe succeeds', async () => {
       type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
 
       const resolved = await (session as unknown as ResolveCommand).resolveCommand(process.execPath);
 
@@ -448,7 +501,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should include the winget Gyan.FFmpeg package bin path on Windows', async () => {
       type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
       const wingetPackage = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build');
       await mkdir(path.join(wingetPackage, 'bin'), { recursive: true });
@@ -467,7 +520,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should ignore unrelated winget package entries on Windows', async () => {
       type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
       const wingetPackages = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
       await mkdir(path.join(wingetPackages, 'Other.Package_Microsoft.Winget.Source_8wekyb3d8bbwe'), { recursive: true });
@@ -489,7 +542,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should ignore Gyan winget package entries without ffmpeg version directories on Windows', async () => {
       type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
       const wingetPackage = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe');
       await mkdir(path.join(wingetPackage, 'metadata'), { recursive: true });
@@ -510,7 +563,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should return no Windows candidates for non-ffmpeg commands when Program Files paths are missing', async () => {
       type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       Object.defineProperty(process, 'platform', { value: 'win32' });
       process.env.LOCALAPPDATA = undefined;
       process.env.ProgramFiles = '';
@@ -527,7 +580,7 @@ describe('WeriftWebRtcSession', () => {
   describe('missing ffmpeg dependency', () => {
     it('should still negotiate a video transceiver but not inject a track when ffmpeg cannot be resolved', async () => {
       type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(void 0);
 
       const sdp = await session.createOffer({ video: true, audio: false });
@@ -542,7 +595,7 @@ describe('WeriftWebRtcSession', () => {
     it('should attach a default VP8 video track only once when no codec is already preferred', async () => {
       type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       type TestVideoState = { testVideoAttached: boolean; testVideoGenerator?: { killed: boolean } };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
 
       const firstSdp = await session.createOffer({ video: true, audio: false });
@@ -562,7 +615,7 @@ describe('WeriftWebRtcSession', () => {
     ])('should attach and clean up a %s video track when command resolution succeeds', async (_name, codec) => {
       type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       type TestVideoState = { testVideoAttached: boolean; testVideoGenerator?: { killed: boolean } };
-      const session = new WeriftWebRtcSession();
+      const session = new WeriftWebRtcSession(1);
       vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
       const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
       transceiver.codecs = [codec];

@@ -38,8 +38,11 @@ import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
-  whiteList?: string[];
-  blackList?: string[];
+  whiteList: string[];
+  blackList: string[];
+  generator: 'none' | 'test' | 'webcam';
+  webcam?: string;
+  webcamResolution: '640x480' | '1280x720' | '1920x1080';
   animationInterval: number;
 };
 
@@ -67,11 +70,6 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
   ) {
     super(matterbridge, log, config);
 
-    // Existing plugin configs may predate the device selection fields. The frontend only enables its Home page
-    // selection controls when both properties are present in the live config.
-    this.config.whiteList ??= [];
-    this.config.blackList ??= [];
-
     // Verify that Matterbridge is the correct version
     if (typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.10.0')) {
       throw new Error(`This plugin requires Matterbridge version >= "3.10.0". Please update Matterbridge to the latest version in the frontend.`);
@@ -82,9 +80,15 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     // Normalize old config values to new ones
     this.config.whiteList ??= [];
     this.config.blackList ??= [];
+    this.config.generator ??= 'none';
+    this.config.webcamResolution ??= '640x480';
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;
     this.config.unregisterOnShutdown ??= false;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = this.config.generator;
+    if (this.config.webcam === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = this.config.webcam;
+    process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = this.config.webcamResolution;
 
     this.log.info(`Platform ${this.config.name} initialized successfully`);
   }

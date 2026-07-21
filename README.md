@@ -60,6 +60,7 @@ Features:
 
 - Exposes the Camera AV Stream Management cluster with the Video, Audio and ImageControl features (the Snapshot feature is not implemented in this example; see Snapshot Camera).
 - Exposes the WebRtcTransportProvider cluster and registers a WebRtcTransportRequestor client, so a bound device can solicit and receive WebRTC offers.
+- Allocates WebRTC session identifiers monotonically from 0 through 65534, wrapping to 0 and skipping identifiers that still belong to active sessions, as required by Matter 1.6.
 - Automatically selects or allocates a video/audio stream when a client's `SolicitOffer`/`ProvideOffer` omits `videoStreams`/`audioStreams` (and their deprecated single-id counterparts), per the Matter specification's automatic stream selection for revision 1 clients. This is required to interoperate with clients that never allocate streams explicitly, such as Home Assistant's Matter camera integration.
 - Supports configurable stream usages and priorities, encoder limits, video sensor parameters, viewport, rate-distortion trade-off points, and microphone capabilities.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
@@ -102,21 +103,40 @@ Features:
 
 `WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video track into the negotiated connection, so the end-to-end media path can be validated without a real camera capture pipeline.
 
-The video source defaults to a synthetic SMPTE bars test pattern, or can be switched to a real local webcam. Configure it with environment variables:
+The platform configuration controls WebRTC video injection with these properties:
 
-- `MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO=1`: disables video injection entirely (only the negotiated transceiver is created, with no track attached).
-- `MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam`: capture from a local webcam via ffmpeg instead of the SMPTE bars test pattern. Requires `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE`; falls back to the test pattern (with a warning) if unset.
-- `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=<device>`: the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow).
-- `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=<width>x<height>`: default webcam capture resolution — `640x480` (default), `1280x720`, or `1920x1080`. Falls back to `640x480` (with a warning) for unsupported values. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
+- `generator` is required and accepts `none`, `test`, or `webcam`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects synthetic SMPTE bars, while `webcam` captures from the configured local webcam.
+- `webcam` is optional and has no default. It contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). Selecting the `webcam` generator without this property falls back to the test pattern with a warning.
+- `webcamResolution` is required and accepts `640x480`, `1280x720`, or `1920x1080`. It defaults to `640x480`. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
 
-A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
+A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `webcamResolution`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `webcamResolution` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
 
-Requires `ffmpeg` to be installed. The resolver first tries `PATH`, then `/usr/bin/ffmpeg`, `/bin/ffmpeg`, and `/usr/local/bin/ffmpeg`. On Windows it also checks winget/Gyan installs under `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_*\ffmpeg-*\bin\ffmpeg.exe`, plus `%ProgramFiles%\ffmpeg\bin\ffmpeg.exe`, `%ProgramFiles%\Gyan\FFmpeg\bin\ffmpeg.exe`, `%ProgramFiles(x86)%\ffmpeg\bin\ffmpeg.exe`, and `%ProgramFiles(x86)%\Gyan\FFmpeg\bin\ffmpeg.exe`.
+Requires `ffmpeg` to be installed. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
-Example, capturing from a real Linux webcam at 720p:
+Use ffmpeg itself to list the available capture devices and find the right value for `webcam`:
 
-```bash
-MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam MATTERBRIDGE_CAMERA_WEBCAM_DEVICE=/dev/video0 MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=1280x720 npm start
+- Linux (v4l2): `v4l2-ctl --list-devices` (from `v4l-utils`), or `ls /dev/video*`.
+- macOS (avfoundation): `ffmpeg -f avfoundation -list_devices true -i dummy` — video devices are listed with their index, e.g. `[0] FaceTime HD Camera`; use that index (e.g. `0`) as the device value.
+- Windows (dshow): `ffmpeg -f dshow -list_devices true -i dummy` — video devices are listed by name under "DirectShow video devices", e.g. `"Integrated Camera"`; use that exact name as the device value.
+
+Example configuration for a real Linux webcam at 720p:
+
+```json
+{
+  "generator": "webcam",
+  "webcam": "/dev/video0",
+  "webcamResolution": "1280x720"
+}
+```
+
+Example, capturing from a real Windows webcam at 720p:
+
+```json
+{
+  "generator": "webcam",
+  "webcam": "Integrated Camera",
+  "webcamResolution": "1280x720"
+}
 ```
 
 ### Known limitation: Firefox may only offer a link-local address on a non-HTTPS page
@@ -192,7 +212,7 @@ WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they 
 ## Chip tests
 
 ```bash
-docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8283:8283 -v "%USERPROFILE%/GitHub/matterbridge-example-camera/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
+docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8283:8283 -v "C:/Users/your-user/GitHub/matterbridge-example-camera/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
 docker logs -f matterbridge-chip-test-hub --tail 1000
 docker exec -it matterbridge-chip-test-hub bash
 ```

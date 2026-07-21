@@ -2,6 +2,7 @@
  * @file vitest/module.test.ts
  * @description This file contains the tests for the ExampleMatterbridgeCameraPlatform.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'Platform';
@@ -26,6 +27,10 @@ import initializePlugin, { type CameraPlatformConfig, ExampleMatterbridgeCameraP
 await setupTest(NAME);
 
 describe('TestPlatform', () => {
+  const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+  const originalWebcamDevice = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+  const originalWebcamResolution = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
+
   let matterbridge: PlatformMatterbridge;
   let platform: ExampleMatterbridgeCameraPlatform;
 
@@ -35,6 +40,8 @@ describe('TestPlatform', () => {
     version: '1.0.0',
     whiteList: [],
     blackList: [],
+    generator: 'none',
+    webcamResolution: '640x480',
     animationInterval: 0,
     debug: false,
     unregisterOnShutdown: false,
@@ -72,6 +79,12 @@ describe('TestPlatform', () => {
     await destroyTestEnvironment();
     // Restore all mocks
     vi.restoreAllMocks();
+    if (originalVideoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
+    if (originalWebcamDevice === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = originalWebcamDevice;
+    if (originalWebcamResolution === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
+    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = originalWebcamResolution;
   });
 
   it('should throw error in load when version is not valid', () => {
@@ -81,9 +94,7 @@ describe('TestPlatform', () => {
   });
 
   it('should add empty selection lists when the config omits them', async () => {
-    const emptyConfig: CameraPlatformConfig = { ...config };
-    delete emptyConfig.whiteList;
-    delete emptyConfig.blackList;
+    const emptyConfig = { ...config, whiteList: undefined, blackList: undefined, webcam: undefined } as unknown as CameraPlatformConfig;
     const emptyConfigPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, emptyConfig);
     addMatterbridge(emptyConfigPlatform);
     vi.spyOn(emptyConfigPlatform, 'registerDevice').mockResolvedValue();
@@ -93,10 +104,37 @@ describe('TestPlatform', () => {
 
       expect(emptyConfigPlatform.config.whiteList).toEqual([]);
       expect(emptyConfigPlatform.config.blackList).toEqual([]);
+      expect(emptyConfigPlatform.config.generator).toBe('none');
+      expect(emptyConfigPlatform.config.webcam).toBeUndefined();
+      expect(emptyConfigPlatform.config.webcamResolution).toBe('640x480');
+      expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('none');
+      expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE).toBeUndefined();
+      expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION).toBe('640x480');
       expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(8);
     } finally {
       await emptyConfigPlatform.onShutdown();
     }
+  });
+
+  it.each(['none', 'test', 'webcam'] as const)('should apply the configured %s video generator', (generator) => {
+    const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, generator });
+
+    expect(generatorPlatform.config.generator).toBe(generator);
+    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe(generator);
+  });
+
+  it.each(['640x480', '1280x720', '1920x1080'] as const)('should apply the configured %s webcam resolution', (webcamResolution) => {
+    const webcamPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, {
+      ...config,
+      generator: 'webcam',
+      webcam: 'Integrated Camera',
+      webcamResolution,
+    });
+
+    expect(webcamPlatform.config.webcam).toBe('Integrated Camera');
+    expect(webcamPlatform.config.webcamResolution).toBe(webcamResolution);
+    expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE).toBe('Integrated Camera');
+    expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION).toBe(webcamResolution);
   });
 
   it('should not create devices when none match the whitelist', async () => {

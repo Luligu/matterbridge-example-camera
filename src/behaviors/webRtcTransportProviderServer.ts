@@ -1,7 +1,8 @@
 /**
  * @file src/behaviors/webRtcTransportProviderServer.ts
  * @description This file contains the MatterbridgeWebRtcTransportProviderServer class of Matterbridge.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-13
  * @version 1.0.0
  * @license Apache-2.0
@@ -48,6 +49,33 @@ const DEFERRED_INVOKE_DELAY_MS = 250;
  * a candidate that truly can't be resolved (e.g. no multicast routing between subnets) is reported promptly.
  */
 const ICE_CANDIDATE_APPLY_TIMEOUT_MS = 5000;
+
+/** Highest WebRTC session identifier allocated before the Matter-mandated wrap to zero. */
+const MAX_WEB_RTC_SESSION_ID = 0xfffe;
+
+/**
+ * Allocates a WebRTC session identifier according to the Matter specification.
+ *
+ * Identifiers start at zero, increase monotonically for every new allocation, wrap after 65534, and skip any
+ * identifier that is still active.
+ *
+ * @param {number} nextCandidate - The next monotonically increasing identifier candidate.
+ * @param {ReadonlySet<number>} activeSessionIds - Identifiers belonging to active sessions.
+ * @returns {{ webRtcSessionId: number; nextCandidate: number }} The allocated identifier and the following candidate.
+ * @throws {StatusResponseError} With status ResourceExhausted if every allocatable identifier is active.
+ */
+export function allocateWebRtcSessionId(nextCandidate: number, activeSessionIds: ReadonlySet<number>): { webRtcSessionId: number; nextCandidate: number } {
+  const firstCandidate = nextCandidate;
+  let candidate = firstCandidate;
+
+  do {
+    const followingCandidate = candidate === MAX_WEB_RTC_SESSION_ID ? 0 : candidate + 1;
+    if (!activeSessionIds.has(candidate)) return { webRtcSessionId: candidate, nextCandidate: followingCandidate };
+    candidate = followingCandidate;
+  } while (candidate !== firstCandidate);
+
+  throw new StatusResponseError('No WebRTC session identifier is available', Status.ResourceExhausted);
+}
 
 /**
  * The subset of a remote command context's session used by {@link MatterbridgeWebRtcTransportProviderServer.#getPeerInfo}.
@@ -168,6 +196,22 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       // back to the first valid fabric index instead.
       fabricIndex: session?.fabric?.fabricIndex ?? FabricIndex(1),
     };
+  }
+
+  /**
+   * Allocates the next WebRTC session identifier according to the Matter specification.
+   *
+   * Identifiers start at zero, increase monotonically for every new allocation, wrap after 65534, and skip any
+   * identifier that is still present in CurrentSessions.
+   *
+   * @returns {number} The next unique WebRTC session identifier.
+   * @throws {StatusResponseError} With status ResourceExhausted if every allocatable identifier is active.
+   */
+  #allocateWebRtcSessionId(): number {
+    const activeSessionIds = new Set(this.state.currentSessions.map((session) => session.id));
+    const allocation = allocateWebRtcSessionId(this.internal.nextWebRtcSessionId, activeSessionIds);
+    this.internal.nextWebRtcSessionId = allocation.nextCandidate;
+    return allocation.webRtcSessionId;
   }
 
   /**
@@ -312,15 +356,12 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     }
     if (!videoStreams?.length && !audioStreams?.length) {
       throw new StatusResponseError(
-        'solicitOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
+        'MatterbridgeWebRtcTransportProviderServer.solicitOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
         Status.ConstraintError,
       );
     }
     const device = this.endpoint.stateOf(MatterbridgeServer);
-    let webRtcSessionId = 0;
-    for (const session of this.state.currentSessions) {
-      webRtcSessionId = Math.max(webRtcSessionId, session.id + 1);
-    }
+    const webRtcSessionId = this.#allocateWebRtcSessionId();
     const { peerNodeId, fabricIndex } = this.#getPeerInfo();
     this.state.currentSessions = [
       ...this.state.currentSessions,
@@ -336,10 +377,10 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       },
     ];
     device.log.info(
-      `Solicited a WebRTC offer for session ${webRtcSessionId} (stream usage ${request.streamUsage}) (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      `MatterbridgeWebRtcTransportProviderServer.solicitOffer: solicited a WebRTC offer for session ${webRtcSessionId} (stream usage ${request.streamUsage}) (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
 
-    const webRtcPeer = new WeriftWebRtcSession((level, message) => device.log[level](message), `WebRTC session ${webRtcSessionId}`);
+    const webRtcPeer = new WeriftWebRtcSession(webRtcSessionId);
     this.internal.sessions.set(webRtcSessionId, webRtcPeer);
     const sdp = await webRtcPeer.createOffer({ video: !!videoStreams?.length, audio: !!audioStreams?.length, videoResolution: this.#resolveVideoResolution(videoStreams) });
 
@@ -348,10 +389,12 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
      * infrastructure to set up (no remote peer test helpers exist). */
     if (requestorEndpoint) {
       this.#invokeDeferred(async () => requestorEndpoint.commandsOf(WebRtcTransportRequestorClient).offer({ webRtcSessionId, sdp }), `Offer for session ${webRtcSessionId}`);
-      device.log.info(`Invoking Offer on the peer's WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      device.log.info(
+        `MatterbridgeWebRtcTransportProviderServer.solicitOffer: invoking Offer on the peer's WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     } else {
       device.log.info(
-        `Could not reach the peer's WebRtcTransportRequestor; the Offer for session ${webRtcSessionId} was not sent (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        `MatterbridgeWebRtcTransportProviderServer.solicitOffer: could not reach the peer's WebRtcTransportRequestor; the Offer for session ${webRtcSessionId} was not sent (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
       );
     }
 
@@ -380,14 +423,11 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       }
       if (!videoStreams?.length && !audioStreams?.length) {
         throw new StatusResponseError(
-          'provideOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
+          'MatterbridgeWebRtcTransportProviderServer.provideOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
           Status.ConstraintError,
         );
       }
-      webRtcSessionId = 0;
-      for (const session of this.state.currentSessions) {
-        webRtcSessionId = Math.max(webRtcSessionId, session.id + 1);
-      }
+      webRtcSessionId = this.#allocateWebRtcSessionId();
       const { peerNodeId, fabricIndex } = this.#getPeerInfo();
       this.state.currentSessions = [
         ...this.state.currentSessions,
@@ -405,12 +445,14 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     } else if (!this.state.currentSessions.some((session) => session.id === webRtcSessionId)) {
       throw new StatusResponseError(`WebRTC session ${webRtcSessionId} is not present in currentSessions`, Status.NotFound);
     }
-    device.log.info(`Received an SDP offer for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
-    device.log.debug(`MatterbridgeWebRtcTransportProviderServer: received SDP offer for session ${webRtcSessionId}: ${request.sdp}`);
+    device.log.info(
+      `MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
+    device.log.debug(`MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session ${webRtcSessionId}:\n${request.sdp}`);
 
     // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was just created or found above.
     const session = this.state.currentSessions.find((s) => s.id === webRtcSessionId)!;
-    const webRtcPeer = this.internal.sessions.get(webRtcSessionId) ?? new WeriftWebRtcSession((level, message) => device.log[level](message), `WebRTC session ${webRtcSessionId}`);
+    const webRtcPeer = this.internal.sessions.get(webRtcSessionId) ?? new WeriftWebRtcSession(webRtcSessionId);
     this.internal.sessions.set(webRtcSessionId, webRtcPeer);
     const sdp = await webRtcPeer.createAnswer(request.sdp, this.#resolveVideoResolution(session.videoStreams));
 
@@ -419,10 +461,12 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
      * infrastructure to set up (no remote peer test helpers exist). */
     if (requestorEndpoint) {
       this.#invokeDeferred(async () => requestorEndpoint.commandsOf(WebRtcTransportRequestorClient).answer({ webRtcSessionId, sdp }), `Answer for session ${webRtcSessionId}`);
-      device.log.info(`Invoking Answer on the peer's WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      device.log.info(
+        `MatterbridgeWebRtcTransportProviderServer.provideOffer: invoking Answer on the peer's WebRtcTransportRequestor for session ${webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     } else {
       device.log.info(
-        `Could not reach the peer's WebRtcTransportRequestor; the Answer for session ${webRtcSessionId} was not sent (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        `MatterbridgeWebRtcTransportProviderServer.provideOffer: could not reach the peer's WebRtcTransportRequestor; the Answer for session ${webRtcSessionId} was not sent (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
       );
     }
 
@@ -444,10 +488,15 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   override async provideAnswer(request: WebRtcTransportProvider.ProvideAnswerRequest): Promise<void> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     if (!this.state.currentSessions.some((session) => session.id === request.webRtcSessionId)) {
-      throw new StatusResponseError(`WebRTC session ${request.webRtcSessionId} is not present in currentSessions`, Status.NotFound);
+      throw new StatusResponseError(
+        `MatterbridgeWebRtcTransportProviderServer.provideAnswer: webRTC session ${request.webRtcSessionId} is not present in currentSessions`,
+        Status.NotFound,
+      );
     }
-    device.log.info(`Received an SDP answer for session ${request.webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
-    device.log.debug(`MatterbridgeWebRtcTransportProviderServer: received SDP answer for session ${request.webRtcSessionId}: ${request.sdp}`);
+    device.log.info(
+      `MatterbridgeWebRtcTransportProviderServer.provideAnswer: received an SDP answer for session ${request.webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
+    device.log.debug(`MatterbridgeWebRtcTransportProviderServer.provideAnswer: received SDP answer for session ${request.webRtcSessionId}:\n${request.sdp}`);
 
     const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
     if (webRtcPeer) {
@@ -472,10 +521,13 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   override async provideIceCandidates(request: WebRtcTransportProvider.ProvideIceCandidatesRequest): Promise<void> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     if (!this.state.currentSessions.some((session) => session.id === request.webRtcSessionId)) {
-      throw new StatusResponseError(`WebRTC session ${request.webRtcSessionId} is not present in currentSessions`, Status.NotFound);
+      throw new StatusResponseError(
+        `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: webRTC session ${request.webRtcSessionId} is not present in currentSessions`,
+        Status.NotFound,
+      );
     }
     device.log.info(
-      `Received ${request.iceCandidates.length} ICE candidate(s) for session ${request.webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: received ${request.iceCandidates.length} ICE candidate(s) for session ${request.webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
 
     const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
@@ -483,7 +535,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       for (const [index, candidate] of request.iceCandidates.entries()) {
         const startedAt = Date.now();
         device.log.debug(
-          `Applying ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
+          `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applying ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
             `(mid=${candidate.sdpMid ?? 'null'}, mLine=${candidate.sdpmLineIndex ?? 'null'}, endOfCandidates=${candidate.candidate.trim() === ''}) ` +
             `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
         );
@@ -491,16 +543,19 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
           await Promise.race([
             webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
             new Promise<never>((_resolve, reject) =>
-              setTimeout(() => reject(new Error(`ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)), ICE_CANDIDATE_APPLY_TIMEOUT_MS),
+              setTimeout(
+                () => reject(new Error(`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)),
+                ICE_CANDIDATE_APPLY_TIMEOUT_MS,
+              ),
             ),
           ]);
           device.log.debug(
-            `Applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
+            `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
               `in ${Date.now() - startedAt}ms (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
           );
         } catch (error) {
           device.log.warn(
-            `Failed ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} after ${Date.now() - startedAt}ms ` +
+            `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} after ${Date.now() - startedAt}ms ` +
               `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber}): ${String(error)}`,
           );
         }
@@ -519,7 +574,10 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   override async endSession(request: WebRtcTransportProvider.EndSessionRequest): Promise<void> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     if (!this.state.currentSessions.some((session) => session.id === request.webRtcSessionId)) {
-      throw new StatusResponseError(`WebRTC session ${request.webRtcSessionId} is not present in currentSessions`, Status.NotFound);
+      throw new StatusResponseError(
+        `MatterbridgeWebRtcTransportProviderServer.endSession: webRTC session ${request.webRtcSessionId} is not present in currentSessions`,
+        Status.NotFound,
+      );
     }
     this.state.currentSessions = this.state.currentSessions.filter((session) => session.id !== request.webRtcSessionId);
     const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
@@ -527,7 +585,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       this.internal.sessions.delete(request.webRtcSessionId);
       await webRtcPeer.close();
     }
-    device.log.info(`Ended WebRTC session ${request.webRtcSessionId} (reason ${request.reason}) (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    device.log.info(
+      `MatterbridgeWebRtcTransportProviderServer.endSession: ended webRTC session ${request.webRtcSessionId} (reason ${request.reason}) (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 }
 
@@ -541,6 +601,9 @@ export namespace MatterbridgeWebRtcTransportProviderServer {
    * Internal (endpoint-scoped, not instance-scoped) state for {@link MatterbridgeWebRtcTransportProviderServer}.
    */
   export class Internal {
+    /** The next WebRTC session identifier candidate, retained across ephemeral behavior agents. */
+    nextWebRtcSessionId = 0;
+
     /**
      * The real werift peer connection wrappers backing each session in {@link WebRtcTransportProvider.State.currentSessions},
      * keyed by WebRTC session id.

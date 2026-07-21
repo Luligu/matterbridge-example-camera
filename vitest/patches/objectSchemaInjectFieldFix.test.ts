@@ -1,7 +1,8 @@
 /**
  * @file vitest/patches/objectSchemaInjectFieldFix.test.ts
  * @description This file contains the tests for the objectSchemaInjectFieldFix patch.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'ObjectSchemaInjectFieldFixPatch';

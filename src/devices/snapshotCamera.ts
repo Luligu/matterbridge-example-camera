@@ -2,6 +2,7 @@
  * @file packages/core/src/devices/snapshotCamera.ts
  * @description This file contains the SnapshotCamera class.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-13
  * @version 1.0.0
  * @license Apache-2.0

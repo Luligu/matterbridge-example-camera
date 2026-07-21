@@ -3,6 +3,8 @@
   "type": "DynamicPlatform",
   "whiteList": [],
   "blackList": [],
+  "generator": "none",
+  "webcamResolution": "640x480",
   "animationInterval": 60,
   "debug": false,
   "unregisterOnShutdown": false
