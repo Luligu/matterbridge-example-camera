@@ -569,9 +569,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
                 }),
               ]);
             } finally {
-              if (timeout) {
-                clearTimeout(timeout);
-              }
+              clearTimeout(timeout);
             }
             device.log.debug(
               `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
