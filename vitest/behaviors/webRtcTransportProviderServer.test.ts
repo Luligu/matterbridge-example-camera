@@ -351,7 +351,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate'));
+    // The command response no longer waits on candidate application (see provideIceCandidates's doc comment), so
+    // the warning is logged in the background and must be awaited rather than asserted immediately.
+    await vi.waitFor(() => expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate')));
     loggerWarnSpy.mockClear();
   });
 
@@ -371,6 +373,41 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
       await expect(invocation).resolves.toBeUndefined();
       expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ICE candidate apply timeout after 5000ms'));
+      loggerWarnSpy.mockClear();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should apply ICE candidates concurrently so one candidate timing out does not delay a sibling candidate', async () => {
+    vi.useFakeTimers();
+    try {
+      const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
+      const webRtcPeer = internal?.sessions.get(0);
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
+      const peer = webRtcPeer!;
+      const addIceCandidateSpy = vi
+        .spyOn(peer, 'addIceCandidate')
+        .mockImplementationOnce(async () => new Promise(() => {}))
+        .mockResolvedValueOnce();
+
+      const invocation = device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
+        webRtcSessionId: 0,
+        iceCandidates: [
+          { candidate: 'candidate:1 1 UDP 1 stuck-interface.local 1 typ host', sdpMid: null, sdpmLineIndex: 0 },
+          { candidate: 'candidate:2 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: 1 },
+        ],
+      });
+
+      // Let both candidates start applying before the first one's timeout fires, proving they run concurrently
+      // rather than the second one waiting for the first's 5s timeout to elapse first.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(addIceCandidateSpy).toHaveBeenCalledTimes(2);
+      expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applied ICE candidate 2/2'));
+
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(invocation).resolves.toBeUndefined();
+      expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate 1/2'));
       loggerWarnSpy.mockClear();
     } finally {
       vi.useRealTimers();
