@@ -557,15 +557,22 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
               `(endpoint ${endpointLabel})`,
           );
           try {
-            await Promise.race([
-              webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
-              new Promise<never>((_resolve, reject) =>
-                setTimeout(
-                  () => reject(new Error(`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)),
-                  ICE_CANDIDATE_APPLY_TIMEOUT_MS,
-                ),
-              ),
-            ]);
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            try {
+              await Promise.race([
+                webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
+                new Promise<never>((_resolve, reject) => {
+                  timeout = setTimeout(
+                    () => reject(new Error(`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)),
+                    ICE_CANDIDATE_APPLY_TIMEOUT_MS,
+                  );
+                }),
+              ]);
+            } finally {
+              if (timeout) {
+                clearTimeout(timeout);
+              }
+            }
             device.log.debug(
               `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
                 `in ${Date.now() - startedAt}ms (endpoint ${endpointLabel})`,
