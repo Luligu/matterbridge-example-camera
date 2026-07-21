@@ -30,6 +30,10 @@ This repository is used to create all Camera Device Types in chapter 16 of Matte
 - `src/devices/` contains all single class device types (it will be moved directly in matterbridge core package).
 - `src/behaviors/` contains all required behaviors (it will be moved directly in matterbridge core package).
 
+## TODO
+
+- Track matter.js PR #4128 (https://github.com/matter-js/matter.js/pull/4128) and, once merged and released in the consumed `@matter/*` version, remove the temporary ImageControl workaround used by Audio Doorbell and Intercom for CameraAvStreamManagement choice conformance.
+
 ## Supported device types
 
 ### Chime
