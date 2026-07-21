@@ -26,7 +26,7 @@
 import './patches/objectSchemaInjectFieldFix.js';
 
 import { MatterbridgeDynamicPlatform } from 'matterbridge';
-import type { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
+import type { MatterbridgeEndpoint, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import type { AnsiLogger } from 'matterbridge/logger';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 
@@ -34,6 +34,7 @@ import { AudioDoorbell } from './devices/audioDoorbell.js';
 import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
 import { Doorbell } from './devices/doorbell.js';
+import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
@@ -118,6 +119,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleCamera = new Camera('Camera', 'CAMERA-001');
     await this.registerDevice(exampleCamera);
 
+    const exampleFloodlightCamera = new FloodlightCamera('Floodlight Camera', 'FLOODLIGHTCAMERA-001', {
+      powerSourceType: 'Wired',
+      cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
+      lightOptions: { name: 'Floodlight' },
+    });
+    await this.registerDevice(exampleFloodlightCamera);
+
     const exampleIntercom = new Intercom('Intercom', 'INTERCOM-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
@@ -158,6 +166,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
     const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
     if (!exampleCamera) throw new Error(`Camera device not found. Please ensure the device is registered before configuration.`);
+
+    const exampleFloodlightCamera: MatterbridgeEndpoint | undefined = this.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001');
+    if (!exampleFloodlightCamera) throw new Error(`Floodlight camera device not found. Please ensure the device is registered before configuration.`);
 
     const exampleIntercom: Intercom | undefined = this.getDeviceById('Intercom-INTERCOM-001');
     if (!exampleIntercom) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);

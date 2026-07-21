@@ -68,7 +68,6 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   CameraAvStreamManagement.Feature.Video,
   CameraAvStreamManagement.Feature.Audio,
   CameraAvStreamManagement.Feature.Snapshot,
-  CameraAvStreamManagement.Feature.Speaker,
   CameraAvStreamManagement.Feature.ImageControl,
 ) {
   /**

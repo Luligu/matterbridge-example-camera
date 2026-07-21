@@ -32,11 +32,12 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
+- [floodlight camera]: Add the Floodlight Camera device type. It is a composed device: the root endpoint carries Basic Information and, unless disabled, Power Source; the mandatory Camera child endpoint and the mandatory On/Off Light child endpoint required by Matter specs 1.6.0 chapter 16.2 are both created automatically by the constructor, the Camera child with the same CameraAvStreamManagement/WebRtcTransportProvider wiring as the standalone `Camera` device; `addLight()` adds further On/Off Light child endpoints beyond the mandatory one.
 - [intercom]: Add the Intercom device type with the Camera AV Stream Management (Audio and Speaker features, for genuine two-way audio), WebRtcTransportProvider, and WebRtcTransportRequestor server clusters, plus the WebRtcTransportProvider, WebRtcTransportRequestor, and Chime client clusters, Identify, and Power Source support.
 - [clients]: Add `addWebRtcTransportProviderClient` helper to `src/behaviors/clients.ts`, shared by `Intercom`, mirroring `addWebRtcTransportRequestorClient`.
 - [behaviors]: Add `src/behaviors/webRtcTransportRequestorServer.ts` with `createDefaultWebRtcTransportRequestorClusterServer`, using matter.js's default `WebRtcTransportRequestorServer` implementation directly.
-- [tests]: Add `vitest/devices/intercom.test.ts`, and extend `vitest/behaviors/clients.test.ts` to cover `addWebRtcTransportProviderClient`.
-- [platform]: Add an Intercom to test binding.
+- [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, custom `lightOptions`, camera identify, power source variants, additional tagged lights, and custom stream usages; add `vitest/devices/intercom.test.ts`; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path; extend `vitest/behaviors/clients.test.ts` to cover `addWebRtcTransportProviderClient`.
+- [platform]: Register a Floodlight Camera and an Intercom example device in `onStart`, and verify they're registered in `onConfigure`.
 
 ### Fixed
 
