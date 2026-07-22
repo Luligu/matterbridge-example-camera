@@ -34,7 +34,8 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [platform]: Add log of config.
 - [platform]: Add animation interval in 10 phases.
-- [doorbell]: Add use of cluster client Chime of Server Doorbell in the animation. It needs the Server Doorbell and Server Chime to be paired and a binding in Matter Server dashboard from Server Doorbell Chime client cluster to Server Chime Chime server cluster: [bindings](screenshots/bindings.png)
+- [doorbell]: Add use of cluster client Chime of Server Doorbell in the animation. It needs the Server Doorbell and Server Chime to be paired and a binding in Matter Server dashboard from Server Doorbell Chime client cluster to Server Chime Chime server cluster: [bindings](screenshots/bindings.png).
+- [chip-test]: Add full shell script to run the chip tests.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 

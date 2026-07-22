@@ -235,22 +235,18 @@ WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they 
 
 ## Chip tests
 
-Run the `luligu/matterbridge:chip-test` docker image and open a shell in the container:
+### Create and run the container (Linux, macOS, and Windows)
+
+Run the `luligu/matterbridge:chip-test` docker image, add the plugin, restart and open a shell in the container:
 
 - frontend on port 8585
+- plugin mapped to .
 - container test logs directory mapped on ./temp directory
 
-### macOS
-
-```bash
-docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
-docker exec -it matterbridge-chip-test-hub bash
-```
-
-### Windows
-
-```powershell
-docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
+```shell
+docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" -v "$(pwd):/root/Matterbridge/matterbridge-example-camera" luligu/matterbridge:chip-test
+docker exec -it matterbridge-chip-test-hub matterbridge --add matterbridge-example-camera
+docker restart matterbridge-chip-test-hub
 docker exec -it matterbridge-chip-test-hub bash
 ```
 
