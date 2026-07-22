@@ -383,7 +383,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     vi.useFakeTimers();
     try {
       const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
-      const webRtcPeer = internal?.sessions.get(0);
+      const webRtcPeer = internal?.sessions.get(1);
       // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
       const peer = webRtcPeer!;
       const addIceCandidateSpy = vi
@@ -392,7 +392,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
         .mockResolvedValueOnce();
 
       const invocation = device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
-        webRtcSessionId: 0,
+        webRtcSessionId: 1,
         iceCandidates: [
           { candidate: 'candidate:1 1 UDP 1 stuck-interface.local 1 typ host', sdpMid: null, sdpmLineIndex: 0 },
           { candidate: 'candidate:2 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: 1 },
