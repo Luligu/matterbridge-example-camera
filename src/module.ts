@@ -25,9 +25,13 @@
 // oxlint-disable-next-line import/no-unassigned-import
 import './patches/objectSchemaInjectFieldFix.js';
 
+import { inspect } from 'node:util';
+
 import { MatterbridgeDynamicPlatform } from 'matterbridge';
 import type { MatterbridgeEndpoint, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
-import type { AnsiLogger } from 'matterbridge/logger';
+import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
+import { RESET, type AnsiLogger } from 'matterbridge/logger';
+import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 
 import { AudioDoorbell } from './devices/audioDoorbell.js';
@@ -94,6 +98,19 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = this.config.webcamResolution;
     process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE = String(this.config.webcamBitrate);
 
+    this.log.debug(`Platform ${this.config.name} config:\n${RESET}${inspect(this.config, { depth: 10, colors: true })}`);
+    this.log.debug(
+      `Platform ${this.config.name} environment variables:\n${RESET}${inspect(
+        {
+          MATTERBRIDGE_CAMERA_VIDEO_SOURCE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE,
+          MATTERBRIDGE_CAMERA_WEBCAM_DEVICE: process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE,
+          MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION: process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION,
+          MATTERBRIDGE_CAMERA_WEBCAM_BITRATE: process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE,
+        },
+        { depth: 10, colors: true },
+      )}`,
+    );
+
     this.log.info(`Platform ${this.config.name} initialized successfully`);
   }
 
@@ -158,8 +175,23 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.addDevice(exampleIntercom1);
 
-    const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', { mode: 'server' });
+    const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.AudibleBeep,
+      powerSourceType: 'Battery',
+      installedChimeSounds: [
+        { chimeId: 0, name: 'Default' },
+        { chimeId: 1, name: 'Phone Ring' },
+        { chimeId: 2, name: 'Doorbell Ring' },
+      ],
+      selectedChime: 0,
+      enabled: true,
+      mode: 'server',
+    });
     await this.addDevice(serverChime);
+    serverChime.subscribeAttribute(ChimeCluster, 'enabled', (newValue, oldValue) => {
+      this.log.info(`Server Chime enabled attribute changed from ${oldValue} to ${newValue}`);
+    });
 
     const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', { mode: 'server' });
     await this.addDevice(serverDoorbell);
@@ -186,6 +218,14 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
     const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
     if (!exampleIntercom1) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
+
+    const serverChime: Chime | undefined = this.getDeviceById('ServerChime-SERVER-CHIME-001');
+    await serverChime?.setCluster(
+      PowerSource,
+      { batChargeLevel: PowerSource.BatChargeLevel.Ok, batPercentRemaining: 150, batVoltage: 2900, batReplacementNeeded: false },
+      serverChime.log,
+    );
+    await serverChime?.setAttribute(ChimeCluster, 'enabled', true, serverChime.log);
 
     if (this.config.animationInterval > 0) {
       clearInterval(this.animationInterval);
@@ -214,20 +254,59 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
    *
    * @returns {Promise<void>} A promise that resolves when the animation handling is complete.
    */
-  // oxlint-disable-next-line typescript/require-await
   async animationHandler(): Promise<void> {
     this.animationPhase = this.animationPhase + 1;
     this.animationPhase = this.animationPhase > 10 ? 0 : this.animationPhase;
     this.log.info(`Platform ${this.config.name} animation phase: ${this.animationPhase}`);
 
-    /*
-    const exampleChime: Chime | undefined = this.getDeviceById('Chime-CHIME-001');
-    const exampleDoorbell: Doorbell | undefined = this.getDeviceById('Doorbell-DOORBELL-001');
-    const exampleAudioDoorbell: AudioDoorbell | undefined = this.getDeviceById('AudioDoorbell-AUDIODOORBELL-001');
-    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001');
-    const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
-    const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
-    */
+    const serverDoorbell: Doorbell | undefined = this.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001');
+    const serverChime: Chime | undefined = this.getDeviceById('ServerChime-SERVER-CHIME-001');
+    // v8 ignore else -- is just a type guard to ensure that the serverDoorbell and serverChime are defined before proceeding.
+    if (serverDoorbell && serverChime) {
+      switch (this.animationPhase) {
+        case 1:
+        case 6:
+          this.log.info(`Platform ${this.config.name} disabling server doorbell chime...`);
+          await serverDoorbell.act(async (agent) => {
+            const chimeEndpoint = agent.get(MatterbridgeBindingServer).getEndpoint(ChimeCluster.id);
+            await chimeEndpoint?.setStateOf(ChimeClient, { enabled: false });
+          });
+          break;
+        case 2:
+        case 7:
+          this.log.info(`Platform ${this.config.name} enabling server doorbell chime...`);
+          await serverDoorbell.act(async (agent) => {
+            const chimeEndpoint = agent.get(MatterbridgeBindingServer).getEndpoint(ChimeCluster.id);
+            await chimeEndpoint?.setStateOf(ChimeClient, { enabled: true });
+          });
+          break;
+        case 3:
+        case 8:
+          this.log.info(`Platform ${this.config.name} playing server doorbell chime sound 0...`);
+          await serverDoorbell.act(async (agent) => {
+            const chimeEndpoint = agent.get(MatterbridgeBindingServer).getEndpoint(ChimeCluster.id);
+            await chimeEndpoint?.commandsOf(ChimeClient).playChimeSound({ chimeId: 0 });
+          });
+          break;
+        case 4:
+        case 9:
+          this.log.info(`Platform ${this.config.name} playing server doorbell chime sound 1...`);
+          await serverDoorbell.act(async (agent) => {
+            const chimeEndpoint = agent.get(MatterbridgeBindingServer).getEndpoint(ChimeCluster.id);
+            await chimeEndpoint?.commandsOf(ChimeClient).playChimeSound({ chimeId: 1 });
+          });
+          break;
+        case 5:
+        case 10:
+          this.log.info(`Platform ${this.config.name} playing server doorbell chime sound 2...`);
+          await serverDoorbell.act(async (agent) => {
+            const chimeEndpoint = agent.get(MatterbridgeBindingServer).getEndpoint(ChimeCluster.id);
+            await chimeEndpoint?.commandsOf(ChimeClient).playChimeSound({ chimeId: 2 });
+          });
+          break;
+        // No default
+      }
+    }
   }
 
   override async onShutdown(reason?: string): Promise<void> {

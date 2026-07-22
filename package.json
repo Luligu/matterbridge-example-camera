@@ -1,6 +1,6 @@
 {
   "name": "matterbridge-example-camera",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Matterbridge camera example plugin",
   "author": "https://github.com/Luligu",
   "license": "Apache-2.0",
@@ -58,6 +58,7 @@
   },
   "files": [
     "assets",
+    "screenshots",
     "bin",
     "dist",
     "npm-shrinkwrap.json",
