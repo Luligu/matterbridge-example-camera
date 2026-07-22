@@ -426,13 +426,20 @@ describe('WeriftWebRtcSession', () => {
     });
 
     it('should create an SDP answer without an injectable audio codec when the remote offer only supports PCMU', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      type TestAudioState = { testAudioAttached: boolean; testAudioGenerator?: { killed: boolean } };
       const session = new WeriftWebRtcSession(1);
+      // A resolvable ffmpeg command would let a wrongly-defaulted Opus track slip through; asserting testAudioAttached
+      // stays false below proves injection is skipped because no codec was negotiated, not because ffmpeg is missing.
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
       const offerSdp = await createPcmuOnlyRemoteOfferSdp();
 
       const answerSdp = await session.createAnswer(offerSdp);
 
       expect(answerSdp).toContain('m=audio');
       expect(answerSdp.toLowerCase()).not.toContain('opus');
+      expect((session as unknown as TestAudioState).testAudioAttached).toBe(false);
+      expect((session as unknown as TestAudioState).testAudioGenerator).toBeUndefined();
 
       await session.close();
     });

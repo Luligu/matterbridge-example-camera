@@ -578,10 +578,10 @@ export class WeriftWebRtcSession {
    * end-to-end audio path (e.g. an Intercom's "Listen" live view) can be verified without a real microphone capture
    * pipeline. Mirrors {@link generateVideoTrack}; disable with MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1.
    *
-   * @param {RTCRtpCodecParameters} [codec] - The negotiated Opus codec parameters to encode and send as.
+   * @param {RTCRtpCodecParameters} codec - The negotiated Opus codec parameters to encode and send as.
    * @returns {Promise<void>} Resolves once the track is attached, or once injection is skipped/failed (logged, not thrown).
    */
-  private async ensureTestAudioTrack(codec?: RTCRtpCodecParameters): Promise<void> {
+  private async ensureTestAudioTrack(codec: RTCRtpCodecParameters): Promise<void> {
     if (this.testAudioAttached) return;
     if (process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO === '1') {
       this.log.debug('Test audio injection disabled by MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1');
@@ -594,10 +594,10 @@ export class WeriftWebRtcSession {
       return;
     }
 
-    const selectedMimeType = (codec?.mimeType ?? 'audio/opus').toLowerCase();
-    const selectedPayloadType = codec?.payloadType ?? 111;
-    const clockRate = codec?.clockRate ?? 48000;
-    const channels = codec?.channels ?? 1;
+    const selectedMimeType = codec.mimeType.toLowerCase();
+    const selectedPayloadType = codec.payloadType;
+    const clockRate = codec.clockRate;
+    const channels = codec.channels;
     try {
       const udpPort = await this.getFreeUdpPort();
       const { track, disposer } = navigator.mediaDevices.getUdpMedia({
@@ -745,10 +745,10 @@ export class WeriftWebRtcSession {
       const preferredAudioCodec = this.getPreferredInjectableAudioCodec();
       if (preferredAudioCodec) {
         this.preferAudioCodecOnTransceivers(preferredAudioCodec.mimeType.toLowerCase());
+        await this.ensureTestAudioTrack(preferredAudioCodec);
       } else {
         this.log.warn('No injectable audio codec available on negotiated transceivers (supported: Opus)');
       }
-      await this.ensureTestAudioTrack(preferredAudioCodec);
     }
     // Transceivers werift auto-creates from the remote offer default to a direction that answers "inactive" with
     // port 0 when no local track is attached; a port-0 m-section is still listed in a=group:BUNDLE, which peers
