@@ -245,6 +245,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
     const serverDoorbell: Doorbell | undefined = this.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001');
     const serverChime: Chime | undefined = this.getDeviceById('ServerChime-SERVER-CHIME-001');
+    // v8 ignore else -- is just a type guard to ensure that the serverDoorbell and serverChime are defined before proceeding.
     if (serverDoorbell && serverChime) {
       switch (this.animationPhase) {
         case 1:
