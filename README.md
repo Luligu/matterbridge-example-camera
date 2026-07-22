@@ -261,11 +261,11 @@ python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_
 # Doorbell mandatory Switch server
 python3 src/python_testing/TC_SWTCH.py
 
-# Chime cluster
-python3 src/python_testing/TC_CHIME_2_2.py
-python3 src/python_testing/TC_CHIME_2_3.py
-python3 src/python_testing/TC_CHIME_2_5.py
-python3 src/python_testing/TC_CHIME_2_6.py
+# Chime cluster ✅
+python3 src/python_testing/TC_CHIME_2_2.py --endpoint 2
+python3 src/python_testing/TC_CHIME_2_3.py --endpoint 2
+python3 src/python_testing/TC_CHIME_2_5.py --endpoint 2
+python3 src/python_testing/TC_CHIME_2_6.py --endpoint 2
 
 # Camera AV Stream Management
 python3 src/python_testing/TC_AVSM_2_1.py

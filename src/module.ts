@@ -201,7 +201,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       { batChargeLevel: PowerSource.BatChargeLevel.Ok, batPercentRemaining: 150, batQuantity: 2, batReplacementDescription: 'AA' },
       exampleChime.log,
     );
-    await exampleChime?.setAttribute(ChimeCluster, 'enabled', true, exampleChime.log);
+    await exampleChime?.setCluster(ChimeCluster, { enabled: true, selectedChime: 0 }, exampleChime.log);
 
     const serverChime: Chime | undefined = this.getDeviceById('ServerChime-SERVER-CHIME-001');
     await serverChime?.setCluster(
@@ -209,7 +209,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       { batChargeLevel: PowerSource.BatChargeLevel.Ok, batPercentRemaining: 150, batVoltage: 2900, batReplacementNeeded: false },
       serverChime.log,
     );
-    await serverChime?.setAttribute(ChimeCluster, 'enabled', true, serverChime.log);
+    await serverChime?.setCluster(ChimeCluster, { enabled: true, selectedChime: 0 }, serverChime.log);
 
     if (this.config.animationInterval > 0) {
       clearInterval(this.animationInterval);
