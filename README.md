@@ -72,6 +72,10 @@ Features:
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 
+Supported by:
+
+- [Matterserver dashboard](screenshots/matterserver-camera.png)
+
 ### Snapshot Camera
 
 Features:
@@ -83,6 +87,10 @@ Features:
 - Captures snapshots using a requested stream or automatic stream selection and returns the requested resolution as JPEG data.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+
+Supported by:
+
+- [Matterserver dashboard](screenshots/matterserver-snapshot-camera.png)
 
 ### Audio Doorbell
 
