@@ -235,11 +235,26 @@ WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they 
 
 ## Chip tests
 
+Run the `luligu/matterbridge:chip-test` docker image and open a shell in the container:
+
+- frontend on port 8585
+- container test logs directory mapped on ./temp directory
+
+### macOS
+
 ```bash
-docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8283:8283 -v "C:/Users/your-user/GitHub/matterbridge-example-camera/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
-docker logs -f matterbridge-chip-test-hub --tail 1000
+docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
 docker exec -it matterbridge-chip-test-hub bash
 ```
+
+### Windows
+
+```powershell
+docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" luligu/matterbridge:chip-test
+docker exec -it matterbridge-chip-test-hub bash
+```
+
+### Inside the container
 
 ```bash
 # Generic device composition and conformance
