@@ -36,7 +36,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
-## [0.0.6] - Dev branch
+## [0.0.6] - 2026-07-21
 
 ### Added
 
@@ -48,8 +48,14 @@ If you like this project and find it useful, please consider giving it a star on
 - [platform]: Register a Floodlight Camera and two Intercom example devices, `Intercom 1` (bridged) and `Intercom 2` (`mode: 'server'`, its own Matter node, alongside the existing `Server Chime`/`Server Doorbell`), in `onStart`, and verify Intercom 1 is registered in `onConfigure`. Intercom 1 and Intercom 2 can be bound to each other to test two-way calling (see the new README pairing section).
 - [docs]: Document how to pair two Intercom devices for two-way calling (Binding and ACL requirements, with chip-tool examples) in the README.
 
+### Changed
+
+- [webrtc]: Add the required `generator` setting (`none`, `test`, or `webcam`, default `none`), the optional `webcam` ffmpeg device setting with no default, and the required `webcamResolution` setting (`640x480`, `1280x720`, or `1920x1080`, default `640x480`). `test` selects the SMPTE bars pattern, `webcam` captures from the configured device, and `none` negotiates video without attaching a track.
+
 ### Fixed
 
+- [webrtc]: Allocate `WebRTCSessionID` values monotonically from 0 through 65534 across both `SolicitOffer` and new-session `ProvideOffer` requests, wrapping to 0 and skipping active identifiers instead of deriving the next value from the currently active sessions.
+- [platform]: Initialize missing `whiteList` and `blackList` properties for older saved configs so the frontend Home page exposes its device-selection checkboxes.
 - [webrtc]: `provideIceCandidates` unconditionally skipped every mDNS host ICE candidate (`*.local`), so a peer that only offers mDNS-obfuscated candidates (the Chromium/Edge default) left the werift peer connection with zero usable remote candidates — signaling succeeded but the stream stayed black. werift-ice already resolves `.local` candidates via a real multicast DNS query before pairing them, so candidates are no longer skipped and that resolution is allowed to run; the per-candidate apply timeout is bumped from 2000ms to 5000ms to leave headroom for the mDNS round trip. Verified against a real Edge client: the mDNS candidate resolved and applied in 98ms and video streamed correctly. See the new "Known limitation: Firefox may only offer a link-local address on a non-HTTPS page" note in the README for a related, separate client-side issue this does not fix.
 - [snapshot]: README asset docs still described the pre-#15 `camera-color-test-*.jpeg` names; `CaptureSnapshot` now reads `camera-color-{640-480,1280-720,1920-1080}.jpeg`. Also documented why all three calibration cards are kept under the ~65535-byte Matter message-size ceiling (AES-CCM's 13-byte nonce) and why it can't be worked around by tuning TCP.
 

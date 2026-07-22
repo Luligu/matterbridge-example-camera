@@ -1,7 +1,8 @@
 /**
  * @file vitest/behaviors/webRtcTransportProviderServer.test.ts
  * @description This file contains the tests for the MatterbridgeWebRtcTransportProviderServer behavior.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'WebRtcTransportProviderServerBehavior';
@@ -25,13 +26,17 @@ import {
 } from 'matterbridge/vitest-utils/matter';
 
 import { MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
-import { createDefaultWebRtcTransportProviderClusterServer, MatterbridgeWebRtcTransportProviderServer } from '../../src/behaviors/webRtcTransportProviderServer.js';
+import {
+  allocateWebRtcSessionId,
+  createDefaultWebRtcTransportProviderClusterServer,
+  MatterbridgeWebRtcTransportProviderServer,
+} from '../../src/behaviors/webRtcTransportProviderServer.js';
 import { Camera } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
 
 describe('MatterbridgeWebRtcTransportProviderServer', () => {
-  const originalDisableTestVideo = process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO;
+  const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
 
   let device: Camera;
 
@@ -55,7 +60,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   beforeEach(() => {
     // Clear all mocks
     vi.clearAllMocks();
-    process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO = '1';
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'none';
   });
 
   afterEach(() => {
@@ -63,7 +68,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(loggerWarnSpy).not.toHaveBeenCalled();
     expect(loggerErrorSpy).not.toHaveBeenCalled();
     expect(loggerFatalSpy).not.toHaveBeenCalled();
-    process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO = originalDisableTestVideo;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
   });
 
   afterAll(async () => {
@@ -87,13 +92,13 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1) }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Solicited a WebRTC offer for session 0'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.solicitOffer: solicited a WebRTC offer for session 0'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions[0].videoStreams).toEqual([0]);
     expect(currentSessions[0].audioStreams).toEqual([0]);
     clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
-    // Restores currentSessions to empty, so the session ids the rest of this flow depends on stay unaffected.
+    // Restores currentSessions to empty without resetting the monotonically increasing session id allocator.
     await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
@@ -106,10 +111,10 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Solicited a WebRTC offer for session 0'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.solicitOffer: solicited a WebRTC offer for session 1'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(1);
-    expect(currentSessions[0].id).toBe(0);
+    expect(currentSessions[0].id).toBe(1);
     expect(currentSessions[0].streamUsage).toBe(StreamUsage.LiveView);
     clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
   });
@@ -123,33 +128,33 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Solicited a WebRTC offer for session 1'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.solicitOffer: solicited a WebRTC offer for session 2'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(2);
-    expect(currentSessions[1].id).toBe(1);
+    expect(currentSessions[1].id).toBe(2);
   });
 
   it('should end the second solicited session', async () => {
     await expect(
-      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 1, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 2, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
     ).resolves.toBeUndefined();
 
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(1);
-    expect(currentSessions[0].id).toBe(0);
+    expect(currentSessions[0].id).toBe(1);
   });
 
   it('should provide an offer for a new session with automatically assigned video and audio streams', async () => {
     await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer' })).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 1'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session 3'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(2);
     expect(currentSessions[1].videoStreams).toEqual([0]);
     expect(currentSessions[1].audioStreams).toEqual([0]);
 
-    // Restores currentSessions to just session 0, so the session ids the rest of this flow depends on stay unaffected.
-    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 1, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
+    // Restores currentSessions to the session created by the main flow.
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 3, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should provide an offer for a new session', async () => {
@@ -162,10 +167,10 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 1'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session 4'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(2);
-    expect(currentSessions[1].id).toBe(1);
+    expect(currentSessions[1].id).toBe(4);
   });
 
   it('should provide an offer for a new session with default stream usage and originating endpoint', async () => {
@@ -173,7 +178,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', videoStreams: [0] }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 2'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session 5'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(3);
     expect(currentSessions[2].streamUsage).toBe(StreamUsage.LiveView);
@@ -181,7 +186,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
   it('should end the session created with default stream usage and originating endpoint', async () => {
     await expect(
-      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 2, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 5, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
     ).resolves.toBeUndefined();
 
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
@@ -193,7 +198,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', videoStreamId: 0, audioStreamId: null }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 2'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session 6'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(3);
     expect(currentSessions[2].videoStreams).toEqual([0]);
@@ -202,7 +207,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
   it('should end the session created with the deprecated videoStreamId field', async () => {
     await expect(
-      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 2, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 6, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
     ).resolves.toBeUndefined();
 
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
@@ -212,7 +217,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   it('should provide an offer for a new session using the deprecated audioStreamId field', async () => {
     await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', audioStreamId: 1 })).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 2'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session 7'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(3);
     expect(currentSessions[2].audioStreams).toEqual([1]);
@@ -220,7 +225,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
   it('should end the session created with the deprecated audioStreamId field', async () => {
     await expect(
-      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 2, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 7, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
     ).resolves.toBeUndefined();
 
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
@@ -251,19 +256,20 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     expect(session.audioStreams).toEqual([0]);
     clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
-    // Restores currentSessions to its pre-test state, so the session ids the rest of this flow depends on stay unaffected.
+    // Restores currentSessions to its pre-test state without resetting the session id allocator.
     await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: session.id, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
   });
 
   it('should provide an offer for an existing session', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', {
-        webRtcSessionId: 0,
+        webRtcSessionId: 1,
         sdp: 'v=0 o=- re-offer',
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP offer for session 0'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session 1'));
+    clearExpectedWarnings();
   });
 
   it('should log a non-Error rejection reason when the peer WebRtcTransportRequestor endpoint cannot be resolved', async () => {
@@ -274,12 +280,13 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', {
-        webRtcSessionId: 0,
+        webRtcSessionId: 1,
         sdp: 'v=0 o=- re-offer',
       }),
     ).resolves.toBeUndefined();
 
     expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringMatching(/Could not resolve peer WebRtcTransportRequestor endpoint.*boom/));
+    clearExpectedWarnings();
   });
 
   it('should reject provideOffer for an unknown session', async () => {
@@ -289,60 +296,62 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   });
 
   it('should provide an answer for an existing session', async () => {
-    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: 0, sdp: 'v=0 o=- answer' })).resolves.toBeUndefined();
+    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: 1, sdp: 'v=0 o=- answer' })).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received an SDP answer for session 0'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideAnswer: received an SDP answer for session 1'));
   });
 
   it('should reject provideAnswer for an unknown session', async () => {
     await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: 99, sdp: 'v=0 o=- answer' })).rejects.toThrow(
-      'WebRTC session 99 is not present in currentSessions',
+      'MatterbridgeWebRtcTransportProviderServer.provideAnswer: webRTC session 99 is not present in currentSessions',
     );
   });
 
   it('should provide ICE candidates for an existing session', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
-        webRtcSessionId: 0,
+        webRtcSessionId: 1,
         iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: 0 }],
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Received 1 ICE candidate(s) for session 0'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: received 1 ICE candidate(s) for session 1'),
+    );
   });
 
   it('should apply mDNS host ICE candidates by delegating mDNS resolution to werift-ice', async () => {
     const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
-    const webRtcPeer = internal?.sessions.get(0);
+    const webRtcPeer = internal?.sessions.get(1);
     // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
     const addIceCandidateSpy = vi.spyOn(webRtcPeer!, 'addIceCandidate').mockResolvedValueOnce();
 
     const candidate = 'candidate:1 1 UDP 1 8f4f3af1-a0a0-4f2c-9276-c6b423a3d2fd.local 54321 typ host';
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
-        webRtcSessionId: 0,
+        webRtcSessionId: 1,
         iceCandidates: [{ candidate, sdpMid: null, sdpmLineIndex: null }],
       }),
     ).resolves.toBeUndefined();
 
     expect(addIceCandidateSpy).toHaveBeenCalledWith(candidate, null, null);
-    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('Applying ICE candidate 1/1'));
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applying ICE candidate 1/1'));
   });
 
   it('should log a warning when applying an ICE candidate fails', async () => {
     const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
-    const webRtcPeer = internal?.sessions.get(0);
+    const webRtcPeer = internal?.sessions.get(1);
     // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
     vi.spyOn(webRtcPeer!, 'addIceCandidate').mockRejectedValueOnce(new Error('addIceCandidate failed'));
 
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
-        webRtcSessionId: 0,
+        webRtcSessionId: 1,
         iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: null }],
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed ICE candidate'));
+    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate'));
     loggerWarnSpy.mockClear();
   });
 
@@ -350,12 +359,12 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     vi.useFakeTimers();
     try {
       const internal = await internalFor<MatterbridgeWebRtcTransportProviderServer.Internal>(device, 'webRtcTransportProvider');
-      const webRtcPeer = internal?.sessions.get(0);
+      const webRtcPeer = internal?.sessions.get(1);
       // oxlint-disable-next-line typescript/no-non-null-assertion -- the session was created by an earlier test in this flow.
       vi.spyOn(webRtcPeer!, 'addIceCandidate').mockImplementationOnce(async () => new Promise(() => {}));
 
       const invocation = device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
-        webRtcSessionId: 0,
+        webRtcSessionId: 1,
         iceCandidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 1 typ host', sdpMid: null, sdpmLineIndex: 0 }],
       });
       await vi.advanceTimersByTimeAsync(5000);
@@ -370,31 +379,40 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
   it('should reject provideIceCandidates for an unknown session', async () => {
     await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', { webRtcSessionId: 99, iceCandidates: [] })).rejects.toThrow(
-      'WebRTC session 99 is not present in currentSessions',
+      'MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: webRTC session 99 is not present in currentSessions',
     );
   });
 
   it('should reject endSession for an unknown session', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 99, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
-    ).rejects.toThrow('WebRTC session 99 is not present in currentSessions');
+    ).rejects.toThrow('MatterbridgeWebRtcTransportProviderServer.endSession: webRTC session 99 is not present in currentSessions');
   });
 
   it('should end an existing session', async () => {
     await expect(
-      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 1, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Ended WebRTC session 0'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.endSession: ended webRTC session 1'));
     const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
     expect(currentSessions).toHaveLength(1);
-    expect(currentSessions[0].id).toBe(1);
+    expect(currentSessions[0].id).toBe(4);
+  });
+
+  it('should allocate, wrap, skip active, and exhaust WebRTC session ids', () => {
+    expect(allocateWebRtcSessionId(0, new Set())).toEqual({ webRtcSessionId: 0, nextCandidate: 1 });
+    expect(allocateWebRtcSessionId(65534, new Set())).toEqual({ webRtcSessionId: 65534, nextCandidate: 0 });
+    expect(allocateWebRtcSessionId(0, new Set([0]))).toEqual({ webRtcSessionId: 1, nextCandidate: 2 });
+
+    const allSessionIds = new Set<number>();
+    for (let id = 0; id <= 65534; id++) allSessionIds.add(id);
+    expect(() => allocateWebRtcSessionId(0, allSessionIds)).toThrow('No WebRTC session identifier is available');
   });
 
   it('should use the allocated video stream resolution for the injected webcam capture, matching a real client resolution/quality picker', async () => {
     const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
     const originalWebcamDevice = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
-    delete process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_VIDEO;
     process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
     process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = 'test-webcam-device';
 
@@ -439,7 +457,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), videoStreams: [999] }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("MatterbridgeWebRtcTransportProviderServer.solicitOffer: could not reach the peer's WebRtcTransportRequestor"),
+    );
     clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
@@ -454,7 +474,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), videoStreams: [0] }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("MatterbridgeWebRtcTransportProviderServer.solicitOffer: could not reach the peer's WebRtcTransportRequestor"),
+    );
     clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
@@ -474,7 +496,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), videoStreams: [0] }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("MatterbridgeWebRtcTransportProviderServer.solicitOffer: could not reach the peer's WebRtcTransportRequestor"),
+    );
     clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
 
     // solicitOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
@@ -492,7 +516,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', videoStreams: [0] }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining("Could not reach the peer's WebRtcTransportRequestor"));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("MatterbridgeWebRtcTransportProviderServer.provideOffer: could not reach the peer's WebRtcTransportRequestor"),
+    );
 
     // provideOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
     // the test doesn't leak that process.

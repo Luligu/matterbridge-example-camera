@@ -41,6 +41,10 @@ import { SnapshotCamera } from './devices/snapshotCamera.js';
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
   blackList: string[];
+  generator: 'none' | 'test' | 'webcam';
+  webcam?: string;
+  webcamResolution: '640x480' | '1280x720' | '1920x1080';
+  webcamBitrate: number;
   animationInterval: number;
 };
 
@@ -75,11 +79,32 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
     this.log.info(`Initializing platform ${this.config.name}...`);
 
+    // Normalize old config values to new ones
+    this.config.whiteList ??= [];
+    this.config.blackList ??= [];
+    this.config.generator ??= 'none';
+    this.config.webcamResolution ??= '640x480';
+    this.config.webcamBitrate ??= 1000;
+    this.config.animationInterval ??= 60;
+    this.config.debug ??= false;
+    this.config.unregisterOnShutdown ??= false;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = this.config.generator;
+    if (this.config.webcam === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = this.config.webcam;
+    process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = this.config.webcamResolution;
+    process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE = String(this.config.webcamBitrate);
+
     this.log.info(`Platform ${this.config.name} initialized successfully`);
   }
 
   override async onStart(reason?: string): Promise<void> {
     this.log.info(`Starting platform ${this.config.name} with reason: ${reason ?? 'No reason provided'}...`);
+
+    // Wait for the platform to fully load the select if you use them.
+    await this.ready;
+
+    // Clear the select since we add all the devices.
+    await this.clearSelect();
 
     const exampleChime = new Chime('Chime', 'CHIME-001', {
       identifyTime: 5,
@@ -93,56 +118,56 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       selectedChime: 0,
       enabled: true,
     });
-    await this.registerDevice(exampleChime);
+    await this.addDevice(exampleChime);
 
     const exampleDoorbell = new Doorbell('Doorbell', 'DOORBELL-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Replaceable',
     });
-    await this.registerDevice(exampleDoorbell);
+    await this.addDevice(exampleDoorbell);
 
     const exampleAudioDoorbell = new AudioDoorbell('Audio Doorbell', 'AUDIODOORBELL-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Replaceable',
     });
-    await this.registerDevice(exampleAudioDoorbell);
+    await this.addDevice(exampleAudioDoorbell);
 
     const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOTCAMERA-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Wired',
     });
-    await this.registerDevice(exampleSnapshotCamera);
+    await this.addDevice(exampleSnapshotCamera);
 
     const exampleCamera = new Camera('Camera', 'CAMERA-001');
-    await this.registerDevice(exampleCamera);
+    await this.addDevice(exampleCamera);
 
     const exampleFloodlightCamera = new FloodlightCamera('Floodlight Camera', 'FLOODLIGHTCAMERA-001', {
       powerSourceType: 'Wired',
       cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
       lightOptions: { name: 'Floodlight' },
     });
-    await this.registerDevice(exampleFloodlightCamera);
+    await this.addDevice(exampleFloodlightCamera);
 
     const exampleIntercom1 = new Intercom('Intercom 1', 'INTERCOM1-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Replaceable',
     });
-    await this.registerDevice(exampleIntercom1);
+    await this.addDevice(exampleIntercom1);
 
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', { mode: 'server' });
-    await this.registerDevice(serverChime);
+    await this.addDevice(serverChime);
 
     const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', { mode: 'server' });
-    await this.registerDevice(serverDoorbell);
+    await this.addDevice(serverDoorbell);
 
     // A separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
     // be bound to each other to test two-way calling (see the README's Intercom pairing section).
     const exampleIntercom2 = new Intercom('Intercom 2', 'INTERCOM2-001', { mode: 'server' });
-    await this.registerDevice(exampleIntercom2);
+    await this.addDevice(exampleIntercom2);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
@@ -152,28 +177,12 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     this.log.info(`Configuring platform ${this.config.name}...`);
 
     const exampleChime: Chime | undefined = this.getDeviceById('Chime-CHIME-001');
-    if (!exampleChime) throw new Error(`Chime device not found. Please ensure the device is registered before configuration.`);
-    await exampleChime.setCluster(
+    await exampleChime?.setCluster(
       PowerSource,
       { batChargeLevel: PowerSource.BatChargeLevel.Ok, batPercentRemaining: 150, batQuantity: 2, batReplacementDescription: 'AA' },
       exampleChime.log,
     );
-    await exampleChime.setAttribute(ChimeCluster, 'enabled', true, exampleChime.log);
-
-    const exampleDoorbell: Doorbell | undefined = this.getDeviceById('Doorbell-DOORBELL-001');
-    if (!exampleDoorbell) throw new Error(`Doorbell device not found. Please ensure the device is registered before configuration.`);
-
-    const exampleAudioDoorbell: AudioDoorbell | undefined = this.getDeviceById('AudioDoorbell-AUDIODOORBELL-001');
-    if (!exampleAudioDoorbell) throw new Error(`Audio doorbell device not found. Please ensure the device is registered before configuration.`);
-
-    const exampleSnapshotCamera: SnapshotCamera | undefined = this.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001');
-    if (!exampleSnapshotCamera) throw new Error(`Snapshot camera device not found. Please ensure the device is registered before configuration.`);
-
-    const exampleCamera: Camera | undefined = this.getDeviceById('Camera-CAMERA-001');
-    if (!exampleCamera) throw new Error(`Camera device not found. Please ensure the device is registered before configuration.`);
-
-    const exampleFloodlightCamera: MatterbridgeEndpoint | undefined = this.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001');
-    if (!exampleFloodlightCamera) throw new Error(`Floodlight camera device not found. Please ensure the device is registered before configuration.`);
+    await exampleChime?.setAttribute(ChimeCluster, 'enabled', true, exampleChime.log);
 
     const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
     if (!exampleIntercom1) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
@@ -184,6 +193,20 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     }
 
     this.log.info(`Platform ${this.config.name} configured successfully`);
+  }
+
+  /**
+   * Adds a device to the platform.
+   *
+   * @param {MatterbridgeEndpoint} device - The device to add.
+   * @returns {Promise<void>} - A promise that resolves when the device has been added.
+   */
+  async addDevice(device: MatterbridgeEndpoint): Promise<void> {
+    // v8 ignore else -- is just a type guard to ensure that the device has a serialNumber and deviceName before proceeding.
+    if (device.serialNumber && device.deviceName) {
+      this.setSelectDevice(device.serialNumber, device.deviceName);
+      if (this.validateDevice([device.deviceName, device.serialNumber])) await this.registerDevice(device);
+    }
   }
 
   /** Handles the animation logic for the platform.

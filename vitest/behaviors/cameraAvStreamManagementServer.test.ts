@@ -2,6 +2,7 @@
  * @file vitest/behaviors/cameraAvStreamManagementServer.test.ts
  * @description This file contains the tests for the MatterbridgeCameraAvStreamManagementServer behavior.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'CameraAvStreamManagementServerBehavior';
