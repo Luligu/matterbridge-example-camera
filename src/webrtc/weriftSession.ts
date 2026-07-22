@@ -403,9 +403,12 @@ export class WeriftWebRtcSession {
       transceiver.codecs = preferredCodecs;
       adjustedTransceivers += 1;
     }
+    /* v8 ignore start -- unreachable: callers only ever pass a mimeType they just found on one of these same
+     * transceivers via getPreferredInjectableAudioCodec(), so adjustedTransceivers always ends up > 0. */
     if (adjustedTransceivers > 0) {
       this.log('info', `Preferred ${mimeType.toUpperCase()} codecs on ${adjustedTransceivers} audio transceiver(s)`);
     }
+    /* v8 ignore stop */
   }
 
   /** Recorded test-voice clip (espeak-ng synthesized, checked into the repo) looped as the injected audio source. */
@@ -471,20 +474,24 @@ export class WeriftWebRtcSession {
         `rtp://127.0.0.1:${udpPort}`,
       ]);
 
+      /* v8 ignore start -- requires the spawned ffmpeg process itself to fail after resolveCommand already verified
+       * it runs (e.g. the binary is removed between the check and this spawn), which this harness can't simulate
+       * without deleting real system binaries or mocking node:child_process. */
       generator.once('error', (error: unknown) => {
         this.log('warn', `Audio generator failed: ${error instanceof Error ? error.message : String(error)}`);
       });
+      /* v8 ignore stop */
 
       this.testAudioUdpDisposer = disposer;
       this.testAudioGenerator = generator;
       this.testAudioAttached = true;
-      this.log(
-        'info',
-        `Attached test-voice audio track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
-      );
+      this.log('info', `Attached test-voice audio track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`);
+      /* v8 ignore start -- requires a lower-level failure (UDP port allocation racing, werift/nonstandard media
+       * internals throwing) that isn't practically triggerable in this harness without mocking werift internals. */
     } catch (error) {
       this.log('warn', `Failed to attach test-voice audio track: ${error instanceof Error ? error.message : String(error)}`);
     }
+    /* v8 ignore stop */
   }
 
   private cleanupTestVideoArtifacts(): void {

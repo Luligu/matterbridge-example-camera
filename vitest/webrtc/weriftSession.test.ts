@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { RTCPeerConnection, RTCRtpCodecParameters, useH264 } from 'werift';
+import { RTCPeerConnection, RTCRtpCodecParameters, useH264, usePCMU } from 'werift';
 
 import { WeriftWebRtcSession } from '../../src/webrtc/weriftSession.js';
 
@@ -21,6 +21,37 @@ import { WeriftWebRtcSession } from '../../src/webrtc/weriftSession.js';
 async function createRemoteOfferSdp(): Promise<string> {
   const remote = new RTCPeerConnection();
   remote.addTransceiver('video', { direction: 'sendonly' });
+  const offer = await remote.createOffer();
+  await remote.setLocalDescription(offer);
+  const sdp = remote.localDescription?.sdp ?? offer.sdp;
+  await remote.close();
+  return sdp;
+}
+
+/**
+ * Creates a real SDP offer from a throwaway remote peer connection, to feed into a WeriftWebRtcSession under test as
+ * if it came from a real remote peer over the WebRtcTransportProvider cluster.
+ *
+ * @returns {Promise<string>} A real SDP offer with a single sendonly audio transceiver.
+ */
+async function createRemoteAudioOfferSdp(): Promise<string> {
+  const remote = new RTCPeerConnection();
+  remote.addTransceiver('audio', { direction: 'sendonly' });
+  const offer = await remote.createOffer();
+  await remote.setLocalDescription(offer);
+  const sdp = remote.localDescription?.sdp ?? offer.sdp;
+  await remote.close();
+  return sdp;
+}
+
+/**
+ * Creates a real SDP offer whose audio media section only advertises PCMU, matching controllers that do not offer Opus.
+ *
+ * @returns {Promise<string>} A real SDP offer with a single sendonly PCMU-only audio transceiver.
+ */
+async function createPcmuOnlyRemoteOfferSdp(): Promise<string> {
+  const remote = new RTCPeerConnection({ codecs: { audio: [usePCMU()] } });
+  remote.addTransceiver('audio', { direction: 'sendonly' });
   const offer = await remote.createOffer();
   await remote.setLocalDescription(offer);
   const sdp = remote.localDescription?.sdp ?? offer.sdp;
@@ -260,6 +291,24 @@ describe('WeriftWebRtcSession', () => {
     });
   });
 
+  describe('test audio injection toggle', () => {
+    afterEach(() => {
+      delete process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO;
+    });
+
+    it('should still negotiate an audio transceiver but not inject a track when MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1', async () => {
+      process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO = '1';
+      const session = new WeriftWebRtcSession();
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
+  });
+
   describe('injectable codec selection', () => {
     it('should prefer an already-negotiated injectable codec when creating a subsequent offer', async () => {
       const session = new WeriftWebRtcSession();
@@ -304,6 +353,37 @@ describe('WeriftWebRtcSession', () => {
       await session.close();
     });
 
+    it('should skip non-audio transceivers when selecting and preferring an injectable audio codec', async () => {
+      const session = new WeriftWebRtcSession();
+      const remote = new RTCPeerConnection();
+      // Video added before audio so the answering session encounters the non-audio transceiver first in the audio codec loop.
+      remote.addTransceiver('video', { direction: 'sendonly' });
+      remote.addTransceiver('audio', { direction: 'sendonly' });
+      const offer = await remote.createOffer();
+      await remote.setLocalDescription(offer);
+      const offerSdp = remote.localDescription?.sdp ?? offer.sdp;
+      await remote.close();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=video');
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
+
+    it('should create an SDP answer without an injectable audio codec when the remote offer only supports PCMU', async () => {
+      const session = new WeriftWebRtcSession();
+      const offerSdp = await createPcmuOnlyRemoteOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+      expect(answerSdp.toLowerCase()).not.toContain('opus');
+
+      await session.close();
+    });
+
     it('should not treat a non-injectable codec as preferred when creating an offer for a pre-existing transceiver', async () => {
       const session = new WeriftWebRtcSession();
       const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
@@ -326,6 +406,27 @@ describe('WeriftWebRtcSession', () => {
       const sdp = await session.createOffer({ video: true, audio: false });
 
       expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should only adjust the audio transceiver(s) that actually have the preferred codec available', async () => {
+      const session = new WeriftWebRtcSession();
+
+      const remote = new RTCPeerConnection();
+      // Two audio m-lines: the first offers Opus and PCMU (the default), the second is restricted to PCMU only, so
+      // after negotiation only one of the resulting local audio transceivers ends up with an injectable Opus codec.
+      remote.addTransceiver('audio', { direction: 'sendonly' });
+      const pcmuOnlyTransceiver = remote.addTransceiver('audio', { direction: 'sendonly' });
+      pcmuOnlyTransceiver.codecs = [new RTCRtpCodecParameters({ mimeType: 'audio/PCMU', clockRate: 8000, payloadType: 0 })];
+      const offer = await remote.createOffer();
+      await remote.setLocalDescription(offer);
+      const offerSdp = remote.localDescription?.sdp ?? offer.sdp;
+      await remote.close();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp.match(/m=audio/g)).toHaveLength(2);
 
       await session.close();
     });
@@ -536,6 +637,19 @@ describe('WeriftWebRtcSession', () => {
 
       await session.close();
     });
+
+    it('should still negotiate an audio transceiver but not inject a track when ffmpeg cannot be resolved', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      const session = new WeriftWebRtcSession();
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(void 0);
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
   });
 
   describe('video track injection lifecycle', () => {
@@ -577,6 +691,28 @@ describe('WeriftWebRtcSession', () => {
 
       expect((session as unknown as TestVideoState).testVideoAttached).toBe(false);
       expect((session as unknown as TestVideoState).testVideoGenerator).toBeUndefined();
+    });
+  });
+
+  describe('audio track injection lifecycle', () => {
+    it('should not attach a second test audio track when creating a subsequent answer on the same session', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      type TestAudioState = { testAudioAttached: boolean; testAudioGenerator?: { killed: boolean } };
+      const session = new WeriftWebRtcSession();
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      await session.createAnswer(offerSdp);
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+      expect((session as unknown as TestAudioState).testAudioAttached).toBe(true);
+      expect((session as unknown as TestAudioState).testAudioGenerator).toBeDefined();
+
+      await session.close();
+
+      expect((session as unknown as TestAudioState).testAudioAttached).toBe(false);
+      expect((session as unknown as TestAudioState).testAudioGenerator).toBeUndefined();
     });
   });
 });
