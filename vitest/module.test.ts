@@ -10,6 +10,7 @@ const MATTER_PORT = 6000;
 const MATTER_CREATE_ONLY = true;
 
 import type { PlatformMatterbridge } from 'matterbridge';
+import { Chime as ChimeCluster } from 'matterbridge/matter/clusters';
 import { log, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setDebug, setupTest } from 'matterbridge/vitest-utils';
 import {
   addMatterbridge,
@@ -168,9 +169,16 @@ describe('TestPlatform', () => {
     expect(platform.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
-    expect(platform.getDeviceById('ServerChime-SERVER-CHIME-001')).toBeDefined();
+    const serverChime = platform.getDeviceById('ServerChime-SERVER-CHIME-001');
+    expect(serverChime).toBeDefined();
     expect(platform.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001')).toBeDefined();
     expect(platform.size()).toBe(8);
+
+    // Toggle the enabled attribute to trigger the subscribeAttribute listener
+    await serverChime?.setAttribute(ChimeCluster, 'enabled', false, serverChime.log);
+    expect(loggerInfoSpy).toHaveBeenCalledWith(`Server Chime enabled attribute changed from true to false`);
+    await serverChime?.setAttribute(ChimeCluster, 'enabled', true, serverChime.log);
+    expect(loggerInfoSpy).toHaveBeenCalledWith(`Server Chime enabled attribute changed from false to true`);
   });
 
   it('should call onConfigure', async () => {
