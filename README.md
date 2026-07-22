@@ -24,6 +24,12 @@
 
 This repository is used to create all Camera Device Types in chapter 16 of Matter specs 1.6.0.
 
+It also tests the client cluster interaction.
+
+## Credit
+
+Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to this project (and many others).
+
 ## Setup
 
 - `src/module.ts` will create all device types for easy testing;
@@ -200,10 +206,12 @@ The `assets` directory contains deterministic three-second media fixtures for ex
 - `test-video.h264`: raw H.264 Constrained Baseline video, 640×360 at 15 FPS, with a moving test pattern. Use this elementary stream when implementing H.264 NAL-unit parsing and RTP packetization.
 - `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a 1 kHz test tone. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
 - `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track. The werift test transfers the complete file over its SCTP data channel and verifies its integrity. This exercises binary file transport, not a WebRTC video RTP track.
-- `camera-color-1920-1080.jpeg`: 1920×1080 simplified ffmpeg-generated color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
-- `camera-color-1280-720.jpeg`: 1280×720 simplified ffmpeg-generated color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
-- `camera-color-640-480.jpeg`: 640×480 simplified ffmpeg-generated color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
-- `camera-color-test-1920-1080.jpeg`, `camera-color-test-1280-720.jpeg`, `camera-color-test-960-540.jpeg`, `camera-color-test-640-480.jpeg`, and `camera-color-test-480-270.jpeg`: additional SMPTE color-bars snapshot fixtures.
+- `camera-color-1920-1080.jpeg`: 1920×1080 simplified ffmpeg-generated color-rectangle snapshot.
+- `camera-color-1280-720.jpeg`: 1280×720 simplified ffmpeg-generated color-rectangle snapshot.
+- `camera-color-640-480.jpeg`: 640×480 simplified ffmpeg-generated color-rectangle snapshot.
+- `camera-color-test-1920-1080.jpeg`: 1920×1080 extended color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
+- `camera-color-test-1280-720.jpeg`: 1280×720 extended color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
+- `camera-color-test-640-480.jpeg`: 640×480 extended color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
 
 #### Why the snapshot calibration cards stay under ~64 KB
 
