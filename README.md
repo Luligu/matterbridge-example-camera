@@ -250,10 +250,17 @@ docker restart matterbridge-chip-test-hub
 docker exec -it matterbridge-chip-test-hub bash
 ```
 
+Stop the container and softRest (needed if running on macOS or Windows)
+
+```shell
+docker stop matterbridge-chip-test-hub
+npm run softReset
+```
+
 ### Inside the container
 
 ```bash
-# Generic device composition and conformance
+# Generic device composition and conformance ✅ (one test fails for a known matter.js bug)
 python3 src/python_testing/TC_DeviceBasicComposition.py
 python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
 python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
