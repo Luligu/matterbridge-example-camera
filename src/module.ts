@@ -39,6 +39,7 @@ import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
 import { Doorbell } from './devices/doorbell.js';
 import { FloodlightCamera } from './devices/floodlightCamera.js';
+import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
@@ -167,6 +168,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.addDevice(exampleFloodlightCamera);
 
+    const exampleIntercom1 = new Intercom('Intercom 1', 'INTERCOM1-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Replaceable',
+    });
+    await this.addDevice(exampleIntercom1);
+
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.AudibleBeep,
@@ -188,6 +196,11 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', { mode: 'server' });
     await this.addDevice(serverDoorbell);
 
+    // A separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
+    // be bound to each other to test two-way calling (see the README's Intercom pairing section).
+    const exampleIntercom2 = new Intercom('Intercom 2', 'INTERCOM2-001', { mode: 'server' });
+    await this.addDevice(exampleIntercom2);
+
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
 
@@ -202,6 +215,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       exampleChime.log,
     );
     await exampleChime?.setCluster(ChimeCluster, { enabled: true, selectedChime: 0 }, exampleChime.log);
+
+    const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
+    if (!exampleIntercom1) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
 
     const serverChime: Chime | undefined = this.getDeviceById('ServerChime-SERVER-CHIME-001');
     await serverChime?.setCluster(

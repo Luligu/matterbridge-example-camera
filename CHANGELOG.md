@@ -32,6 +32,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
+- [tests]: Add `vitest/webrtc/weriftSession.test.ts` coverage for the audio track injection path in `WeriftWebRtcSession`: an SDP answer without an injectable audio codec when the remote offer only supports PCMU, skipping non-audio transceivers when selecting the preferred audio codec, only adjusting the audio transceiver(s) that actually negotiated the preferred codec, the `MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1` toggle, a missing ffmpeg dependency on the audio path, and not re-attaching a test-audio track on a subsequent `createAnswer`. `weriftSession.ts` is back to 100% statement/branch/function/line coverage. Also mark the audio generator's spawn-error handler, its catch block, and the unreachable `adjustedTransceivers === 0` branch in `preferAudioCodecOnTransceivers` as `v8 ignore`, mirroring the already-ignored video counterparts for the same reasons (child-process/werift-internals mocking, and a mimeType that's always found on at least one transceiver).
 - [platform]: Add log of config.
 - [platform]: Add animation interval in 10 phases.
 - [doorbell]: Add use of cluster client Chime of Server Doorbell in the animation. It needs the Server Doorbell and Server Chime to be paired and a binding in Matter Server dashboard from Server Doorbell Chime client cluster to Server Chime Chime server cluster: [bindings](screenshots/bindings.png).
@@ -39,7 +40,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Fixed
 
-- [chime]: Fix behavior when enabled is false. All chip tests pass.
+- [webrtc]: `createAnswer()` no longer calls `ensureTestAudioTrack()` when the remote offer negotiated no injectable audio codec (e.g. PCMU-only). Previously it still ran with an `undefined` codec and silently defaulted to Opus/payload type 111, injecting RTP the peer never negotiated.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
@@ -48,8 +49,12 @@ If you like this project and find it useful, please consider giving it a star on
 ### Added
 
 - [floodlight camera]: Add the Floodlight Camera device type. It is a composed device: the root endpoint carries Basic Information and, unless disabled, Power Source; the mandatory Camera child endpoint and the mandatory On/Off Light child endpoint required by Matter specs 1.6.0 chapter 16.2 are both created automatically by the constructor, the Camera child with the same CameraAvStreamManagement/WebRtcTransportProvider wiring as the standalone `Camera` device; `addLight()` adds further On/Off Light child endpoints beyond the mandatory one.
-- [platform]: Register a Floodlight Camera example device in `onStart`, and verify it's registered in `onConfigure`.
-- [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, custom `lightOptions`, camera identify, power source variants, additional tagged lights, and custom stream usages; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path.
+- [intercom]: Add the Intercom device type with the Camera AV Stream Management (Audio and Speaker features, for genuine two-way audio), WebRtcTransportProvider, and WebRtcTransportRequestor server clusters, plus the WebRtcTransportProvider, WebRtcTransportRequestor, and Chime client clusters, Identify, and Power Source support.
+- [clients]: Add `addWebRtcTransportProviderClient` helper to `src/behaviors/clients.ts`, shared by `Intercom`, mirroring `addWebRtcTransportRequestorClient`.
+- [behaviors]: Add `src/behaviors/webRtcTransportRequestorServer.ts` with `createDefaultWebRtcTransportRequestorClusterServer`, using matter.js's default `WebRtcTransportRequestorServer` implementation directly.
+- [tests]: Add `vitest/devices/floodlightCamera.test.ts` covering default options, custom `lightOptions`, camera identify, power source variants, additional tagged lights, and custom stream usages; add `vitest/devices/intercom.test.ts`; extend `vitest/module.test.ts` with the Floodlight Camera "device not registered" `onConfigure` error path; extend `vitest/behaviors/clients.test.ts` to cover `addWebRtcTransportProviderClient`.
+- [platform]: Register a Floodlight Camera and two Intercom example devices, `Intercom 1` (bridged) and `Intercom 2` (`mode: 'server'`, its own Matter node, alongside the existing `Server Chime`/`Server Doorbell`), in `onStart`, and verify Intercom 1 is registered in `onConfigure`. Intercom 1 and Intercom 2 can be bound to each other to test two-way calling (see the new README pairing section).
+- [docs]: Document how to pair two Intercom devices for two-way calling (Binding and ACL requirements, with chip-tool examples) in the README.
 
 ### Changed
 

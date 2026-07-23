@@ -36,6 +36,10 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 - `src/devices/` contains all single class device types (it will be moved directly in matterbridge core package).
 - `src/behaviors/` contains all required behaviors (it will be moved directly in matterbridge core package).
 
+## TODO
+
+- Track matter.js PR #4128 (https://github.com/matter-js/matter.js/pull/4128) and, once merged and released in the consumed `@matter/*` version, remove the temporary ImageControl workaround used by Audio Doorbell and Intercom for CameraAvStreamManagement choice conformance.
+
 ## Supported device types
 
 ### Chime
@@ -112,6 +116,54 @@ Features:
 - Exposes `addLight()` to add further On/Off Light child endpoints beyond the mandatory one, with an optional tagList for disambiguation when more than one light is present.
 - Configurable Power Source cluster type on the root endpoint: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 - The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device. The mandatory light's name, tagList, and initial state can be customized via the `lightOptions` constructor option.
+
+### Intercom
+
+Features:
+
+- Exposes the Camera AV Stream Management cluster with the Audio and Speaker features (the Video and Snapshot features are not present, per the Matter specification for this device type; see Camera for a device implementing those). The Speaker feature is what makes an Intercom genuinely two-way: unlike Audio Doorbell, it can both capture and play back audio. Configurable speaker capabilities (codec, sample rates, channels) and two-way talk support (NotSupported, HalfDuplex, FullDuplex; default FullDuplex).
+- Unlike Camera and Audio Doorbell, an Intercom both hosts and invokes WebRtcTransportProvider and WebRtcTransportRequestor: it exposes both cluster servers, and registers both as client clusters via `addWebRtcTransportProviderClient`/`addWebRtcTransportRequestorClient`, so it can both receive and solicit WebRTC offers to/from a peer intercom.
+- Adds the optional Chime client cluster automatically via `addChimeClient`, so a bound Chime device can be triggered.
+- Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
+- Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+- Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around the same matter.js bug described above for Audio Doorbell.
+
+#### Pairing two Intercoms for two-way calling
+
+`src/module.ts` registers exactly this pair for testing: `Intercom 1` (bridged, under the Matterbridge aggregator) and `Intercom 2` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
+
+`Intercom 2` has to be `mode: 'server'` rather than a second bridged endpoint: peer resolution (see below) identifies the caller from the `peerNodeId`/`fabricIndex` of the command's CASE session, and a CASE session only exists between two distinct node identities on the fabric. Two bridged endpoints share the bridge's single node identity, so there is no CASE session, Binding, or ACL between them to test — invoking one from the other would just be a local, in-process behavior call. `mode: 'server'` is what gives an endpoint its own independent Matter node, which is what a real second, physical Intercom would be.
+
+Unlike a Doorbell/Chime pair, where only the Doorbell invokes commands on the Chime, an Intercom both hosts (server) and invokes (client) WebRtcTransportProvider and WebRtcTransportRequestor (see `#resolvePeerRequestorEndpoint` in `src/behaviors/webRtcTransportProviderServer.ts`). Once a peer invokes SolicitOffer/ProvideOffer on an Intercom's WebRtcTransportProvider, that Intercom resolves the caller's WebRtcTransportRequestor endpoint directly from the invoking peer's node id/fabric index carried by the command's CASE session — not via the Binding cluster — so the Offer/Answer "return leg" needs no binding of its own. Only the initiating invoke needs one.
+
+So, to let either Intercom 1 or Intercom 2 start a call, on the fabric they share (commission both onto the same controller/ecosystem first, e.g. via chip-tool, Apple Home, or Google Home):
+
+1. **Binding on 1 → 2**, so Intercom 1 knows where to send SolicitOffer/ProvideOffer. Binding on 2 → 1 is the mirror, for the other direction:
+
+   ```bash
+   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_2>, "endpoint": <ENDPOINT_2>, "cluster": 1363}]' <NODE_ID_1> <ENDPOINT_1>
+   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_1>, "endpoint": <ENDPOINT_1>, "cluster": 1363}]' <NODE_ID_2> <ENDPOINT_2>
+   ```
+
+   `1363` (`0x553`) is the WebRtcTransportProvider cluster id; `<ENDPOINT_1>`/`<ENDPOINT_2>` are each Intercom's endpoint number (find them from the commissioning output or the Matterbridge frontend).
+
+2. **ACL on 2 granting 1**, and **ACL on 1 granting 2**, Operate access to both WebRtcTransportProvider (`1363`) and WebRtcTransportRequestor (`1364`, `0x554`) — Intercom 1 needs it on 2 for the initiating invoke, and Intercom 2 needs it on 1 for the return invoke, regardless of who starts the call:
+
+   ```bash
+   chip-tool accesscontrol write acl '[
+     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
+     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_1>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
+   ]' <NODE_ID_2> 0
+
+   chip-tool accesscontrol write acl '[
+     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
+     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_2>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
+   ]' <NODE_ID_1> 0
+   ```
+
+   The ACL attribute is a full replace, not a merge: keep the existing Administer entry for `<ADMIN_NODE_ID>` (your controller/commissioner) in the list, or you lock yourself out of that node.
+
+With both directions in place, either Intercom can call the other; a call initiated the other way only needs its own binding/ACL pair, already covered above since both were set up symmetrically.
 
 ## WebRTC test video injection
 
