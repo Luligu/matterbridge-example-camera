@@ -79,20 +79,32 @@ describe('MatterbridgeChimeServer', () => {
   it('should play the selected chime sound when no chimeId is provided', async () => {
     await expect(device.invokeBehaviorCommand(ChimeCluster, 'playChimeSound', {})).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Playing chime sound 0'));
-    expect(loggerDebugSpy).toHaveBeenCalledWith('MatterbridgeChimeServer: playChimeSound called with chimeId 0');
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('playing chime sound 0'));
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeChimeServer: playChimeSound called with chimeId 0'));
   });
 
   it('should play the requested chime sound when a chimeId is provided', async () => {
     await expect(device.invokeBehaviorCommand(ChimeCluster, 'playChimeSound', { chimeId: 1 })).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Playing chime sound 1'));
-    expect(loggerDebugSpy).toHaveBeenCalledWith('MatterbridgeChimeServer: playChimeSound called with chimeId 1');
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('playing chime sound 1'));
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeChimeServer: playChimeSound called with chimeId 1'));
   });
 
   it('should reject with NotFound when the requested chimeId is not in installedChimeSounds', async () => {
-    await expect(device.invokeBehaviorCommand(ChimeCluster, 'playChimeSound', { chimeId: 99 })).rejects.toThrow('Chime sound 99 is not present in installedChimeSounds');
+    await expect(device.invokeBehaviorCommand(ChimeCluster, 'playChimeSound', { chimeId: 99 })).rejects.toThrow('chime sound 99 is not present in installedChimeSounds');
 
-    expect(loggerInfoSpy).not.toHaveBeenCalledWith(expect.stringContaining('Playing chime sound 99'));
+    expect(loggerInfoSpy).not.toHaveBeenCalledWith(expect.stringContaining('playing chime sound 99'));
+  });
+
+  it('should succeed with no side effects when enabled is false', async () => {
+    await device.setAttribute(ChimeCluster, 'enabled', false, device.log);
+    vi.clearAllMocks();
+
+    await expect(device.invokeBehaviorCommand(ChimeCluster, 'playChimeSound', {})).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).not.toHaveBeenCalled();
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeChimeServer: playChimeSound called but chime is disabled'));
+
+    await device.setAttribute(ChimeCluster, 'enabled', true, device.log);
   });
 });

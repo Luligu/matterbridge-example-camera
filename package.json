@@ -112,7 +112,7 @@
     "git:hardreset:main": "git fetch origin && git checkout main && git reset --hard origin/main",
     "git:hardreset:dev": "git fetch origin && git checkout dev && git reset --hard origin/dev",
     "git:hardreset:edge": "git fetch origin && git checkout edge && git reset --hard origin/edge",
-    "git:merge:dev": "git fetch origin && git checkout -b dev-backup && git checkout dev && git merge origin/main && git push origin dev",
+    "git:rebase:dev": "git fetch origin && git checkout -b dev-backup && git checkout dev && git merge origin/main && git push origin dev",
     "reset": "npm run deepClean && npm run softReset",
     "softReset": "npm install --no-fund --no-audit && npm prune --no-fund --no-audit && npm link --no-fund --no-audit matterbridge && npm run build && npm run typecheck",
     "checkDependencies": "npm install --no-fund --no-audit --no-save npm-check-updates && ncu && npm run softReset",
@@ -128,9 +128,9 @@
   "devDependencies": {
     "@types/node": "26.1.1",
     "@vitest/coverage-v8": "4.1.10",
-    "oxfmt": "0.59.0",
-    "oxlint": "1.74.0",
-    "oxlint-tsgolint": "0.25.0",
+    "oxfmt": "0.60.0",
+    "oxlint": "1.75.0",
+    "oxlint-tsgolint": "7.0.2001",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
   }

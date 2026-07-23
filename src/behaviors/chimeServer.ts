@@ -43,6 +43,7 @@ export class MatterbridgeChimeServer extends ChimeServerBase {
   /**
    * Handles the PlayChimeSound command.
    * Plays the chime sound passed in the request or, if none is passed, the currently selected chime, and generates the ChimeStartedPlaying event.
+   * Per Matter 1.6 Application Cluster spec §11.8.6.1.2, if Enabled is false, the command SHALL succeed with no other side effects.
    *
    * @param {Chime.PlayChimeSoundRequest} request - PlayChimeSound request payload.
    * @throws {StatusResponseError} With status NotFound if the requested chimeId is not present in installedChimeSounds.
@@ -50,11 +51,18 @@ export class MatterbridgeChimeServer extends ChimeServerBase {
   // oxlint-disable-next-line typescript/require-await
   override async playChimeSound(request: Chime.PlayChimeSoundRequest): Promise<void> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (!this.state.enabled) {
+      device.log.debug(`MatterbridgeChimeServer: playChimeSound called but chime is disabled (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      return;
+    }
     const chimeId = request.chimeId ?? this.state.selectedChime;
     if (!this.state.installedChimeSounds.some((chimeSound) => chimeSound.chimeId === chimeId)) {
-      throw new StatusResponseError(`Chime sound ${chimeId} is not present in installedChimeSounds`, Status.NotFound);
+      throw new StatusResponseError(
+        `MatterbridgeChimeServer: chime sound ${chimeId} is not present in installedChimeSounds (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
     }
-    device.log.info(`Playing chime sound ${chimeId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    device.log.info(`MatterbridgeChimeServer: playing chime sound ${chimeId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     // TODO: Add Chime.playChimeSound in matterbridge
     /*
     await device.commandHandler.executeHandler('Chime.playChimeSound', {
@@ -67,7 +75,7 @@ export class MatterbridgeChimeServer extends ChimeServerBase {
       context: this.context,
     });
     */
-    device.log.debug(`MatterbridgeChimeServer: playChimeSound called with chimeId ${chimeId}`);
+    device.log.debug(`MatterbridgeChimeServer: playChimeSound called with chimeId ${chimeId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     this.events.chimeStartedPlaying.emit({ chimeId }, this.context);
   }
 }

@@ -214,7 +214,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       { batChargeLevel: PowerSource.BatChargeLevel.Ok, batPercentRemaining: 150, batQuantity: 2, batReplacementDescription: 'AA' },
       exampleChime.log,
     );
-    await exampleChime?.setAttribute(ChimeCluster, 'enabled', true, exampleChime.log);
+    await exampleChime?.setCluster(ChimeCluster, { enabled: true, selectedChime: 0 }, exampleChime.log);
 
     const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
     if (!exampleIntercom1) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
@@ -225,7 +225,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       { batChargeLevel: PowerSource.BatChargeLevel.Ok, batPercentRemaining: 150, batVoltage: 2900, batReplacementNeeded: false },
       serverChime.log,
     );
-    await serverChime?.setAttribute(ChimeCluster, 'enabled', true, serverChime.log);
+    await serverChime?.setCluster(ChimeCluster, { enabled: true, selectedChime: 0 }, serverChime.log);
 
     if (this.config.animationInterval > 0) {
       clearInterval(this.animationInterval);
