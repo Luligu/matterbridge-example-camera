@@ -112,7 +112,7 @@ describe('TestPlatform', () => {
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('none');
       expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE).toBeUndefined();
       expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION).toBe('640x480');
-      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(10);
+      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(11);
     } finally {
       await emptyConfigPlatform.onShutdown();
     }
@@ -175,12 +175,13 @@ describe('TestPlatform', () => {
     expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
+    expect(platform.getDeviceById('PTZCamera-PTZCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('Intercom1-INTERCOM1-001')).toBeDefined();
     const serverChime = platform.getDeviceById('ServerChime-SERVER-CHIME-001');
     expect(serverChime).toBeDefined();
     expect(platform.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001')).toBeDefined();
-    expect(platform.size()).toBe(10);
+    expect(platform.size()).toBe(11);
 
     // Toggle the enabled attribute to trigger the subscribeAttribute listener
     await serverChime?.setAttribute(ChimeCluster, 'enabled', false, serverChime.log);
