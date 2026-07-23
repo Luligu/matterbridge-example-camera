@@ -117,6 +117,15 @@ Features:
 - Configurable Power Source cluster type on the root endpoint: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 - The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device. The mandatory light's name, tagList, and initial state can be customized via the `lightOptions` constructor option.
 
+### Video Doorbell
+
+Features:
+
+- A composite device type, always defined via endpoint composition: the root endpoint exposes Basic Information and, unless disabled, a Power Source cluster; the mandatory Camera child endpoint and the mandatory Doorbell child endpoint required by the Matter specification for this device type are both created automatically by the constructor. The Camera child is wired the same way as the standalone Camera device (CameraAvStreamManagement with the Video, Audio, Snapshot and ImageControl features, and the WebRtcTransportProvider cluster and WebRtcTransportRequestor client). The Doorbell child is wired the same way as the standalone Doorbell device (Switch cluster with the MomentarySwitch feature only, Identify cluster always created, and the required Chime client cluster added automatically via `addChimeClient`).
+- Exposes `addDoorbell()` to add further Doorbell child endpoints beyond the mandatory one, with an optional tagList for disambiguation when more than one doorbell is present.
+- Configurable Power Source cluster type on the root endpoint: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+- The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device. The mandatory doorbell's name, tagList, and identify configuration can be customized via the `doorbellOptions` constructor option.
+
 ### Intercom
 
 Features:

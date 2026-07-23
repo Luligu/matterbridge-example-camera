@@ -41,6 +41,7 @@ import { Doorbell } from './devices/doorbell.js';
 import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
+import { VideoDoorbell } from './devices/videoDoorbell.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
@@ -174,6 +175,12 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       powerSourceType: 'Replaceable',
     });
     await this.addDevice(exampleIntercom1);
+
+    const exampleVideoDoorbell = new VideoDoorbell('Video Doorbell', 'VIDEODOORBELL-001', {
+      powerSourceType: 'Wired',
+      cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
+    });
+    await this.addDevice(exampleVideoDoorbell);
 
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', {
       identifyTime: 5,
