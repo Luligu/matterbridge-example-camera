@@ -32,6 +32,10 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
+- [video doorbell]: Add the Video Doorbell device type (Matter 1.6.0 chapter 16.3). A composite device, always defined via endpoint composition: the root endpoint exposes Basic Information and, unless disabled, a Power Source cluster; the mandatory Camera child endpoint is wired the same way as the standalone `Camera` device, and the mandatory Doorbell child endpoint is wired the same way as the standalone `Doorbell` device. Exposes `addDoorbell()` to add further Doorbell child endpoints.
+- [platform]: Register a Video Doorbell example device in `onStart`.
+- [tests]: Add `vitest/devices/videoDoorbell.test.ts`; extend `vitest/module.test.ts` device-count assertions for the new device.
+- [docs]: Document the Video Doorbell device type in the README.
 - [tests]: Add `vitest/webrtc/weriftSession.test.ts` coverage for the audio track injection path in `WeriftWebRtcSession`: an SDP answer without an injectable audio codec when the remote offer only supports PCMU, skipping non-audio transceivers when selecting the preferred audio codec, only adjusting the audio transceiver(s) that actually negotiated the preferred codec, the `MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1` toggle, a missing ffmpeg dependency on the audio path, and not re-attaching a test-audio track on a subsequent `createAnswer`. `weriftSession.ts` is back to 100% statement/branch/function/line coverage. Also mark the audio generator's spawn-error handler, its catch block, and the unreachable `adjustedTransceivers === 0` branch in `preferAudioCodecOnTransceivers` as `v8 ignore`, mirroring the already-ignored video counterparts for the same reasons (child-process/werift-internals mocking, and a mimeType that's always found on at least one transceiver).
 - [platform]: Add log of config.
 - [platform]: Add animation interval in 10 phases.
