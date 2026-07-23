@@ -46,6 +46,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [chime]: Fix behavior when enabled is false. All chip tests pass.
 - [webrtc]: `createAnswer()` no longer calls `ensureTestAudioTrack()` when the remote offer negotiated no injectable audio codec (e.g. PCMU-only). Previously it still ran with an `undefined` codec and silently defaulted to Opus/payload type 111, injecting RTP the peer never negotiated.
+- [webrtc]: `provideIceCandidates` applied ICE candidates one at a time and only returned once every one of them had finished (up to a 5s mDNS resolution/apply timeout, each). A browser offers one host candidate per local network interface, and an interface with no multicast route to the Matterbridge host (e.g. an inactive VPN/virtual adapter) always runs out that timeout — so candidates were stacking up to 5-10s of dead time onto every `ProvideIceCandidates` call, even though a candidate on a reachable interface routinely resolved in milliseconds. Candidates are now applied concurrently, and the command responds as soon as they're recorded instead of waiting for their application to finish (matching how `SolicitOffer`/`ProvideOffer` already invoke Offer/Answer on the peer without blocking their own response) — application results are still logged, just in the background. Diagnosed against a real Edge client.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 

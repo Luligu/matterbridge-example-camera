@@ -514,10 +514,21 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * `IceGatherer.addRemoteCandidate` in the werift-ice dependency), so this method does not need to special-case
    * them itself.
    *
+   * Candidates are applied concurrently rather than one at a time, and this command does not wait for that
+   * application to finish before returning: a browser routinely offers one host candidate per local network
+   * interface, and an interface with no multicast route to this peer (e.g. an inactive VPN/virtual adapter) makes
+   * its candidate's mDNS resolution run out the full {@link ICE_CANDIDATE_APPLY_TIMEOUT_MS} budget. A sibling
+   * candidate on a reachable interface routinely succeeds in milliseconds, so blocking this command's response on
+   * every candidate (even applied concurrently) would still needlessly hold the peer waiting on the doomed one for
+   * up to {@link ICE_CANDIDATE_APPLY_TIMEOUT_MS} — the same reason {@link #invokeDeferred} does not block
+   * SolicitOffer/ProvideOffer's response on the peer's Offer/Answer invoke.
+   *
    * @param {WebRtcTransportProvider.ProvideIceCandidatesRequest} request - ProvideIceCandidates request payload.
-   * @returns {Promise<void>} Resolves once the candidates have been recorded and, if applicable, applied.
+   * @returns {Promise<void>} Resolves once the candidates have been recorded; their application against the peer
+   * connection continues in the background and is only reflected in the log.
    * @throws {StatusResponseError} With status NotFound if webRtcSessionId is not present in currentSessions.
    */
+  // oxlint-disable-next-line typescript/require-await
   override async provideIceCandidates(request: WebRtcTransportProvider.ProvideIceCandidatesRequest): Promise<void> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     if (!this.state.currentSessions.some((session) => session.id === request.webRtcSessionId)) {
@@ -526,40 +537,52 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
         Status.NotFound,
       );
     }
+    // Captured now, rather than read again from `this.endpoint` in the background application below: this behavior
+    // instance is ephemeral (see this class's doc comment) and may no longer be valid by the time that code runs.
+    const endpointLabel = `${this.endpoint.maybeId}.${this.endpoint.maybeNumber}`;
     device.log.info(
-      `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: received ${request.iceCandidates.length} ICE candidate(s) for session ${request.webRtcSessionId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: received ${request.iceCandidates.length} ICE candidate(s) for session ${request.webRtcSessionId} (endpoint ${endpointLabel})`,
     );
 
     const webRtcPeer = this.internal.sessions.get(request.webRtcSessionId);
     if (webRtcPeer) {
-      for (const [index, candidate] of request.iceCandidates.entries()) {
-        const startedAt = Date.now();
-        device.log.debug(
-          `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applying ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
-            `(mid=${candidate.sdpMid ?? 'null'}, mLine=${candidate.sdpmLineIndex ?? 'null'}, endOfCandidates=${candidate.candidate.trim() === ''}) ` +
-            `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-        );
-        try {
-          await Promise.race([
-            webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
-            new Promise<never>((_resolve, reject) =>
-              setTimeout(
-                () => reject(new Error(`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)),
-                ICE_CANDIDATE_APPLY_TIMEOUT_MS,
-              ),
-            ),
-          ]);
+      // Not awaited: see this method's doc comment for why the command response must not wait on candidate
+      // application. Every candidate's own errors/timeouts are caught below, so this can never reject.
+      void Promise.allSettled(
+        request.iceCandidates.map(async (candidate, index) => {
+          const startedAt = Date.now();
           device.log.debug(
-            `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
-              `in ${Date.now() - startedAt}ms (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+            `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applying ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
+              `(mid=${candidate.sdpMid ?? 'null'}, mLine=${candidate.sdpmLineIndex ?? 'null'}, endOfCandidates=${candidate.candidate.trim() === ''}) ` +
+              `(endpoint ${endpointLabel})`,
           );
-        } catch (error) {
-          device.log.warn(
-            `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} after ${Date.now() - startedAt}ms ` +
-              `(endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber}): ${String(error)}`,
-          );
-        }
-      }
+          try {
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            try {
+              await Promise.race([
+                webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
+                new Promise<never>((_resolve, reject) => {
+                  timeout = setTimeout(
+                    () => reject(new Error(`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)),
+                    ICE_CANDIDATE_APPLY_TIMEOUT_MS,
+                  );
+                }),
+              ]);
+            } finally {
+              clearTimeout(timeout);
+            }
+            device.log.debug(
+              `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: applied ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} ` +
+                `in ${Date.now() - startedAt}ms (endpoint ${endpointLabel})`,
+            );
+          } catch (error) {
+            device.log.warn(
+              `MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate ${index + 1}/${request.iceCandidates.length} for session ${request.webRtcSessionId} after ${Date.now() - startedAt}ms ` +
+                `(endpoint ${endpointLabel}): ${String(error)}`,
+            );
+          }
+        }),
+      );
     }
   }
 
