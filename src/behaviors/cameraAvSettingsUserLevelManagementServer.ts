@@ -89,8 +89,13 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
   override mptzRelativeMove(request: CameraAvSettingsUserLevelManagement.MptzRelativeMoveRequest): void {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     const current = this.state.mptzPosition;
+    /* v8 ignore next -- pan/tilt/zoom are conformance-mandatory once MechanicalPan/MechanicalTilt/MechanicalZoom are
+     * enabled, which this class's fixed feature set always does (see the class declaration), so mptzPosition always
+     * has all three fields defined and the `?? 0`/`?? 1` fallbacks can never trigger through the public API. */
     const pan = request.panDelta === undefined ? current.pan : clamp((current.pan ?? 0) + request.panDelta, this.state.panMin, this.state.panMax);
+    // v8 ignore next -- same as above, for tilt.
     const tilt = request.tiltDelta === undefined ? current.tilt : clamp((current.tilt ?? 0) + request.tiltDelta, this.state.tiltMin, this.state.tiltMax);
+    // v8 ignore next -- same as above, for zoom.
     const zoom = request.zoomDelta === undefined ? current.zoom : clamp((current.zoom ?? 1) * (1 + request.zoomDelta / 100), 1, this.state.zoomMax);
     this.state.mptzPosition = { pan, tilt, zoom };
     device.log.info(

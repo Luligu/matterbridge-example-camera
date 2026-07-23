@@ -129,4 +129,10 @@ describe('MatterbridgeCameraAvSettingsUserLevelManagementServer', () => {
 
     expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 170, tilt: 90, zoom: 1 });
   });
+
+  it('should preserve tilt and zoom when only pan is present in an absolute position request', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { pan: -170 })).resolves.toBeUndefined();
+
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: -170, tilt: 90, zoom: 1 });
+  });
 });
