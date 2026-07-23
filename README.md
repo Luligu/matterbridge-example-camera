@@ -235,29 +235,40 @@ WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they 
 
 ## Chip tests
 
-### Create and run the container (Linux, macOS, and Windows)
+### Create the container (Linux, macOS, and Windows)
 
-Run the `luligu/matterbridge:chip-test` docker image, add the plugin, restart and open a shell in the container:
+Run the `luligu/matterbridge:chip-test` docker image:
 
 - frontend on port 8585
 - plugin mapped to .
 - container test logs directory mapped on ./temp directory
 
 ```shell
-docker rm matterbridge-chip-test-hub -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name matterbridge-chip-test-hub -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" -v "$(pwd):/root/Matterbridge/matterbridge-example-camera" luligu/matterbridge:chip-test
-docker exec -it matterbridge-chip-test-hub matterbridge --add matterbridge-example-camera
-docker restart matterbridge-chip-test-hub
-docker exec -it matterbridge-chip-test-hub bash
+docker rm plugin-chip-test -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name plugin-chip-test -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" -v "$(pwd):/root/Matterbridge/matterbridge-example-camera" luligu/matterbridge:chip-test
 ```
 
-Stop the container and softRest (needed if running on macOS or Windows)
+### Add the plugin
+
+Add the plugin and restart the container
 
 ```shell
-docker stop matterbridge-chip-test-hub
-npm run softReset
+npm install --no-fund --no-audit --verbose
+npm link matterbridge --no-fund --no-audit --verbose
+npm run build
+npm prune --omit=dev --no-fund --no-audit --verbose
+docker exec -it plugin-chip-test matterbridge --add matterbridge-example-camera
+docker restart plugin-chip-test
 ```
 
-### Inside the container
+### Run the tests inside the container
+
+Open a shell in the container
+
+```shell
+docker exec -it plugin-chip-test bash
+```
+
+In the shell:
 
 ```bash
 # Generic device composition and conformance ✅ (one test fails for a known matter.js bug)
@@ -363,4 +374,11 @@ python3 src/python_testing/TC_WEBRTCP_2_32.py
 
 # Zone Management
 python3 src/python_testing/TC_ZONEMGMT_2_4.py
+```
+
+### Stop the container and link the local matterbridge instance
+
+```shell
+docker stop plugin-chip-test
+npm run link
 ```
