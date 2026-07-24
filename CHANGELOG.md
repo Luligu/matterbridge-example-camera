@@ -37,6 +37,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [platform]: Add animation interval in 10 phases.
 - [doorbell]: Add use of cluster client Chime of Server Doorbell in the animation. It needs the Server Doorbell and Server Chime to be paired and a binding in Matter Server dashboard from Server Doorbell Chime client cluster to Server Chime Chime server cluster: [bindings](screenshots/bindings.png).
 - [chip-test]: Add full shell script to run the chip tests.
+- [platform]: Set the software version (plugin version) and hardware version (Matterbridge version) on each device in `addDevice()` before registration, so the BasicInformation/BridgedDeviceBasicInformation Firmware and Hardware fields no longer stay stuck at the default `1.0.0`.
 
 ### Changed
 
