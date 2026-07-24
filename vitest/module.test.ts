@@ -174,13 +174,23 @@ describe('TestPlatform', () => {
     expect(platform.getDeviceById('Doorbell-DOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001')).toBeDefined();
-    expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
+    const exampleCamera = platform.getDeviceById('Camera-CAMERA-001');
+    expect(exampleCamera).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('Intercom1-INTERCOM1-001')).toBeDefined();
     const serverChime = platform.getDeviceById('ServerChime-SERVER-CHIME-001');
     expect(serverChime).toBeDefined();
     expect(platform.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001')).toBeDefined();
     expect(platform.size()).toBe(10);
+
+    // Bridged and server-mode devices alike should carry the plugin version as software version
+    // and the Matterbridge version as hardware version, set by addDevice() before registration.
+    for (const device of [exampleCamera, serverChime]) {
+      expect(device?.softwareVersion).toBe(Number.parseInt(platform.version.replace(/\D/g, '')));
+      expect(device?.softwareVersionString).toBe(platform.version);
+      expect(device?.hardwareVersion).toBe(Number.parseInt(matterbridge.matterbridgeVersion.replace(/\D/g, '')));
+      expect(device?.hardwareVersionString).toBe(matterbridge.matterbridgeVersion);
+    }
 
     // Toggle the enabled attribute to trigger the subscribeAttribute listener
     await serverChime?.setAttribute(ChimeCluster, 'enabled', false, serverChime.log);
