@@ -34,7 +34,7 @@ import { RESET, type AnsiLogger } from 'matterbridge/logger';
 import { UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
 import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
-import { isValidNumber, isValidString } from 'matterbridge/utils';
+import { isValidNumber } from 'matterbridge/utils';
 
 import { AudioDoorbell } from './devices/audioDoorbell.js';
 import { Camera } from './devices/camera.js';
@@ -251,9 +251,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       device.hardwareVersion = Number.parseInt(this.matterbridge.matterbridgeVersion.replace(/\D/g, ''));
       device.hardwareVersionString = this.matterbridge.matterbridgeVersion;
       device.softwareVersion = isValidNumber(device.softwareVersion, 0, UINT32_MAX) ? device.softwareVersion : undefined;
-      device.softwareVersionString = isValidString(device.softwareVersionString) ? device.softwareVersionString.slice(0, 64) : undefined;
+      device.softwareVersionString = device.softwareVersionString.slice(0, 64);
       device.hardwareVersion = isValidNumber(device.hardwareVersion, 0, UINT16_MAX) ? device.hardwareVersion : undefined;
-      device.hardwareVersionString = isValidString(device.hardwareVersionString) ? device.hardwareVersionString.slice(0, 64) : undefined;
+      device.hardwareVersionString = device.hardwareVersionString.slice(0, 64);
       this.setSelectDevice(device.serialNumber, device.deviceName);
       if (this.validateDevice([device.deviceName, device.serialNumber])) await this.registerDevice(device);
     }

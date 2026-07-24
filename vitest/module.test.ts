@@ -9,7 +9,7 @@ const NAME = 'Platform';
 const MATTER_PORT = 6000;
 const MATTER_CREATE_ONLY = true;
 
-import type { PlatformMatterbridge } from 'matterbridge';
+import type { MatterbridgeEndpoint, PlatformMatterbridge } from 'matterbridge';
 import { Chime as ChimeCluster } from 'matterbridge/matter/clusters';
 import { log, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setDebug, setupTest } from 'matterbridge/vitest-utils';
 import {
@@ -197,6 +197,31 @@ describe('TestPlatform', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Server Chime enabled attribute changed from true to false`);
     await serverChime?.setAttribute(ChimeCluster, 'enabled', true, serverChime.log);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Server Chime enabled attribute changed from false to true`);
+  });
+
+  it('should leave softwareVersion/hardwareVersion undefined when they cannot be parsed as valid numbers', async () => {
+    const invalidVersionPlatform = new ExampleMatterbridgeCameraPlatform({ ...matterbridge, matterbridgeVersion: '99999.10.0' }, log, config);
+    addMatterbridge(invalidVersionPlatform);
+    invalidVersionPlatform.version = '';
+    const registeredDevices: MatterbridgeEndpoint[] = [];
+    vi.spyOn(invalidVersionPlatform, 'registerDevice').mockImplementation(async (device) => {
+      registeredDevices.push(device);
+    });
+
+    try {
+      await invalidVersionPlatform.onStart();
+
+      const exampleCamera = registeredDevices.find((device) => device.deviceName === 'Camera');
+      expect(exampleCamera).toBeDefined();
+      // this.version is '' (no digits, out of range too far to matter): softwareVersion parses to NaN, so it's dropped.
+      expect(exampleCamera?.softwareVersion).toBeUndefined();
+      expect(exampleCamera?.softwareVersionString).toBe('Unknown');
+      // matterbridgeVersion's digits ('99999100') exceed UINT16_MAX, so hardwareVersion is dropped.
+      expect(exampleCamera?.hardwareVersion).toBeUndefined();
+      expect(exampleCamera?.hardwareVersionString).toBe('99999.10.0');
+    } finally {
+      await invalidVersionPlatform.onShutdown();
+    }
   });
 
   it('should call onConfigure', async () => {
