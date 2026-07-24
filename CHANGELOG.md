@@ -41,11 +41,14 @@ If you like this project and find it useful, please consider giving it a star on
 ### Changed
 
 - [package]: Update dependencies and update package.
+- [package]: Bump `werift` to v.0.24.1. This release tightens `setRemoteDescription`/`setLocalDescription` toward W3C `RTCPeerConnection` spec compliance (signaling-state validation, SDP media-section handling), which is stricter than the previous 0.23.0 behavior.
+- [package]: Update agents configs.
 
 ### Fixed
 
 - [chime]: Fix behavior when enabled is false. All chip tests pass.
 - [webrtc]: `createAnswer()` no longer calls `ensureTestAudioTrack()` when the remote offer negotiated no injectable audio codec (e.g. PCMU-only). Previously it still ran with an `undefined` codec and silently defaulted to Opus/payload type 111, injecting RTP the peer never negotiated.
+- [tests]: Fix `vitest/behaviors/webRtcTransportProviderServer.test.ts` session reuse that broke under werift 0.24.1's stricter signaling-state validation: `provideOffer`/`provideAnswer` on an "existing session" test now use dedicated sessions instead of layering a media-less fake re-offer/answer onto the same real, already-negotiated session 1, which used to silently work only because of werift 0.23.0's laxer validation.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
