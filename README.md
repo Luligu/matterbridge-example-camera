@@ -219,6 +219,12 @@ The fix is on the browser side, not in this plugin: disable mDNS obfuscation of 
 - **Chrome**: the same flag is at `chrome://flags/#enable-webrtc-hide-local-ips-with-mdns`.
 - **Firefox**: open `about:config` and set `media.peerconnection.ice.obfuscate_host_addresses` to `false`. Note this alone may not be enough — per the Firefox limitation above, Firefox can still fall back to a useless link-local address on a non-secure-context page even with this preference disabled, so the page also needs to be served over HTTPS or via `localhost`.
 
+### Known limitation: a client with an unreachable network interface can slow down ICE negotiation logging
+
+A browser gathers one host ICE candidate per local network interface it sees, mDNS-obfuscated or not. When one of those interfaces has no multicast route to the machine running Matterbridge — a disconnected VPN adapter, a Hyper-V/WSL virtual switch, a second NIC on an unrelated subnet — werift-ice's mDNS resolution for that candidate's `*.local` name can never succeed, and takes the full per-candidate apply timeout (5s, see `ICE_CANDIDATE_APPLY_TIMEOUT_MS` in `src/behaviors/webRtcTransportProviderServer.ts`) to give up on it.
+
+Candidates are applied concurrently, not one after another, so this doesn't compound: a candidate on a reachable interface succeeds in a few milliseconds without waiting behind a sibling candidate that's doomed to time out. `provideIceCandidates` also responds to the peer as soon as the candidates are recorded, rather than waiting for their application to finish — the same reason `SolicitOffer`/`ProvideOffer` already invoke Offer/Answer on the peer without blocking their own response — so an unreachable interface no longer delays the Matter command itself, only the background log entry for that specific candidate. If a stream is slow to start or intermittently fails specifically on a machine with multiple network interfaces/VPNs, this is the mechanism to check first (grep the Matterbridge log for `ICE candidate apply timeout`).
+
 ## Werift integration test
 
 The `vitest/werift.test.ts` integration test creates local client and server peers and verifies SDP offer/answer negotiation, ICE candidate exchange, a bidirectional data-channel transfer, and connection teardown with `werift`.
