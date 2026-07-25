@@ -11,6 +11,7 @@ const MATTER_CREATE_ONLY = true;
 
 import type { MatterbridgeEndpoint, PlatformMatterbridge } from 'matterbridge';
 import { Chime as ChimeCluster } from 'matterbridge/matter/clusters';
+import { parseVersionString } from 'matterbridge/utils';
 import { log, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setDebug, setupTest } from 'matterbridge/vitest-utils';
 import {
   addMatterbridge,
@@ -186,9 +187,9 @@ describe('TestPlatform', () => {
     // Bridged and server-mode devices alike should carry the plugin version as software version
     // and the Matterbridge version as hardware version, set by addDevice() before registration.
     for (const device of [exampleCamera, serverChime]) {
-      expect(device?.softwareVersion).toBe(Number.parseInt(platform.version.replace(/\D/g, '')));
+      expect(device?.softwareVersion).toBe(parseVersionString(platform.version));
       expect(device?.softwareVersionString).toBe(platform.version);
-      expect(device?.hardwareVersion).toBe(Number.parseInt(matterbridge.matterbridgeVersion.replace(/\D/g, '')));
+      expect(device?.hardwareVersion).toBe(parseVersionString(matterbridge.matterbridgeVersion));
       expect(device?.hardwareVersionString).toBe(matterbridge.matterbridgeVersion);
     }
 
@@ -213,10 +214,10 @@ describe('TestPlatform', () => {
 
       const exampleCamera = registeredDevices.find((device) => device.deviceName === 'Camera');
       expect(exampleCamera).toBeDefined();
-      // this.version is '' (no digits, out of range too far to matter): softwareVersion parses to NaN, so it's dropped.
+      // this.version is '': parseVersionString() rejects it, so softwareVersion is dropped.
       expect(exampleCamera?.softwareVersion).toBeUndefined();
       expect(exampleCamera?.softwareVersionString).toBe('Unknown');
-      // matterbridgeVersion's digits ('99999100') exceed UINT16_MAX, so hardwareVersion is dropped.
+      // matterbridgeVersion's major component (99999) exceeds parseVersionString()'s 99 cap, so hardwareVersion is dropped.
       expect(exampleCamera?.hardwareVersion).toBeUndefined();
       expect(exampleCamera?.hardwareVersionString).toBe('99999.10.0');
     } finally {
