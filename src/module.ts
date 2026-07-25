@@ -31,8 +31,10 @@ import { MatterbridgeDynamicPlatform } from 'matterbridge';
 import type { MatterbridgeEndpoint, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { RESET, type AnsiLogger } from 'matterbridge/logger';
+import { UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
 import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
+import { isValidNumber, parseVersionString } from 'matterbridge/utils';
 
 import { AudioDoorbell } from './devices/audioDoorbell.js';
 import { Camera } from './devices/camera.js';
@@ -41,6 +43,7 @@ import { Doorbell } from './devices/doorbell.js';
 import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
+import { VideoDoorbell } from './devices/videoDoorbell.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
@@ -161,6 +164,14 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleCamera = new Camera('Camera', 'CAMERA-001');
     await this.addDevice(exampleCamera);
 
+    const examplePtzCamera = new Camera('PTZ Camera', 'PTZCAMERA-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Wired',
+      ptz: true,
+    });
+    await this.addDevice(examplePtzCamera);
+
     const exampleFloodlightCamera = new FloodlightCamera('Floodlight Camera', 'FLOODLIGHTCAMERA-001', {
       powerSourceType: 'Wired',
       cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
@@ -174,6 +185,12 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       powerSourceType: 'Replaceable',
     });
     await this.addDevice(exampleIntercom1);
+
+    const exampleVideoDoorbell = new VideoDoorbell('Video Doorbell', 'VIDEODOORBELL-001', {
+      powerSourceType: 'Wired',
+      cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
+    });
+    await this.addDevice(exampleVideoDoorbell);
 
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', {
       identifyTime: 5,
@@ -244,6 +261,14 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
   async addDevice(device: MatterbridgeEndpoint): Promise<void> {
     // v8 ignore else -- is just a type guard to ensure that the device has a serialNumber and deviceName before proceeding.
     if (device.serialNumber && device.deviceName) {
+      device.softwareVersion = parseVersionString(this.version);
+      device.softwareVersionString = this.version === '' ? 'Unknown' : this.version;
+      device.hardwareVersion = parseVersionString(this.matterbridge.matterbridgeVersion);
+      device.hardwareVersionString = this.matterbridge.matterbridgeVersion;
+      device.softwareVersion = isValidNumber(device.softwareVersion, 0, UINT32_MAX) ? device.softwareVersion : undefined;
+      device.softwareVersionString = device.softwareVersionString.slice(0, 64);
+      device.hardwareVersion = isValidNumber(device.hardwareVersion, 0, UINT16_MAX) ? device.hardwareVersion : undefined;
+      device.hardwareVersionString = device.hardwareVersionString.slice(0, 64);
       this.setSelectDevice(device.serialNumber, device.deviceName);
       if (this.validateDevice([device.deviceName, device.serialNumber])) await this.registerDevice(device);
     }

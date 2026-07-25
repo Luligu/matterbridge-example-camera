@@ -9,8 +9,9 @@ const NAME = 'Platform';
 const MATTER_PORT = 6000;
 const MATTER_CREATE_ONLY = true;
 
-import type { PlatformMatterbridge } from 'matterbridge';
+import type { MatterbridgeEndpoint, PlatformMatterbridge } from 'matterbridge';
 import { Chime as ChimeCluster } from 'matterbridge/matter/clusters';
+import { parseVersionString } from 'matterbridge/utils';
 import { log, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setDebug, setupTest } from 'matterbridge/vitest-utils';
 import {
   addMatterbridge,
@@ -112,7 +113,7 @@ describe('TestPlatform', () => {
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('none');
       expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE).toBeUndefined();
       expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION).toBe('640x480');
-      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(10);
+      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(12);
     } finally {
       await emptyConfigPlatform.onShutdown();
     }
@@ -174,19 +175,56 @@ describe('TestPlatform', () => {
     expect(platform.getDeviceById('Doorbell-DOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001')).toBeDefined();
-    expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
+    const exampleCamera = platform.getDeviceById('Camera-CAMERA-001');
+    expect(exampleCamera).toBeDefined();
+    expect(platform.getDeviceById('PTZCamera-PTZCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('Intercom1-INTERCOM1-001')).toBeDefined();
+    expect(platform.getDeviceById('VideoDoorbell-VIDEODOORBELL-001')).toBeDefined();
     const serverChime = platform.getDeviceById('ServerChime-SERVER-CHIME-001');
     expect(serverChime).toBeDefined();
     expect(platform.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001')).toBeDefined();
-    expect(platform.size()).toBe(10);
+    expect(platform.size()).toBe(12);
+
+    // Bridged and server-mode devices alike should carry the plugin version as software version
+    // and the Matterbridge version as hardware version, set by addDevice() before registration.
+    for (const device of [exampleCamera, serverChime]) {
+      expect(device?.softwareVersion).toBe(parseVersionString(platform.version));
+      expect(device?.softwareVersionString).toBe(platform.version);
+      expect(device?.hardwareVersion).toBe(parseVersionString(matterbridge.matterbridgeVersion));
+      expect(device?.hardwareVersionString).toBe(matterbridge.matterbridgeVersion);
+    }
 
     // Toggle the enabled attribute to trigger the subscribeAttribute listener
     await serverChime?.setAttribute(ChimeCluster, 'enabled', false, serverChime.log);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Server Chime enabled attribute changed from true to false`);
     await serverChime?.setAttribute(ChimeCluster, 'enabled', true, serverChime.log);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Server Chime enabled attribute changed from false to true`);
+  });
+
+  it('should leave softwareVersion/hardwareVersion undefined when they cannot be parsed as valid numbers', async () => {
+    const invalidVersionPlatform = new ExampleMatterbridgeCameraPlatform({ ...matterbridge, matterbridgeVersion: '99999.10.0' }, log, config);
+    addMatterbridge(invalidVersionPlatform);
+    invalidVersionPlatform.version = '';
+    const registeredDevices: MatterbridgeEndpoint[] = [];
+    vi.spyOn(invalidVersionPlatform, 'registerDevice').mockImplementation(async (device) => {
+      registeredDevices.push(device);
+    });
+
+    try {
+      await invalidVersionPlatform.onStart();
+
+      const exampleCamera = registeredDevices.find((device) => device.deviceName === 'Camera');
+      expect(exampleCamera).toBeDefined();
+      // this.version is '': parseVersionString() rejects it, so softwareVersion is dropped.
+      expect(exampleCamera?.softwareVersion).toBeUndefined();
+      expect(exampleCamera?.softwareVersionString).toBe('Unknown');
+      // matterbridgeVersion's major component (99999) exceeds parseVersionString()'s 99 cap, so hardwareVersion is dropped.
+      expect(exampleCamera?.hardwareVersion).toBeUndefined();
+      expect(exampleCamera?.hardwareVersionString).toBe('99999.10.0');
+    } finally {
+      await invalidVersionPlatform.onShutdown();
+    }
   });
 
   it('should call onConfigure', async () => {

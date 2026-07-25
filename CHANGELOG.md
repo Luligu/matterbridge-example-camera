@@ -32,11 +32,21 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
+- [video doorbell]: Add the Video Doorbell device type (Matter 1.6.0 chapter 16.3). A composite device, always defined via endpoint composition: the root endpoint exposes Basic Information and, unless disabled, a Power Source cluster; the mandatory Camera child endpoint is wired the same way as the standalone `Camera` device, and the mandatory Doorbell child endpoint is wired the same way as the standalone `Doorbell` device. Exposes `addDoorbell()` to add further Doorbell child endpoints.
+- [platform]: Register a Video Doorbell example device in `onStart`.
+- [tests]: Add `vitest/devices/videoDoorbell.test.ts`; extend `vitest/module.test.ts` device-count assertions for the new device.
+- [docs]: Document the Video Doorbell device type in the README.
 - [tests]: Add `vitest/webrtc/weriftSession.test.ts` coverage for the audio track injection path in `WeriftWebRtcSession`: an SDP answer without an injectable audio codec when the remote offer only supports PCMU, skipping non-audio transceivers when selecting the preferred audio codec, only adjusting the audio transceiver(s) that actually negotiated the preferred codec, the `MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1` toggle, a missing ffmpeg dependency on the audio path, and not re-attaching a test-audio track on a subsequent `createAnswer`. `weriftSession.ts` is back to 100% statement/branch/function/line coverage. Also mark the audio generator's spawn-error handler, its catch block, and the unreachable `adjustedTransceivers === 0` branch in `preferAudioCodecOnTransceivers` as `v8 ignore`, mirroring the already-ignored video counterparts for the same reasons (child-process/werift-internals mocking, and a mimeType that's always found on at least one transceiver).
+- [ptz camera]: Add the PTZ Camera device type. Same device type and Camera AV Stream Management/WebRtcTransportProvider wiring as the standalone `Camera` device, plus the Camera AV Settings User Level Management cluster with the MechanicalPan, MechanicalTilt and MechanicalZoom features, implementing the `MPTZSetPosition` (absolute move, rejecting out-of-range pan/tilt/zoom with a ConstraintError) and `MPTZRelativeMove` (relative move, clamped to the configured range) commands.
+- [behaviors]: Add `src/behaviors/cameraAvSettingsUserLevelManagementServer.ts` with `MatterbridgeCameraAvSettingsUserLevelManagementServer`.
+- [platform]: Register a PTZ Camera example device in `onStart`.
+- [tests]: Add `vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts`; extend `vitest/module.test.ts` device-count assertions for the new device.
+- [docs]: Document the PTZ Camera device type in the README.
 - [platform]: Add log of config.
 - [platform]: Add animation interval in 10 phases.
 - [doorbell]: Add use of cluster client Chime of Server Doorbell in the animation. It needs the Server Doorbell and Server Chime to be paired and a binding in Matter Server dashboard from Server Doorbell Chime client cluster to Server Chime Chime server cluster: [bindings](screenshots/bindings.png).
 - [chip-test]: Add full shell script to run the chip tests.
+- [platform]: Set the software version (plugin version) and hardware version (Matterbridge version) on each device in `addDevice()` before registration, so the BasicInformation/BridgedDeviceBasicInformation Firmware and Hardware fields no longer stay stuck at the default `1.0.0`.
 
 ### Changed
 
@@ -49,6 +59,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [chime]: Fix behavior when enabled is false. All chip tests pass.
 - [webrtc]: `createAnswer()` no longer calls `ensureTestAudioTrack()` when the remote offer negotiated no injectable audio codec (e.g. PCMU-only). Previously it still ran with an `undefined` codec and silently defaulted to Opus/payload type 111, injecting RTP the peer never negotiated.
 - [tests]: Fix `vitest/behaviors/webRtcTransportProviderServer.test.ts` session reuse that broke under werift 0.24.1's stricter signaling-state validation: `provideOffer`/`provideAnswer` on an "existing session" test now use dedicated sessions instead of layering a media-less fake re-offer/answer onto the same real, already-negotiated session 1, which used to silently work only because of werift 0.23.0's laxer validation.
+- [webrtc]: `provideIceCandidates` applied ICE candidates one at a time and only returned once every one of them had finished (up to a 5s mDNS resolution/apply timeout, each). A browser offers one host candidate per local network interface, and an interface with no multicast route to the Matterbridge host (e.g. an inactive VPN/virtual adapter) always runs out that timeout — so candidates were stacking up to 5-10s of dead time onto every `ProvideIceCandidates` call, even though a candidate on a reachable interface routinely resolved in milliseconds. Candidates are now applied concurrently, and the command responds as soon as they're recorded instead of waiting for their application to finish (matching how `SolicitOffer`/`ProvideOffer` already invoke Offer/Answer on the peer without blocking their own response) — application results are still logged, just in the background. Diagnosed against a real Edge client.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 

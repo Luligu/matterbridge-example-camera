@@ -24,10 +24,11 @@
 
 // Matterbridge
 import { camera, MatterbridgeEndpoint, type MatterbridgeEndpointOptions, powerSource } from 'matterbridge';
-import { CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
+import { CameraAvSettingsUserLevelManagement, CameraAvStreamManagement, Identify } from 'matterbridge/matter/clusters';
 import { StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
 import type { Viewport } from 'matterbridge/matter/types';
 
+import { MatterbridgeCameraAvSettingsUserLevelManagementServer } from '../behaviors/cameraAvSettingsUserLevelManagementServer.js';
 import { MatterbridgeCameraAvStreamManagementServer } from '../behaviors/cameraAvStreamManagementServer.js';
 import { addWebRtcTransportRequestorClient } from '../behaviors/clients.js';
 import { MatterbridgeWebRtcTransportProviderServer } from '../behaviors/webRtcTransportProviderServer.js';
@@ -47,6 +48,9 @@ export interface CameraOptions extends MatterbridgeEndpointOptions {
 
   /** Power source type. Default: Wired (with None, the Power Source cluster will not be created) */
   powerSourceType?: 'Rechargeable' | 'Replaceable' | 'Battery' | 'Wired' | 'None';
+
+  /** Indicates whether the camera has a mechanical pan-tilt-zoom (PTZ) mechanism */
+  ptz?: boolean;
 
   /** Indicates the maximum size, in bytes, of the content buffer used for pre-roll, queued transmissions and metadata */
   maxContentBufferSize?: number;
@@ -76,6 +80,19 @@ export interface CameraOptions extends MatterbridgeEndpointOptions {
   snapshotCapabilities?: CameraAvStreamManagement.SnapshotCapabilities[];
   /** Indicates the list of allocated snapshot streams */
   allocatedSnapshotStreams?: CameraAvStreamManagement.SnapshotStream[];
+
+  /** Indicates the minimum value for the mechanical pan, in angular degrees */
+  panMin?: number;
+  /** Indicates the maximum value for the mechanical pan, in angular degrees */
+  panMax?: number;
+  /** Indicates the minimum value for the mechanical tilt, in angular degrees */
+  tiltMin?: number;
+  /** Indicates the maximum value for the mechanical tilt, in angular degrees */
+  tiltMax?: number;
+  /** Indicates the maximum value for the mechanical zoom */
+  zoomMax?: number;
+  /** Indicates the initial mechanical pan, tilt and zoom position */
+  mptzPosition?: CameraAvSettingsUserLevelManagement.Mptz;
 }
 
 /**
@@ -114,6 +131,12 @@ export class Camera extends MatterbridgeEndpoint {
    *  - snapshotCapabilities: [{ resolution: 640x480 }, { resolution: 1280x720 }, { resolution: 1920x1080 }], each with maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false
    *  - allocatedSnapshotStreams: []
    *
+   *  - ptz: false (the CameraAvSettingsUserLevelManagement cluster will not be created)
+   *  - panMin: -170, panMax: 170 (angular degrees)
+   *  - tiltMin: -20, tiltMax: 90 (angular degrees)
+   *  - zoomMax: 10
+   *  - mptzPosition: { pan: 0, tilt: 0, zoom: 1 }
+   *
    * @returns {Camera} The Camera instance.
    */
   constructor(name: string, serial: string, options: CameraOptions = {}) {
@@ -121,6 +144,7 @@ export class Camera extends MatterbridgeEndpoint {
       identifyTime = 0,
       identifyType = Identify.IdentifyType.None,
       powerSourceType = 'Wired',
+      ptz = false,
       maxContentBufferSize = 4_194_304,
       maxNetworkBandwidth = 10_000_000,
       supportedStreamUsages = [StreamUsage.LiveView, StreamUsage.Recording],
@@ -139,6 +163,12 @@ export class Camera extends MatterbridgeEndpoint {
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
       allocatedSnapshotStreams = [],
+      panMin = -170,
+      panMax = 170,
+      tiltMin = -20,
+      tiltMax = 90,
+      zoomMax = 10,
+      mptzPosition = { pan: 0, tilt: 0, zoom: 1 },
       id,
       number,
       tagList,
@@ -183,6 +213,7 @@ export class Camera extends MatterbridgeEndpoint {
       snapshotCapabilities,
       allocatedSnapshotStreams,
     });
+    if (ptz) createDefaultCameraAvSettingsUserLevelManagementClusterServer(this, { panMin, panMax, tiltMin, tiltMax, zoomMax, mptzPosition });
     createDefaultWebRtcTransportProviderClusterServer(this);
     addWebRtcTransportRequestorClient(this);
     this.addRequiredClusters();
@@ -256,6 +287,50 @@ export function createDefaultCameraAvStreamManagementClusterServer(endpoint: Mat
       imageRotation: 0,
       imageFlipVertical: false,
       imageFlipHorizontal: false,
+    },
+  );
+  return endpoint;
+}
+
+/**
+ * Initial state accepted by {@link createDefaultCameraAvSettingsUserLevelManagementClusterServer}.
+ */
+export interface CameraAvSettingsUserLevelManagementClusterOptions {
+  /** Indicates the minimum value for the mechanical pan, in angular degrees */
+  panMin: number;
+  /** Indicates the maximum value for the mechanical pan, in angular degrees */
+  panMax: number;
+  /** Indicates the minimum value for the mechanical tilt, in angular degrees */
+  tiltMin: number;
+  /** Indicates the maximum value for the mechanical tilt, in angular degrees */
+  tiltMax: number;
+  /** Indicates the maximum value for the mechanical zoom */
+  zoomMax: number;
+  /** Indicates the initial mechanical pan, tilt and zoom position */
+  mptzPosition: CameraAvSettingsUserLevelManagement.Mptz;
+}
+
+/**
+ * Creates a default CameraAvSettingsUserLevelManagement cluster server, with the MechanicalPan, MechanicalTilt and
+ * MechanicalZoom features enabled, on the given endpoint.
+ *
+ * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvSettingsUserLevelManagement cluster server on.
+ * @param {CameraAvSettingsUserLevelManagementClusterOptions} options - The initial state of the CameraAvSettingsUserLevelManagement cluster server.
+ * @returns {MatterbridgeEndpoint} The endpoint with the CameraAvSettingsUserLevelManagement cluster server created.
+ */
+export function createDefaultCameraAvSettingsUserLevelManagementClusterServer(
+  endpoint: MatterbridgeEndpoint,
+  options: CameraAvSettingsUserLevelManagementClusterOptions,
+): MatterbridgeEndpoint {
+  endpoint.behaviors.require(
+    MatterbridgeCameraAvSettingsUserLevelManagementServer.with(
+      CameraAvSettingsUserLevelManagement.Feature.MechanicalPan,
+      CameraAvSettingsUserLevelManagement.Feature.MechanicalTilt,
+      CameraAvSettingsUserLevelManagement.Feature.MechanicalZoom,
+    ),
+    {
+      ...options,
+      movementState: CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle,
     },
   );
   return endpoint;
