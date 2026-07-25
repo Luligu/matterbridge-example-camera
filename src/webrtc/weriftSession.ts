@@ -33,7 +33,7 @@ import { AnsiLogger, LogLevel, MAGENTA, TimestampFormat } from 'matterbridge/log
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264, useOPUS, usePCMU, useVP8 } from 'werift';
 import { navigator } from 'werift/nonstandard';
 
-type VideoSource = 'none' | 'test' | 'webcam';
+type VideoSource = 'none' | 'test' | 'webcam' | 'rtsp';
 
 /**
  * Media kinds to negotiate when creating a real WebRTC offer for a WebRtcTransportProvider session.
@@ -60,10 +60,11 @@ export interface WeriftOfferOptions {
  * In addition to SDP/ICE negotiation, this session can inject a video source using werift/nonstandard + ffmpeg so an
  * end-to-end media path can be validated without a real camera capture pipeline. The source is a synthetic moving
  * test pattern when `MATTERBRIDGE_CAMERA_VIDEO_SOURCE=test`, a local webcam capture device when the source is
- * `webcam`, or no injected track when the source is unset or `none`. MATTERBRIDGE_CAMERA_WEBCAM_DEVICE identifies the
- * webcam device (e.g. /dev/video0 on Linux, an avfoundation index on macOS, or a dshow device name on Windows). The
- * webcam capture resolution defaults to 640x480 and can be set to 1280x720 or 1920x1080 with
- * MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION.
+ * `webcam`, a real RTSP camera stream when the source is `rtsp`, or no injected track when the source is unset or
+ * `none`. MATTERBRIDGE_CAMERA_WEBCAM_DEVICE identifies the webcam device (e.g. /dev/video0 on Linux, an avfoundation
+ * index on macOS, or a dshow device name on Windows) for `webcam`, or the RTSP url (e.g.
+ * rtsp://user:password@host:554/path) for `rtsp`. The webcam capture resolution defaults to 640x480 and can be set
+ * to 1280x720 or 1920x1080 with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION.
  *
  * Similarly, a recorded test-voice clip can be injected as the audio track (e.g. for an Intercom's "Listen" live
  * view) so the audio path can be validated without a real microphone capture pipeline; disable with
@@ -380,7 +381,7 @@ export class WeriftWebRtcSession {
   /**
    * Resolves the configured injected video source.
    *
-   * @returns {VideoSource} `none` by default, or the configured `test`/`webcam` source.
+   * @returns {VideoSource} `none` by default, or the configured `test`/`webcam`/`rtsp` source.
    */
   private getConfiguredVideoSource(): VideoSource {
     const source = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE?.trim().toLowerCase() ?? 'none';
@@ -388,9 +389,10 @@ export class WeriftWebRtcSession {
       case 'none':
       case 'test':
       case 'webcam':
+      case 'rtsp':
         return source;
       default:
-        this.log.warn(`Unsupported MATTERBRIDGE_CAMERA_VIDEO_SOURCE "${source}" (supported: test, webcam, none); falling back to none`);
+        this.log.warn(`Unsupported MATTERBRIDGE_CAMERA_VIDEO_SOURCE "${source}" (supported: test, webcam, rtsp, none); falling back to none`);
         return 'none';
     }
   }
@@ -398,18 +400,19 @@ export class WeriftWebRtcSession {
   /**
    * Resolves the ffmpeg input arguments and a human-readable description for the configured video source.
    *
-   * Uses the synthetic moving test pattern for `test`, or MATTERBRIDGE_CAMERA_WEBCAM_DEVICE for `webcam`; falls
-   * back to the test pattern (logging a warning) if the device is missing or webcam capture isn't supported on this
-   * platform. The webcam capture resolution defaults to 640x480 and can be overridden with
-   * MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION (640x480, 1280x720, or 1920x1080), or per-session via requestedResolution.
-   * The webcam capture bitrate defaults to {@link DEFAULT_BITRATE_KBPS} and can be overridden with
+   * Uses the synthetic moving test pattern for `test`, or MATTERBRIDGE_CAMERA_WEBCAM_DEVICE for `webcam`/`rtsp`
+   * (the RTSP url for `rtsp`); falls back to the test pattern (logging a warning) if the device/url is missing or
+   * webcam capture isn't supported on this platform. The webcam capture resolution defaults to 640x480 and can be
+   * overridden with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION (640x480, 1280x720, or 1920x1080), or per-session via
+   * requestedResolution; the RTSP source ignores it and streams at the camera's own resolution/frame rate. The
+   * webcam capture bitrate defaults to {@link DEFAULT_BITRATE_KBPS} and can be overridden with
    * MATTERBRIDGE_CAMERA_WEBCAM_BITRATE, regardless of resolution.
    *
-   * @param {'test' | 'webcam'} videoSource - The configured video source after `none` has been handled by the caller.
+   * @param {'test' | 'webcam' | 'rtsp'} videoSource - The configured video source after `none` has been handled by the caller.
    * @param {string} [requestedResolution] - The per-session preferred webcam resolution; see {@link getConfiguredWebcamResolution}.
    * @returns {{ args: string[]; description: string; bitrateKbps: number }} The ffmpeg input arguments, a description of the source for logging, and the target encoder bitrate.
    */
-  private buildFfmpegVideoInputArgs(videoSource: 'test' | 'webcam', requestedResolution?: string): { args: string[]; description: string; bitrateKbps: number } {
+  private buildFfmpegVideoInputArgs(videoSource: 'test' | 'webcam' | 'rtsp', requestedResolution?: string): { args: string[]; description: string; bitrateKbps: number } {
     const testPatternInput = {
       args: ['-re', '-f', 'lavfi', '-i', 'testsrc=size=640x480:rate=10'],
       description: 'synthetic moving test pattern',
@@ -422,8 +425,15 @@ export class WeriftWebRtcSession {
 
     const device = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
     if (!device) {
-      this.log.warn('MATTERBRIDGE_CAMERA_VIDEO_SOURCE=webcam requires MATTERBRIDGE_CAMERA_WEBCAM_DEVICE to be set; falling back to the synthetic test video');
+      this.log.warn(`MATTERBRIDGE_CAMERA_VIDEO_SOURCE=${videoSource} requires MATTERBRIDGE_CAMERA_WEBCAM_DEVICE to be set; falling back to the synthetic test video`);
       return testPatternInput;
+    }
+
+    if (videoSource === 'rtsp') {
+      const bitrateKbps = this.getConfiguredWebcamBitrate();
+      const description = `RTSP camera (${device})`;
+      this.log.debug(`RTSP capture params: url=${device}, description="${description}", bitrateKbps=${bitrateKbps}`);
+      return { args: ['-rtsp_transport', 'tcp', '-i', device], description, bitrateKbps };
     }
 
     const resolution = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION ?? this.getConfiguredWebcamResolution(requestedResolution);
@@ -444,7 +454,7 @@ export class WeriftWebRtcSession {
   }
 
   /**
-   * Attaches an injected video track (test pattern or webcam, per {@link buildFfmpegVideoInputArgs}) to the peer
+   * Attaches an injected video track (test pattern, webcam, or RTSP camera, per {@link buildFfmpegVideoInputArgs}) to the peer
    * connection by spawning ffmpeg to encode into it over a local UDP/RTP loop, unless one is already attached, the
    * configured source is `none`, or ffmpeg can't be resolved. Failures are logged and swallowed rather than thrown,
    * since the offer/answer exchange should still proceed without video.

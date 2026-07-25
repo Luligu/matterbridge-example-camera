@@ -48,7 +48,7 @@ import { VideoDoorbell } from './devices/videoDoorbell.js';
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
   blackList: string[];
-  generator: 'none' | 'test' | 'webcam';
+  generator: 'none' | 'test' | 'webcam' | 'rtsp';
   webcam?: string;
   webcamResolution: '640x480' | '1280x720' | '1920x1080';
   webcamBitrate: number;
@@ -232,9 +232,6 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       exampleChime.log,
     );
     await exampleChime?.setCluster(ChimeCluster, { enabled: true, selectedChime: 0 }, exampleChime.log);
-
-    const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
-    if (!exampleIntercom1) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
 
     const serverChime: Chime | undefined = this.getDeviceById('ServerChime-SERVER-CHIME-001');
     await serverChime?.setCluster(

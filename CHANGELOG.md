@@ -30,6 +30,12 @@ If you like this project and find it useful, please consider giving it a star on
 
 ## [0.0.8] - Dev branch
 
+### Added
+
+- [webrtc]: Add an `rtsp` video generator option, reusing the `webcam` config property (and `MATTERBRIDGE_CAMERA_WEBCAM_DEVICE`) to hold the RTSP url instead of a local capture device, so `WeriftWebRtcSession` can inject a video track pulled from a real RTSP camera via `ffmpeg -rtsp_transport tcp -i <url>` instead of only the synthetic test pattern or a local webcam.
+- [docs]: Document the `rtsp` video generator in the README, with an example configuration.
+- [tests]: Add `rtsp` video source coverage in `vitest/webrtc/weriftSession.test.ts` and extend the `vitest/module.test.ts` generator normalization test.
+
 ## [0.0.7] - 2026-07-25
 
 ### Added

@@ -44,14 +44,14 @@
     },
     "generator": {
       "title": "Video Generator",
-      "description": "Select the WebRTC video source: none disables track injection, test generates a synthetic moving test pattern, and webcam captures from the configured local webcam.",
+      "description": "Select the WebRTC video source: none disables track injection, test generates a synthetic moving test pattern, webcam captures from the configured local webcam, and rtsp pulls from the RTSP url configured in Webcam Device.",
       "type": "string",
-      "enum": ["none", "test", "webcam"],
+      "enum": ["none", "test", "webcam", "rtsp"],
       "default": "none"
     },
     "webcam": {
       "title": "Webcam Device",
-      "description": "OS-specific ffmpeg webcam identifier, such as /dev/video0 on Linux, 0 on macOS, or Integrated Camera on Windows.",
+      "description": "OS-specific ffmpeg webcam identifier, such as /dev/video0 on Linux, 0 on macOS, or Integrated Camera on Windows. When Video Generator is rtsp, this holds the RTSP url instead, e.g. rtsp://user:password@host:554/path.",
       "type": "string"
     },
     "webcamResolution": {

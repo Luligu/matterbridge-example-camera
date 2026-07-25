@@ -192,8 +192,8 @@ With both directions in place, either Intercom can call the other; a call initia
 
 The platform configuration controls WebRTC video injection with these properties:
 
-- `generator` is required and accepts `none`, `test`, or `webcam`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects a synthetic moving test pattern, while `webcam` captures from the configured local webcam.
-- `webcam` is optional and has no default. It contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). Selecting the `webcam` generator without this property falls back to the test pattern with a warning.
+- `generator` is required and accepts `none`, `test`, `webcam`, or `rtsp`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects a synthetic moving test pattern, `webcam` captures from the configured local webcam, and `rtsp` pulls from the RTSP url configured in `webcam`.
+- `webcam` is optional and has no default. For the `webcam` generator it contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path`. Selecting the `webcam` or `rtsp` generator without this property falls back to the test pattern with a warning.
 - `webcamResolution` is required and accepts `640x480`, `1280x720`, or `1920x1080`. It defaults to `640x480`. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
 
 A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `webcamResolution`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `webcamResolution` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
@@ -223,6 +223,15 @@ Example, capturing from a real Windows webcam at 720p:
   "generator": "webcam",
   "webcam": "Integrated Camera",
   "webcamResolution": "1280x720"
+}
+```
+
+Example, pulling from a real RTSP camera (`webcamResolution` is ignored; the camera streams at its own resolution and frame rate, re-encoded at `webcamBitrate`):
+
+```json
+{
+  "generator": "rtsp",
+  "webcam": "rtsp://admin:password@192.168.1.100:554/ch1/main"
 }
 ```
 

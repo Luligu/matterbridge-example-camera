@@ -119,7 +119,7 @@ describe('TestPlatform', () => {
     }
   });
 
-  it.each(['none', 'test', 'webcam'] as const)('should apply the configured %s video generator', (generator) => {
+  it.each(['none', 'test', 'webcam', 'rtsp'] as const)('should apply the configured %s video generator', (generator) => {
     const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, generator });
 
     expect(generatorPlatform.config.generator).toBe(generator);

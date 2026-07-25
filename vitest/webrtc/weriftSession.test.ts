@@ -326,6 +326,36 @@ describe('WeriftWebRtcSession', () => {
     });
   });
 
+  describe('rtsp video source', () => {
+    afterEach(() => {
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+      delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    });
+
+    it('should still attach a video track, falling back to the test pattern, when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=rtsp is set without a url', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'rtsp';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should attach a video track from the configured RTSP url', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'rtsp';
+      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = 'rtsp://admin:password@192.168.1.100:554/ch1/main';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+  });
+
   describe('disabled video source', () => {
     afterEach(() => {
       delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
