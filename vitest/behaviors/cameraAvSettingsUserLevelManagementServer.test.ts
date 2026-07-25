@@ -22,12 +22,12 @@ import {
 } from 'matterbridge/vitest-utils/matter';
 
 import { MatterbridgeCameraAvSettingsUserLevelManagementServer } from '../../src/behaviors/cameraAvSettingsUserLevelManagementServer.js';
-import { PtzCamera } from '../../src/devices/ptzCamera.js';
+import { Camera } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
 
 describe('MatterbridgeCameraAvSettingsUserLevelManagementServer', () => {
-  let device: PtzCamera;
+  let device: Camera;
 
   beforeAll(async () => {
     // Setup the Matter test environment
@@ -63,7 +63,7 @@ describe('MatterbridgeCameraAvSettingsUserLevelManagementServer', () => {
   });
 
   it('should create and register a PTZ camera using the Camera AV Settings User Level Management behavior', async () => {
-    device = new PtzCamera('Ptz Camera Behavior', 'PTZ-CAMERA-BEHAVIOR');
+    device = new Camera('Ptz Camera Behavior', 'PTZ-CAMERA-BEHAVIOR', { ptz: true });
     expect(
       device.behaviors.has(
         MatterbridgeCameraAvSettingsUserLevelManagementServer.with(
@@ -110,10 +110,10 @@ describe('MatterbridgeCameraAvSettingsUserLevelManagementServer', () => {
   });
 
   it('should move by a relative pan, tilt and zoom delta', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { panDelta: -5, tiltDelta: 5, zoomDelta: 100 })).resolves.toBeUndefined();
+    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { panDelta: -5, tiltDelta: 5, zoomDelta: 3 })).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 40, tilt: 15, zoom: 4 });
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Moved mechanical PTZ position by pan -5°, tilt 5°, zoom 100% to pan 40°, tilt 15°, zoom 4'));
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 40, tilt: 15, zoom: 5 });
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Moved mechanical PTZ position by pan -5°, tilt 5°, zoom 3 to pan 40°, tilt 15°, zoom 5'));
   });
 
   it('should clamp a relative move at the pan, tilt and zoom limits', async () => {

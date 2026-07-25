@@ -80,9 +80,9 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
 
   /**
    * Handles the MPTZRelativeMove command.
-   * Moves the camera by the delta values relative to the currently defined position. Pan and tilt deltas are added
-   * in angular degrees; the zoom delta is a percentage change relative to the current zoom value. The resulting
-   * values are clamped to the supported pan, tilt and zoom ranges.
+   * Moves the camera by the delta values relative to the currently defined position. Pan, tilt and zoom deltas are
+   * all added directly to the corresponding current value. The resulting values are clamped to the supported pan,
+   * tilt and zoom ranges.
    *
    * @param {CameraAvSettingsUserLevelManagement.MptzRelativeMoveRequest} request - MPTZRelativeMove request payload.
    */
@@ -96,10 +96,10 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
     // v8 ignore next -- same as above, for tilt.
     const tilt = request.tiltDelta === undefined ? current.tilt : clamp((current.tilt ?? 0) + request.tiltDelta, this.state.tiltMin, this.state.tiltMax);
     // v8 ignore next -- same as above, for zoom.
-    const zoom = request.zoomDelta === undefined ? current.zoom : clamp((current.zoom ?? 1) * (1 + request.zoomDelta / 100), 1, this.state.zoomMax);
+    const zoom = request.zoomDelta === undefined ? current.zoom : clamp((current.zoom ?? 1) + request.zoomDelta, 1, this.state.zoomMax);
     this.state.mptzPosition = { pan, tilt, zoom };
     device.log.info(
-      `Moved mechanical PTZ position by pan ${request.panDelta ?? 0}°, tilt ${request.tiltDelta ?? 0}°, zoom ${request.zoomDelta ?? 0}% to pan ${pan}°, tilt ${tilt}°, zoom ${zoom} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      `Moved mechanical PTZ position by pan ${request.panDelta ?? 0}°, tilt ${request.tiltDelta ?? 0}°, zoom ${request.zoomDelta ?? 0} to pan ${pan}°, tilt ${tilt}°, zoom ${zoom} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
   }
 }

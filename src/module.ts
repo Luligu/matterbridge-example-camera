@@ -40,7 +40,6 @@ import { Chime } from './devices/chime.js';
 import { Doorbell } from './devices/doorbell.js';
 import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { Intercom } from './devices/intercom.js';
-import { PtzCamera } from './devices/ptzCamera.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
@@ -162,10 +161,11 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleCamera = new Camera('Camera', 'CAMERA-001');
     await this.addDevice(exampleCamera);
 
-    const examplePtzCamera = new PtzCamera('PTZ Camera', 'PTZCAMERA-001', {
+    const examplePtzCamera = new Camera('PTZ Camera', 'PTZCAMERA-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Wired',
+      ptz: true,
     });
     await this.addDevice(examplePtzCamera);
 

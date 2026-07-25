@@ -36,7 +36,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [ptz camera]: Add the PTZ Camera device type. Same device type and Camera AV Stream Management/WebRtcTransportProvider wiring as the standalone `Camera` device, plus the Camera AV Settings User Level Management cluster with the MechanicalPan, MechanicalTilt and MechanicalZoom features, implementing the `MPTZSetPosition` (absolute move, rejecting out-of-range pan/tilt/zoom with a ConstraintError) and `MPTZRelativeMove` (relative move, clamped to the configured range) commands.
 - [behaviors]: Add `src/behaviors/cameraAvSettingsUserLevelManagementServer.ts` with `MatterbridgeCameraAvSettingsUserLevelManagementServer`.
 - [platform]: Register a PTZ Camera example device in `onStart`.
-- [tests]: Add `vitest/devices/ptzCamera.test.ts` and `vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts`; extend `vitest/module.test.ts` device-count assertions for the new device.
+- [tests]: Add `vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts`; extend `vitest/module.test.ts` device-count assertions for the new device.
 - [docs]: Document the PTZ Camera device type in the README.
 - [platform]: Add log of config.
 - [platform]: Add animation interval in 10 phases.
