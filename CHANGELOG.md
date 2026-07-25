@@ -35,8 +35,13 @@ If you like this project and find it useful, please consider giving it a star on
 - [webrtc]: Add an `rtsp` video generator option that pulls from a real RTSP camera via `ffmpeg -rtsp_transport tcp -i <url>` instead of only the synthetic test pattern or a local webcam.
 - [platform]: Rename the `webcam`/`webcamResolution`/`webcamBitrate` config properties to `videoSource`/`videoResolution`/`videoBitrate` (and the corresponding `MATTERBRIDGE_CAMERA_WEBCAM_*` env vars to `MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE`/`MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION`/`MATTERBRIDGE_CAMERA_VIDEO_BITRATE`), since `videoSource` now also holds the RTSP url for the `rtsp` generator.
 - [platform]: Rename the `generator` config property to `videoGenerator`.
-- [docs]: Document the `rtsp` video generator and the renamed config properties in the README, with an example configuration.
-- [tests]: Add `rtsp` video source coverage in `vitest/webrtc/weriftSession.test.ts` and extend the `vitest/module.test.ts` generator normalization test.
+- [webrtc]: Add an `auto` value for `videoResolution` (now the default) that uses the controller's requested per-session resolution (the allocated video stream's `maxResolution`) instead of a fixed value; a fixed `videoResolution` still always wins over the controller's request. For `rtsp`, the resolved resolution (fixed or auto) is now applied to the injected track with an ffmpeg `scale` filter instead of being ignored.
+- [docs]: Document the `rtsp` video generator, the renamed config properties, the `auto`/fixed `videoResolution` precedence, and the previously undocumented `videoBitrate` property in the README, with example configurations.
+- [tests]: Add `rtsp` video source and `videoResolution` precedence (`auto` vs. fixed, webcam and rtsp) coverage in `vitest/webrtc/weriftSession.test.ts`; extend `vitest/module.test.ts` with the `videoGenerator` normalization test and a test for the `videoResolution` default of `auto`.
+
+### Fixed
+
+- [webrtc]: The per-session requested webcam resolution (from a client's `CameraAvStreamManagement.VideoStreamAllocate`) was never actually applied: `buildFfmpegVideoInputArgs` read `MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION` directly before falling back to `getConfiguredVideoResolution(requestedResolution)`, and since the plugin always sets that env var (default `640x480`), the fallback — and therefore the requested resolution — was never reached.
 
 ## [0.0.7] - 2026-07-25
 

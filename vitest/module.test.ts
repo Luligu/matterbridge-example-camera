@@ -126,7 +126,15 @@ describe('TestPlatform', () => {
     expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe(videoGenerator);
   });
 
-  it.each(['640x480', '1280x720', '1920x1080'] as const)('should apply the configured %s webcam resolution', (videoResolution) => {
+  it('should default videoResolution to auto when the config omits it', () => {
+    const defaultResolutionConfig = { ...config, videoResolution: undefined } as unknown as CameraPlatformConfig;
+    const defaultResolutionPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, defaultResolutionConfig);
+
+    expect(defaultResolutionPlatform.config.videoResolution).toBe('auto');
+    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe('auto');
+  });
+
+  it.each(['auto', '640x480', '1280x720', '1920x1080'] as const)('should apply the configured %s webcam resolution', (videoResolution) => {
     const webcamPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, {
       ...config,
       videoGenerator: 'webcam',

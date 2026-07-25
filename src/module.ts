@@ -50,7 +50,7 @@ export type CameraPlatformConfig = PlatformConfig & {
   blackList: string[];
   videoGenerator: 'none' | 'test' | 'webcam' | 'rtsp';
   videoSource?: string;
-  videoResolution: '640x480' | '1280x720' | '1920x1080';
+  videoResolution: 'auto' | '640x480' | '1280x720' | '1920x1080';
   videoBitrate: number;
   animationInterval: number;
 };
@@ -90,7 +90,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     this.config.whiteList ??= [];
     this.config.blackList ??= [];
     this.config.videoGenerator ??= 'none';
-    this.config.videoResolution ??= '640x480';
+    this.config.videoResolution ??= 'auto';
     this.config.videoBitrate ??= 1000;
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;

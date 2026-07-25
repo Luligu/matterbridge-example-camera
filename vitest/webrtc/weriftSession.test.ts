@@ -324,12 +324,39 @@ describe('WeriftWebRtcSession', () => {
 
       await session.close();
     });
+
+    it('should use a fixed MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION even when the requested per-session resolution names a different supported resolution', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = '/dev/video0';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = '640x480';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '1920x1080' });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should use the requested per-session resolution when MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION=auto', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = '/dev/video0';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = 'auto';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '1280x720' });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
   });
 
   describe('rtsp video source', () => {
     afterEach(() => {
       delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
       delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
     });
 
     it('should still attach a video track, falling back to the test pattern, when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=rtsp is set without a url', async () => {
@@ -349,6 +376,32 @@ describe('WeriftWebRtcSession', () => {
       const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should scale the RTSP camera to a fixed MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION regardless of the requested per-session resolution', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'rtsp';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = 'rtsp://admin:password@192.168.1.100:554/ch1/main';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = '1280x720';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '640x480' });
+
+      expect(sdp).toContain('m=video');
+
+      await session.close();
+    });
+
+    it('should scale the RTSP camera to the requested per-session resolution when MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION=auto', async () => {
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'rtsp';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = 'rtsp://admin:password@192.168.1.100:554/ch1/main';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = 'auto';
+      const session = new WeriftWebRtcSession(1);
+
+      const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '1920x1080' });
 
       expect(sdp).toContain('m=video');
 

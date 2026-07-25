@@ -4,7 +4,7 @@
   "whiteList": [],
   "blackList": [],
   "videoGenerator": "none",
-  "videoResolution": "640x480",
+  "videoResolution": "auto",
   "videoBitrate": 1000,
   "animationInterval": 60,
   "debug": false,
