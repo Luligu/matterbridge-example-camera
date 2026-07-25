@@ -401,7 +401,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
     // The command response no longer waits on candidate application (see provideIceCandidates's doc comment), so
     // the warning is logged in the background and must be awaited rather than asserted immediately.
-    await vi.waitFor(() => expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate')));
+    await vi.waitFor(() =>
+      expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate')),
+    );
     loggerWarnSpy.mockClear();
   });
 
