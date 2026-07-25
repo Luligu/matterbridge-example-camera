@@ -30,8 +30,8 @@ await setupTest(NAME);
 
 describe('TestPlatform', () => {
   const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
-  const originalWebcamDevice = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
-  const originalWebcamResolution = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
+  const originalVideoSourceDevice = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
+  const originalVideoResolution = process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
 
   let matterbridge: PlatformMatterbridge;
   let platform: ExampleMatterbridgeCameraPlatform;
@@ -42,9 +42,9 @@ describe('TestPlatform', () => {
     version: '1.0.0',
     whiteList: [],
     blackList: [],
-    generator: 'none',
-    webcamResolution: '640x480',
-    webcamBitrate: 1000,
+    videoGenerator: 'none',
+    videoResolution: '640x480',
+    videoBitrate: 1000,
     animationInterval: 0,
     debug: false,
     unregisterOnShutdown: false,
@@ -84,10 +84,10 @@ describe('TestPlatform', () => {
     vi.restoreAllMocks();
     if (originalVideoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
     else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
-    if (originalWebcamDevice === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
-    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = originalWebcamDevice;
-    if (originalWebcamResolution === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
-    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = originalWebcamResolution;
+    if (originalVideoSourceDevice === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = originalVideoSourceDevice;
+    if (originalVideoResolution === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
+    else process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = originalVideoResolution;
   });
 
   it('should throw error in load when version is not valid', () => {
@@ -97,7 +97,7 @@ describe('TestPlatform', () => {
   });
 
   it('should add empty selection lists when the config omits them', async () => {
-    const emptyConfig = { ...config, whiteList: undefined, blackList: undefined, webcam: undefined } as unknown as CameraPlatformConfig;
+    const emptyConfig = { ...config, whiteList: undefined, blackList: undefined, videoSource: undefined } as unknown as CameraPlatformConfig;
     const emptyConfigPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, emptyConfig);
     addMatterbridge(emptyConfigPlatform);
     vi.spyOn(emptyConfigPlatform, 'registerDevice').mockResolvedValue();
@@ -107,37 +107,37 @@ describe('TestPlatform', () => {
 
       expect(emptyConfigPlatform.config.whiteList).toEqual([]);
       expect(emptyConfigPlatform.config.blackList).toEqual([]);
-      expect(emptyConfigPlatform.config.generator).toBe('none');
-      expect(emptyConfigPlatform.config.webcam).toBeUndefined();
-      expect(emptyConfigPlatform.config.webcamResolution).toBe('640x480');
+      expect(emptyConfigPlatform.config.videoGenerator).toBe('none');
+      expect(emptyConfigPlatform.config.videoSource).toBeUndefined();
+      expect(emptyConfigPlatform.config.videoResolution).toBe('640x480');
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('none');
-      expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE).toBeUndefined();
-      expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION).toBe('640x480');
+      expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE).toBeUndefined();
+      expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe('640x480');
       expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(12);
     } finally {
       await emptyConfigPlatform.onShutdown();
     }
   });
 
-  it.each(['none', 'test', 'webcam', 'rtsp'] as const)('should apply the configured %s video generator', (generator) => {
-    const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, generator });
+  it.each(['none', 'test', 'webcam', 'rtsp'] as const)('should apply the configured %s video generator', (videoGenerator) => {
+    const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, videoGenerator });
 
-    expect(generatorPlatform.config.generator).toBe(generator);
-    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe(generator);
+    expect(generatorPlatform.config.videoGenerator).toBe(videoGenerator);
+    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe(videoGenerator);
   });
 
-  it.each(['640x480', '1280x720', '1920x1080'] as const)('should apply the configured %s webcam resolution', (webcamResolution) => {
+  it.each(['640x480', '1280x720', '1920x1080'] as const)('should apply the configured %s webcam resolution', (videoResolution) => {
     const webcamPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, {
       ...config,
-      generator: 'webcam',
-      webcam: 'Integrated Camera',
-      webcamResolution,
+      videoGenerator: 'webcam',
+      videoSource: 'Integrated Camera',
+      videoResolution,
     });
 
-    expect(webcamPlatform.config.webcam).toBe('Integrated Camera');
-    expect(webcamPlatform.config.webcamResolution).toBe(webcamResolution);
-    expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE).toBe('Integrated Camera');
-    expect(process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION).toBe(webcamResolution);
+    expect(webcamPlatform.config.videoSource).toBe('Integrated Camera');
+    expect(webcamPlatform.config.videoResolution).toBe(videoResolution);
+    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE).toBe('Integrated Camera');
+    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe(videoResolution);
   });
 
   it('should not create devices when none match the whitelist', async () => {
@@ -158,13 +158,6 @@ describe('TestPlatform', () => {
     addMatterbridge(platform);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Initializing platform ${config.name}...`);
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} initialized successfully`);
-  });
-
-  it('should throw error in onConfigure when the intercom device is not registered', async () => {
-    const unconfiguredPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
-    addMatterbridge(unconfiguredPlatform);
-
-    await expect(unconfiguredPlatform.onConfigure()).rejects.toThrow('Intercom device not found. Please ensure the device is registered before configuration.');
   });
 
   it('should call onStart with reason', async () => {

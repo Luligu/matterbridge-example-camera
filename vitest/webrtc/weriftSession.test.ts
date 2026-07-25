@@ -217,8 +217,8 @@ describe('WeriftWebRtcSession', () => {
 
     afterEach(() => {
       delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
-      delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
-      delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     });
 
@@ -275,7 +275,7 @@ describe('WeriftWebRtcSession', () => {
       ['freebsd', '/dev/video0'],
     ])('should attach a video track from the configured webcam device on platform %s', async (platform, device) => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = device;
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = device;
       Object.defineProperty(process, 'platform', { value: platform });
       const session = new WeriftWebRtcSession(1);
 
@@ -286,10 +286,10 @@ describe('WeriftWebRtcSession', () => {
       await session.close();
     });
 
-    it.each(['1280x720', '1920x1080'])('should attach a video track using the requested MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION=%s', async (resolution) => {
+    it.each(['1280x720', '1920x1080'])('should attach a video track using the requested MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION=%s', async (resolution) => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = resolution;
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = '/dev/video0';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = resolution;
       const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
@@ -299,10 +299,10 @@ describe('WeriftWebRtcSession', () => {
       await session.close();
     });
 
-    it('should still attach a video track, falling back to 640x480, when MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION is not one of the supported resolutions', async () => {
+    it('should still attach a video track, falling back to 640x480, when MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION is not one of the supported resolutions', async () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = '4000x3000';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = '/dev/video0';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = '4000x3000';
       const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
@@ -312,10 +312,10 @@ describe('WeriftWebRtcSession', () => {
       await session.close();
     });
 
-    it('should still attach a video track, falling back to MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION, when the requested per-session resolution is not supported', async () => {
+    it('should still attach a video track, falling back to MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION, when the requested per-session resolution is not supported', async () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = '1280x720';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = '/dev/video0';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = '1280x720';
       const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '9999x9999' });
@@ -329,7 +329,7 @@ describe('WeriftWebRtcSession', () => {
   describe('rtsp video source', () => {
     afterEach(() => {
       delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
-      delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
     });
 
     it('should still attach a video track, falling back to the test pattern, when MATTERBRIDGE_CAMERA_VIDEO_SOURCE=rtsp is set without a url', async () => {
@@ -345,7 +345,7 @@ describe('WeriftWebRtcSession', () => {
 
     it('should attach a video track from the configured RTSP url', async () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'rtsp';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = 'rtsp://admin:password@192.168.1.100:554/ch1/main';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = 'rtsp://admin:password@192.168.1.100:554/ch1/main';
       const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false });
@@ -544,12 +544,12 @@ describe('WeriftWebRtcSession', () => {
   describe('per-session webcam resolution precedence', () => {
     afterEach(() => {
       delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
-      delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+      delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
     });
 
     it('should use the requested per-session resolution when it names a supported resolution', async () => {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = '/dev/video0';
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = '/dev/video0';
       const session = new WeriftWebRtcSession(1);
 
       const sdp = await session.createOffer({ video: true, audio: false, videoResolution: '1280x720' });

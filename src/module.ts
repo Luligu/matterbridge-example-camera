@@ -48,10 +48,10 @@ import { VideoDoorbell } from './devices/videoDoorbell.js';
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
   blackList: string[];
-  generator: 'none' | 'test' | 'webcam' | 'rtsp';
-  webcam?: string;
-  webcamResolution: '640x480' | '1280x720' | '1920x1080';
-  webcamBitrate: number;
+  videoGenerator: 'none' | 'test' | 'webcam' | 'rtsp';
+  videoSource?: string;
+  videoResolution: '640x480' | '1280x720' | '1920x1080';
+  videoBitrate: number;
   animationInterval: number;
 };
 
@@ -89,26 +89,26 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     // Normalize old config values to new ones
     this.config.whiteList ??= [];
     this.config.blackList ??= [];
-    this.config.generator ??= 'none';
-    this.config.webcamResolution ??= '640x480';
-    this.config.webcamBitrate ??= 1000;
+    this.config.videoGenerator ??= 'none';
+    this.config.videoResolution ??= '640x480';
+    this.config.videoBitrate ??= 1000;
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;
     this.config.unregisterOnShutdown ??= false;
-    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = this.config.generator;
-    if (this.config.webcam === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
-    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = this.config.webcam;
-    process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = this.config.webcamResolution;
-    process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE = String(this.config.webcamBitrate);
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = this.config.videoGenerator;
+    if (this.config.videoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = this.config.videoSource;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = this.config.videoResolution;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE = String(this.config.videoBitrate);
 
     this.log.debug(`Platform ${this.config.name} config:\n${RESET}${inspect(this.config, { depth: 10, colors: true })}`);
     this.log.debug(
       `Platform ${this.config.name} environment variables:\n${RESET}${inspect(
         {
           MATTERBRIDGE_CAMERA_VIDEO_SOURCE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE,
-          MATTERBRIDGE_CAMERA_WEBCAM_DEVICE: process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE,
-          MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION: process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION,
-          MATTERBRIDGE_CAMERA_WEBCAM_BITRATE: process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE,
+          MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE,
+          MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION: process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION,
+          MATTERBRIDGE_CAMERA_VIDEO_BITRATE: process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE,
         },
         { depth: 10, colors: true },
       )}`,

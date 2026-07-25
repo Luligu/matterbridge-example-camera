@@ -2,7 +2,7 @@
   "title": "Matterbridge example camera plugin",
   "description": "matterbridge-example-camera v. 1.0.0 by https://github.com/Luligu",
   "type": "object",
-  "required": ["generator", "webcamResolution"],
+  "required": ["videoGenerator", "videoResolution"],
   "properties": {
     "name": {
       "description": "Plugin Name",
@@ -42,28 +42,28 @@
       "type": "number",
       "default": 60
     },
-    "generator": {
+    "videoGenerator": {
       "title": "Video Generator",
-      "description": "Select the WebRTC video source: none disables track injection, test generates a synthetic moving test pattern, webcam captures from the configured local webcam, and rtsp pulls from the RTSP url configured in Webcam Device.",
+      "description": "Select the WebRTC video generator: none disables track injection, test generates a synthetic moving test pattern, webcam captures from the configured local webcam, and rtsp pulls from the RTSP url configured in Video Source.",
       "type": "string",
       "enum": ["none", "test", "webcam", "rtsp"],
       "default": "none"
     },
-    "webcam": {
-      "title": "Webcam Device",
+    "videoSource": {
+      "title": "Video Source",
       "description": "OS-specific ffmpeg webcam identifier, such as /dev/video0 on Linux, 0 on macOS, or Integrated Camera on Windows. When Video Generator is rtsp, this holds the RTSP url instead, e.g. rtsp://user:password@host:554/path.",
       "type": "string"
     },
-    "webcamResolution": {
-      "title": "Webcam Resolution",
+    "videoResolution": {
+      "title": "Video Resolution",
       "description": "Resolution used when capturing from the configured webcam.",
       "type": "string",
       "enum": ["640x480", "1280x720", "1920x1080"],
       "default": "640x480"
     },
-    "webcamBitrate": {
-      "title": "Webcam Bitrate",
-      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam, regardless of resolution.",
+    "videoBitrate": {
+      "title": "Video Bitrate",
+      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam or RTSP camera, regardless of resolution.",
       "type": "number",
       "default": 1000
     },

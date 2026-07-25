@@ -44,10 +44,10 @@ export interface WeriftOfferOptions {
   /** Whether to add a sendonly audio transceiver to the offer. */
   audio: boolean;
   /**
-   * Preferred webcam capture resolution (e.g. "1280x720") for this session, typically the allocated video stream's
+   * Preferred capture resolution (e.g. "1280x720") for this session, typically the allocated video stream's
    * resolution from a real client's CameraAvStreamManagement.VideoStreamAllocate request. Takes precedence over
-   * MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION when it names a supported resolution; ignored for the synthetic test
-   * pattern source.
+   * MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION when it names a supported resolution; ignored for the synthetic test
+   * pattern and RTSP sources.
    */
   videoResolution?: string;
 }
@@ -61,10 +61,10 @@ export interface WeriftOfferOptions {
  * end-to-end media path can be validated without a real camera capture pipeline. The source is a synthetic moving
  * test pattern when `MATTERBRIDGE_CAMERA_VIDEO_SOURCE=test`, a local webcam capture device when the source is
  * `webcam`, a real RTSP camera stream when the source is `rtsp`, or no injected track when the source is unset or
- * `none`. MATTERBRIDGE_CAMERA_WEBCAM_DEVICE identifies the webcam device (e.g. /dev/video0 on Linux, an avfoundation
- * index on macOS, or a dshow device name on Windows) for `webcam`, or the RTSP url (e.g.
+ * `none`. MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE identifies the webcam device (e.g. /dev/video0 on Linux, an
+ * avfoundation index on macOS, or a dshow device name on Windows) for `webcam`, or the RTSP url (e.g.
  * rtsp://user:password@host:554/path) for `rtsp`. The webcam capture resolution defaults to 640x480 and can be set
- * to 1280x720 or 1920x1080 with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION.
+ * to 1280x720 or 1920x1080 with MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION.
  *
  * Similarly, a recorded test-voice clip can be injected as the audio track (e.g. for an Intercom's "Listen" live
  * view) so the audio path can be validated without a real microphone capture pipeline; disable with
@@ -316,29 +316,29 @@ export class WeriftWebRtcSession {
     return undefined;
   }
 
-  /** Webcam capture resolutions supported via MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION; falls back to the first entry. */
-  private static readonly SUPPORTED_WEBCAM_RESOLUTIONS = ['640x480', '1280x720', '1920x1080'];
+  /** Webcam capture resolutions supported via MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION; falls back to the first entry. */
+  private static readonly SUPPORTED_VIDEO_RESOLUTIONS = ['640x480', '1280x720', '1920x1080'];
 
   /**
    * Default target encoder bitrate (kbps), used for the test pattern and as the fallback when
-   * MATTERBRIDGE_CAMERA_WEBCAM_BITRATE is unset or invalid. Without an explicit -b:v, ffmpeg falls back to a generic
+   * MATTERBRIDGE_CAMERA_VIDEO_BITRATE is unset or invalid. Without an explicit -b:v, ffmpeg falls back to a generic
    * ~200kbps default that is far too low even at 640x480 and produces heavy blocking artifacts.
    */
   private static readonly DEFAULT_BITRATE_KBPS = 1000;
 
   /**
-   * Resolves the configured webcam capture bitrate (kbps) from MATTERBRIDGE_CAMERA_WEBCAM_BITRATE, applied
-   * regardless of the capture resolution; falls back to {@link DEFAULT_BITRATE_KBPS} (with a warning) if unset or
-   * not a positive number.
+   * Resolves the configured encoder bitrate (kbps) from MATTERBRIDGE_CAMERA_VIDEO_BITRATE, applied regardless of the
+   * capture resolution; falls back to {@link DEFAULT_BITRATE_KBPS} (with a warning) if unset or not a positive
+   * number.
    *
    * @returns {number} The target encoder bitrate in kbps.
    */
-  private getConfiguredWebcamBitrate(): number {
-    const configured = process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE;
+  private getConfiguredVideoBitrate(): number {
+    const configured = process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE;
     if (!configured) return WeriftWebRtcSession.DEFAULT_BITRATE_KBPS;
     const bitrateKbps = Number(configured);
     if (!Number.isFinite(bitrateKbps) || bitrateKbps <= 0) {
-      this.log.warn(`Invalid MATTERBRIDGE_CAMERA_WEBCAM_BITRATE "${configured}"; falling back to ${WeriftWebRtcSession.DEFAULT_BITRATE_KBPS}kbps`);
+      this.log.warn(`Invalid MATTERBRIDGE_CAMERA_VIDEO_BITRATE "${configured}"; falling back to ${WeriftWebRtcSession.DEFAULT_BITRATE_KBPS}kbps`);
       return WeriftWebRtcSession.DEFAULT_BITRATE_KBPS;
     }
     return bitrateKbps;
@@ -347,33 +347,33 @@ export class WeriftWebRtcSession {
   /**
    * Resolves the webcam capture resolution to use, preferring the requested per-session resolution (typically the
    * client's allocated video stream resolution) when it names a supported resolution, then
-   * MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION, then falling back (with a warning) to 640x480.
+   * MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION, then falling back (with a warning) to 640x480.
    *
    * @param {string} [requestedResolution] - The per-session preferred resolution, e.g. "1280x720".
    * @returns {string} The resolution to pass to ffmpeg's -video_size option, e.g. "1280x720".
    */
-  private getConfiguredWebcamResolution(requestedResolution?: string): string {
-    const [defaultResolution] = WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS;
+  private getConfiguredVideoResolution(requestedResolution?: string): string {
+    const [defaultResolution] = WeriftWebRtcSession.SUPPORTED_VIDEO_RESOLUTIONS;
     if (requestedResolution) {
-      if (WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.includes(requestedResolution)) {
+      if (WeriftWebRtcSession.SUPPORTED_VIDEO_RESOLUTIONS.includes(requestedResolution)) {
         this.log.debug(`Using requested webcam capture resolution ${requestedResolution}`);
         return requestedResolution;
       }
       this.log.warn(
-        `Requested video stream resolution "${requestedResolution}" is not supported for webcam capture (supported: ${WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.join(', ')}); falling back to MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION`,
+        `Requested video stream resolution "${requestedResolution}" is not supported for webcam capture (supported: ${WeriftWebRtcSession.SUPPORTED_VIDEO_RESOLUTIONS.join(', ')}); falling back to MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION`,
       );
     }
-    const requested = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION;
+    const requested = process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
     if (!requested) {
       this.log.debug(`Using default webcam capture resolution ${defaultResolution}`);
       return defaultResolution;
     }
-    if (WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.includes(requested)) {
-      this.log.debug(`Using MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION ${requested}`);
+    if (WeriftWebRtcSession.SUPPORTED_VIDEO_RESOLUTIONS.includes(requested)) {
+      this.log.debug(`Using MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION ${requested}`);
       return requested;
     }
     this.log.warn(
-      `Unsupported MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION "${requested}" (supported: ${WeriftWebRtcSession.SUPPORTED_WEBCAM_RESOLUTIONS.join(', ')}); falling back to ${defaultResolution}`,
+      `Unsupported MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION "${requested}" (supported: ${WeriftWebRtcSession.SUPPORTED_VIDEO_RESOLUTIONS.join(', ')}); falling back to ${defaultResolution}`,
     );
     return defaultResolution;
   }
@@ -400,16 +400,16 @@ export class WeriftWebRtcSession {
   /**
    * Resolves the ffmpeg input arguments and a human-readable description for the configured video source.
    *
-   * Uses the synthetic moving test pattern for `test`, or MATTERBRIDGE_CAMERA_WEBCAM_DEVICE for `webcam`/`rtsp`
+   * Uses the synthetic moving test pattern for `test`, or MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE for `webcam`/`rtsp`
    * (the RTSP url for `rtsp`); falls back to the test pattern (logging a warning) if the device/url is missing or
    * webcam capture isn't supported on this platform. The webcam capture resolution defaults to 640x480 and can be
-   * overridden with MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION (640x480, 1280x720, or 1920x1080), or per-session via
+   * overridden with MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION (640x480, 1280x720, or 1920x1080), or per-session via
    * requestedResolution; the RTSP source ignores it and streams at the camera's own resolution/frame rate. The
-   * webcam capture bitrate defaults to {@link DEFAULT_BITRATE_KBPS} and can be overridden with
-   * MATTERBRIDGE_CAMERA_WEBCAM_BITRATE, regardless of resolution.
+   * encoder bitrate defaults to {@link DEFAULT_BITRATE_KBPS} and can be overridden with
+   * MATTERBRIDGE_CAMERA_VIDEO_BITRATE, regardless of resolution.
    *
    * @param {'test' | 'webcam' | 'rtsp'} videoSource - The configured video source after `none` has been handled by the caller.
-   * @param {string} [requestedResolution] - The per-session preferred webcam resolution; see {@link getConfiguredWebcamResolution}.
+   * @param {string} [requestedResolution] - The per-session preferred webcam resolution; see {@link getConfiguredVideoResolution}.
    * @returns {{ args: string[]; description: string; bitrateKbps: number }} The ffmpeg input arguments, a description of the source for logging, and the target encoder bitrate.
    */
   private buildFfmpegVideoInputArgs(videoSource: 'test' | 'webcam' | 'rtsp', requestedResolution?: string): { args: string[]; description: string; bitrateKbps: number } {
@@ -423,21 +423,21 @@ export class WeriftWebRtcSession {
       return testPatternInput;
     }
 
-    const device = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    const device = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
     if (!device) {
-      this.log.warn(`MATTERBRIDGE_CAMERA_VIDEO_SOURCE=${videoSource} requires MATTERBRIDGE_CAMERA_WEBCAM_DEVICE to be set; falling back to the synthetic test video`);
+      this.log.warn(`MATTERBRIDGE_CAMERA_VIDEO_SOURCE=${videoSource} requires MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE to be set; falling back to the synthetic test video`);
       return testPatternInput;
     }
 
     if (videoSource === 'rtsp') {
-      const bitrateKbps = this.getConfiguredWebcamBitrate();
+      const bitrateKbps = this.getConfiguredVideoBitrate();
       const description = `RTSP camera (${device})`;
       this.log.debug(`RTSP capture params: url=${device}, description="${description}", bitrateKbps=${bitrateKbps}`);
       return { args: ['-rtsp_transport', 'tcp', '-i', device], description, bitrateKbps };
     }
 
-    const resolution = process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION ?? this.getConfiguredWebcamResolution(requestedResolution);
-    const bitrateKbps = this.getConfiguredWebcamBitrate();
+    const resolution = process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION ?? this.getConfiguredVideoResolution(requestedResolution);
+    const bitrateKbps = this.getConfiguredVideoBitrate();
     const description = `local webcam (${device}, ${resolution})`;
     this.log.debug(`Webcam capture params: device=${device}, resolution=${resolution}, description="${description}", bitrateKbps=${bitrateKbps}`);
     switch (process.platform) {

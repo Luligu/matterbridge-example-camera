@@ -192,15 +192,15 @@ With both directions in place, either Intercom can call the other; a call initia
 
 The platform configuration controls WebRTC video injection with these properties:
 
-- `generator` is required and accepts `none`, `test`, `webcam`, or `rtsp`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects a synthetic moving test pattern, `webcam` captures from the configured local webcam, and `rtsp` pulls from the RTSP url configured in `webcam`.
-- `webcam` is optional and has no default. For the `webcam` generator it contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path`. Selecting the `webcam` or `rtsp` generator without this property falls back to the test pattern with a warning.
-- `webcamResolution` is required and accepts `640x480`, `1280x720`, or `1920x1080`. It defaults to `640x480`. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
+- `videoGenerator` is required and accepts `none`, `test`, `webcam`, or `rtsp`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects a synthetic moving test pattern, `webcam` captures from the configured local webcam, and `rtsp` pulls from the RTSP url configured in `videoSource`.
+- `videoSource` is optional and has no default. For the `webcam` generator it contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path`. Selecting the `webcam` or `rtsp` generator without this property falls back to the test pattern with a warning.
+- `videoResolution` is required and accepts `640x480`, `1280x720`, or `1920x1080`. It defaults to `640x480`. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
 
-A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `webcamResolution`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `webcamResolution` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
+A real client's resolution/quality picker (e.g. in Home Assistant) takes precedence over `videoResolution`: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the webcam capture resolution for the session. `videoResolution` is used when no matching allocated stream is found, or when the requested resolution isn't one of the three supported above.
 
 Requires `ffmpeg` to be installed. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
-Use ffmpeg itself to list the available capture devices and find the right value for `webcam`:
+Use ffmpeg itself to list the available capture devices and find the right value for `videoSource`:
 
 - Linux (v4l2): `v4l2-ctl --list-devices` (from `v4l-utils`), or `ls /dev/video*`.
 - macOS (avfoundation): `ffmpeg -f avfoundation -list_devices true -i dummy` — video devices are listed with their index, e.g. `[0] FaceTime HD Camera`; use that index (e.g. `0`) as the device value.
@@ -210,9 +210,9 @@ Example configuration for a real Linux webcam at 720p:
 
 ```json
 {
-  "generator": "webcam",
-  "webcam": "/dev/video0",
-  "webcamResolution": "1280x720"
+  "videoGenerator": "webcam",
+  "videoSource": "/dev/video0",
+  "videoResolution": "1280x720"
 }
 ```
 
@@ -220,18 +220,18 @@ Example, capturing from a real Windows webcam at 720p:
 
 ```json
 {
-  "generator": "webcam",
-  "webcam": "Integrated Camera",
-  "webcamResolution": "1280x720"
+  "videoGenerator": "webcam",
+  "videoSource": "Integrated Camera",
+  "videoResolution": "1280x720"
 }
 ```
 
-Example, pulling from a real RTSP camera (`webcamResolution` is ignored; the camera streams at its own resolution and frame rate, re-encoded at `webcamBitrate`):
+Example, pulling from a real RTSP camera (`videoResolution` is ignored; the camera streams at its own resolution and frame rate, re-encoded at `videoBitrate`):
 
 ```json
 {
-  "generator": "rtsp",
-  "webcam": "rtsp://admin:password@192.168.1.100:554/ch1/main"
+  "videoGenerator": "rtsp",
+  "videoSource": "rtsp://admin:password@192.168.1.100:554/ch1/main"
 }
 ```
 
