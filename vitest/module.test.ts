@@ -175,7 +175,8 @@ describe('TestPlatform', () => {
     expect(platform.getDeviceById('Doorbell-DOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('AudioDoorbell-AUDIODOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('SnapshotCamera-SNAPSHOTCAMERA-001')).toBeDefined();
-    expect(platform.getDeviceById('Camera-CAMERA-001')).toBeDefined();
+    const exampleCamera = platform.getDeviceById('Camera-CAMERA-001');
+    expect(exampleCamera).toBeDefined();
     expect(platform.getDeviceById('PTZCamera-PTZCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('Intercom1-INTERCOM1-001')).toBeDefined();
