@@ -11,7 +11,7 @@ const MATTER_CREATE_ONLY = true;
 
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
-import { CameraAvStreamManagement, Identify, PowerSource, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
+import { CameraAvSettingsUserLevelManagement, CameraAvStreamManagement, Identify, PowerSource, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
 import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
@@ -25,7 +25,7 @@ import {
   stopServerNode,
 } from 'matterbridge/vitest-utils/matter';
 
-import { Camera, createDefaultCameraAvStreamManagementClusterServer } from '../../src/devices/camera.js';
+import { Camera, createDefaultCameraAvSettingsUserLevelManagementClusterServer, createDefaultCameraAvStreamManagementClusterServer } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
 
@@ -157,5 +157,61 @@ describe('Camera', () => {
       { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
     ]);
     expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([]);
+  });
+
+  it('should create a camera device with ptz enabled', async () => {
+    const device = new Camera('Camera Ptz', 'CAMERA-PTZ', { ptz: true });
+    expect(device.hasClusterServer(CameraAvSettingsUserLevelManagement.id)).toBeTruthy();
+
+    expect(await addDevice(aggregator, device)).toBeTruthy();
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'panMin')).toBe(-170);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'panMax')).toBe(170);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'tiltMin')).toBe(-20);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'tiltMax')).toBe(90);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'zoomMax')).toBe(10);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 0, tilt: 0, zoom: 1 });
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'movementState')).toBe(CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle);
+  });
+
+  it('should create a camera device with ptz enabled and custom pan, tilt and zoom ranges', async () => {
+    const device = new Camera('Camera Ptz Custom', 'CAMERA-PTZ-CUSTOM', {
+      ptz: true,
+      panMin: -90,
+      panMax: 90,
+      tiltMin: -10,
+      tiltMax: 45,
+      zoomMax: 4,
+      mptzPosition: { pan: 10, tilt: 5, zoom: 2 },
+    });
+
+    expect(await addDevice(aggregator, device)).toBeTruthy();
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'panMin')).toBe(-90);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'panMax')).toBe(90);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'tiltMin')).toBe(-10);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'tiltMax')).toBe(45);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'zoomMax')).toBe(4);
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 10, tilt: 5, zoom: 2 });
+  });
+
+  it('should not create the CameraAvSettingsUserLevelManagement cluster server when ptz is disabled', async () => {
+    const device = new Camera('Camera No Ptz', 'CAMERA-NO-PTZ');
+    expect(device.hasClusterServer(CameraAvSettingsUserLevelManagement.id)).toBeFalsy();
+
+    expect(await addDevice(aggregator, device)).toBeTruthy();
+  });
+
+  it('should add createDefaultCameraAvSettingsUserLevelManagementClusterServer to an endpoint', () => {
+    const device = new Camera('Camera Ptz Helper', 'CAMERA-PTZ-HELPER', { ptz: true });
+    // The constructor already creates the CameraAvSettingsUserLevelManagement cluster server; calling the helper again should return the same endpoint.
+    expect(
+      createDefaultCameraAvSettingsUserLevelManagementClusterServer(device, {
+        panMin: -170,
+        panMax: 170,
+        tiltMin: -20,
+        tiltMax: 90,
+        zoomMax: 10,
+        mptzPosition: { pan: 0, tilt: 0, zoom: 1 },
+      }),
+    ).toBe(device);
   });
 });

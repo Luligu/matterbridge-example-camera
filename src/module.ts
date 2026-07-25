@@ -161,6 +161,14 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleCamera = new Camera('Camera', 'CAMERA-001');
     await this.addDevice(exampleCamera);
 
+    const examplePtzCamera = new Camera('PTZ Camera', 'PTZCAMERA-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      powerSourceType: 'Wired',
+      ptz: true,
+    });
+    await this.addDevice(examplePtzCamera);
+
     const exampleFloodlightCamera = new FloodlightCamera('Floodlight Camera', 'FLOODLIGHTCAMERA-001', {
       powerSourceType: 'Wired',
       cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
