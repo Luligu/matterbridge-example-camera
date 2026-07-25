@@ -39,6 +39,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
 
   let device: Camera;
+  let testExistingSessionId: number;
 
   function clearExpectedWarnings(...expectedMessages: string[]): void {
     const unexpectedWarnings = loggerWarnSpy.mock.calls.filter(([message]) => !expectedMessages.some((expectedMessage) => message.includes(expectedMessage)));
@@ -261,15 +262,35 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   });
 
   it('should provide an offer for an existing session', async () => {
+    // Renegotiating session 1 here (rather than creating a dedicated session) would feed a real werift peer
+    // connection a remote re-offer with no media sections, wiping out the video m-line the later ICE-candidate and
+    // provideAnswer tests below depend on. Use a disposable session instead so session 1 stays untouched.
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
+        streamUsage: StreamUsage.LiveView,
+        originatingEndpointId: EndpointNumber(1),
+        videoStreams: [0],
+      }),
+    ).resolves.toBeUndefined();
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
+
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    const existingSessionId = currentSessions[currentSessions.length - 1].id;
+
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', {
-        webRtcSessionId: 1,
+        webRtcSessionId: existingSessionId,
         sdp: 'v=0 o=- re-offer',
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session 1'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining(`MatterbridgeWebRtcTransportProviderServer.provideOffer: received an SDP offer for session ${existingSessionId}`),
+    );
     clearExpectedWarnings();
+
+    // Kept alive for the "log a non-Error rejection reason" test below; ended there.
+    testExistingSessionId = existingSessionId;
   });
 
   it('should log a non-Error rejection reason when the peer WebRtcTransportRequestor endpoint cannot be resolved', async () => {
@@ -280,13 +301,18 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', {
-        webRtcSessionId: 1,
+        webRtcSessionId: testExistingSessionId,
         sdp: 'v=0 o=- re-offer',
       }),
     ).resolves.toBeUndefined();
 
     expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringMatching(/Could not resolve peer WebRtcTransportRequestor endpoint.*boom/));
     clearExpectedWarnings();
+
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', {
+      webRtcSessionId: testExistingSessionId,
+      reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup,
+    });
   });
 
   it('should reject provideOffer for an unknown session', async () => {
@@ -295,18 +321,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     );
   });
 
-  it('should provide an answer for an existing session', async () => {
-    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: 1, sdp: 'v=0 o=- answer' })).resolves.toBeUndefined();
-
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideAnswer: received an SDP answer for session 1'));
-  });
-
-  it('should reject provideAnswer for an unknown session', async () => {
-    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: 99, sdp: 'v=0 o=- answer' })).rejects.toThrow(
-      'MatterbridgeWebRtcTransportProviderServer.provideAnswer: webRTC session 99 is not present in currentSessions',
-    );
-  });
-
+  // Applied to session 1 before provideAnswer below: session 1's real local offer (from solicitOffer) already has a
+  // real video m-line, and the ICE candidate lookup resolves against it. Applying provideAnswer's fake, media-less
+  // SDP first would clear that m-line and leave nothing for sdpMLineIndex 0 to resolve against.
   it('should provide ICE candidates for an existing session', async () => {
     await expect(
       device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideIceCandidates', {
@@ -317,6 +334,37 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
     expect(loggerInfoSpy).toHaveBeenCalledWith(
       expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: received 1 ICE candidate(s) for session 1'),
+    );
+  });
+
+  it('should provide an answer for an existing session', async () => {
+    // Uses a dedicated session rather than session 1: session 1 already has a real ICE candidate buffered against
+    // its real video m-line (see the ICE-candidate test above), and applying this fake, media-less answer SDP to it
+    // would drop that m-line, so werift's flush of the buffered candidate against the new answer fails to resolve.
+    await expect(
+      device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
+        streamUsage: StreamUsage.LiveView,
+        originatingEndpointId: EndpointNumber(1),
+        videoStreams: [0],
+      }),
+    ).resolves.toBeUndefined();
+    clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
+
+    const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];
+    const answerSessionId = currentSessions[currentSessions.length - 1].id;
+
+    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: answerSessionId, sdp: 'v=0 o=- answer' })).resolves.toBeUndefined();
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining(`MatterbridgeWebRtcTransportProviderServer.provideAnswer: received an SDP answer for session ${answerSessionId}`),
+    );
+
+    await device.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: answerSessionId, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
+  });
+
+  it('should reject provideAnswer for an unknown session', async () => {
+    await expect(device.invokeBehaviorCommand(WebRtcTransportProvider, 'provideAnswer', { webRtcSessionId: 99, sdp: 'v=0 o=- answer' })).rejects.toThrow(
+      'MatterbridgeWebRtcTransportProviderServer.provideAnswer: webRTC session 99 is not present in currentSessions',
     );
   });
 
@@ -353,7 +401,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
     // The command response no longer waits on candidate application (see provideIceCandidates's doc comment), so
     // the warning is logged in the background and must be awaited rather than asserted immediately.
-    await vi.waitFor(() => expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate')));
+    await vi.waitFor(() =>
+      expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: failed ICE candidate')),
+    );
     loggerWarnSpy.mockClear();
   });
 
