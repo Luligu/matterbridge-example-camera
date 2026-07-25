@@ -80,6 +80,18 @@ Supported by:
 
 - [Matterserver dashboard](screenshots/matterserver-camera.png)
 
+### PTZ Camera
+
+Features:
+
+- Same device type and Camera AV Stream Management setup as Camera (Video, Audio, Snapshot and ImageControl features, plus the WebRtcTransportProvider cluster and a WebRtcTransportRequestor client).
+- Additionally exposes the Camera AV Settings User Level Management cluster with the MechanicalPan, MechanicalTilt and MechanicalZoom features, so a controller can move the camera to an absolute pan/tilt/zoom position (`MPTZSetPosition`) or by a relative delta (`MPTZRelativeMove`). The MechanicalPresets and DigitalPtz features are not part of this example.
+- `MPTZSetPosition` rejects an absolute pan, tilt, or zoom value outside of the configured range with a ConstraintError.
+- `MPTZRelativeMove` adds the pan/tilt/zoom delta directly to the current position, clamping the result to the configured range instead of rejecting it, since a relative move is expected to just stop at the mechanical limit.
+- Configurable pan (`panMin`/`panMax`), tilt (`tiltMin`/`tiltMax`) and zoom (`zoomMax`) ranges, and initial `mptzPosition`. Defaults: pan -170° to 170°, tilt -20° to 90°, zoom 1 to 10, starting position `{ pan: 0, tilt: 0, zoom: 1 }`.
+- Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
+- Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+
 ### Snapshot Camera
 
 Features:
@@ -116,6 +128,15 @@ Features:
 - Exposes `addLight()` to add further On/Off Light child endpoints beyond the mandatory one, with an optional tagList for disambiguation when more than one light is present.
 - Configurable Power Source cluster type on the root endpoint: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 - The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device. The mandatory light's name, tagList, and initial state can be customized via the `lightOptions` constructor option.
+
+### Video Doorbell
+
+Features:
+
+- A composite device type, always defined via endpoint composition: the root endpoint exposes Basic Information and, unless disabled, a Power Source cluster; the mandatory Camera child endpoint and the mandatory Doorbell child endpoint required by the Matter specification for this device type are both created automatically by the constructor. The Camera child is wired the same way as the standalone Camera device (CameraAvStreamManagement with the Video, Audio, Snapshot and ImageControl features, and the WebRtcTransportProvider cluster and WebRtcTransportRequestor client). The Doorbell child is wired the same way as the standalone Doorbell device (Switch cluster with the MomentarySwitch feature only, Identify cluster always created, and the required Chime client cluster added automatically via `addChimeClient`).
+- Exposes `addDoorbell()` to add further Doorbell child endpoints beyond the mandatory one, with an optional tagList for disambiguation when more than one doorbell is present.
+- Configurable Power Source cluster type on the root endpoint: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
+- The Camera child endpoint's Identify and CameraAvStreamManagement configuration can be customized via the `cameraOptions` constructor option, using the same fields and defaults as the standalone Camera device. The mandatory doorbell's name, tagList, and identify configuration can be customized via the `doorbellOptions` constructor option.
 
 ### Intercom
 
