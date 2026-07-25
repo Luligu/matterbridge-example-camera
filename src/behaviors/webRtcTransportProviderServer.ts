@@ -557,13 +557,14 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
               `(endpoint ${endpointLabel})`,
           );
           try {
-            let timeout: ReturnType<typeof setTimeout> | undefined;
+            let timeout: NodeJS.Timeout | undefined;
             try {
               await Promise.race([
                 webRtcPeer.addIceCandidate(candidate.candidate, candidate.sdpMid, candidate.sdpmLineIndex),
-                new Promise<never>((_resolve, reject) => {
+                new Promise<void>((resolve, reject) => {
                   timeout = setTimeout(
-                    () => reject(new Error(`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)),
+                    () =>
+                      reject(new Error(`MatterbridgeWebRtcTransportProviderServer.provideIceCandidates: ICE candidate apply timeout after ${ICE_CANDIDATE_APPLY_TIMEOUT_MS}ms`)),
                     ICE_CANDIDATE_APPLY_TIMEOUT_MS,
                   );
                 }),
