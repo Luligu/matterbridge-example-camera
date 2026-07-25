@@ -36,7 +36,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [platform]: Rename the `webcam`/`webcamResolution`/`webcamBitrate` config properties to `videoSource`/`videoResolution`/`videoBitrate` (and the corresponding `MATTERBRIDGE_CAMERA_WEBCAM_*` env vars to `MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE`/`MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION`/`MATTERBRIDGE_CAMERA_VIDEO_BITRATE`), since `videoSource` now also holds the RTSP url for the `rtsp` generator.
 - [platform]: Rename the `generator` config property to `videoGenerator`.
 - [webrtc]: Add an `auto` value for `videoResolution` (now the default) that uses the controller's requested per-session resolution (the allocated video stream's `maxResolution`) instead of a fixed value; a fixed `videoResolution` still always wins over the controller's request. For `rtsp`, the resolved resolution (fixed or auto) is now applied to the injected track with an ffmpeg `scale` filter instead of being ignored.
-- [docs]: Document the `rtsp` video generator, the renamed config properties, the `auto`/fixed `videoResolution` precedence, and the previously undocumented `videoBitrate` property in the README, with example configurations.
+- [docs]: Document the `rtsp` video generator, the renamed config properties, the `auto`/fixed `videoResolution` precedence, and the previously undocumented `videoBitrate` property (with suggested per-resolution values) in the README and schema, with example configurations.
 - [tests]: Add `rtsp` video source and `videoResolution` precedence (`auto` vs. fixed, webcam and rtsp) coverage in `vitest/webrtc/weriftSession.test.ts`; extend `vitest/module.test.ts` with the `videoGenerator` normalization test and a test for the `videoResolution` default of `auto`.
 
 ### Fixed

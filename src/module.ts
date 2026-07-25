@@ -2,6 +2,7 @@
  * @file src/module.ts
  * @description This file contains the class ExampleMatterbridgeCameraPlatform.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-01-27
  * @version 1.0.0
  * @license Apache-2.0

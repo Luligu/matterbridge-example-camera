@@ -63,7 +63,7 @@
     },
     "videoBitrate": {
       "title": "Video Bitrate",
-      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam or RTSP camera, regardless of resolution.",
+      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam or RTSP camera, regardless of resolution. Default is 1000. Suggested values: ~800 for 640x480, ~2000 for 1280x720, ~2500 for 1920x1080.",
       "type": "number",
       "default": 1000
     },

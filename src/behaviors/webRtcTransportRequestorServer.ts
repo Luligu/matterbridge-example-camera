@@ -1,7 +1,8 @@
 /**
  * @file src/behaviors/webRtcTransportRequestorServer.ts
  * @description This file contains the helper that creates a default WebRtcTransportRequestor cluster server on a MatterbridgeEndpoint.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-20
  * @version 1.0.0
  * @license Apache-2.0
