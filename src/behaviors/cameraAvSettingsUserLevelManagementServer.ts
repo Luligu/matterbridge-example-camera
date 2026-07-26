@@ -27,6 +27,9 @@ import { CameraAvSettingsUserLevelManagementServer } from 'matterbridge/matter/b
 import { CameraAvSettingsUserLevelManagement } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
+/** Simulated duration, in milliseconds, of a mechanical PTZ movement before movementState reverts to Idle. */
+const MOVEMENT_DURATION_MS = 1000;
+
 /**
  * Clamps a value between a minimum and a maximum.
  *
@@ -49,6 +52,14 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
   CameraAvSettingsUserLevelManagement.Feature.MechanicalTilt,
   CameraAvSettingsUserLevelManagement.Feature.MechanicalZoom,
 ) {
+  /**
+   * Internal (endpoint-scoped, not instance-scoped) state for {@link MatterbridgeCameraAvSettingsUserLevelManagementServer}.
+   * Behaviors are ephemeral (matter.js constructs a new instance per Agent), so the pending movement-simulation
+   * timer must live in `internal` state, which is backed by the endpoint rather than the instance, to survive from
+   * the command that starts a movement to a later command that restarts it before the previous one's timer fires.
+   */
+  declare internal: MatterbridgeCameraAvSettingsUserLevelManagementServer.Internal;
+
   /**
    * Handles the MPTZSetPosition command.
    * Moves the camera to the provided absolute values for pan, tilt and zoom. Fields omitted from the request leave
@@ -77,6 +88,7 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
     device.log.info(
       `Set mechanical PTZ position to pan ${this.state.mptzPosition.pan}°, tilt ${this.state.mptzPosition.tilt}°, zoom ${this.state.mptzPosition.zoom} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
+    this.#simulateMovement();
   }
 
   /**
@@ -102,5 +114,47 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
     device.log.info(
       `Moved mechanical PTZ position by pan ${request.panDelta ?? 0}°, tilt ${request.tiltDelta ?? 0}°, zoom ${request.zoomDelta ?? 0} to pan ${pan}°, tilt ${tilt}°, zoom ${zoom} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
     );
+    this.#simulateMovement();
   }
+
+  /**
+   * Marks the camera as Moving and schedules a return to Idle after a simulated movement duration.
+   * Restarts the timer if a movement is already in progress, so a burst of move commands keeps movementState at
+   * Moving until the last one settles instead of flapping back to Idle between them.
+   */
+  #simulateMovement(): void {
+    const endpoint = this.endpoint;
+    if (this.internal.movementTimer !== undefined) clearTimeout(this.internal.movementTimer);
+    this.state.movementState = CameraAvSettingsUserLevelManagement.PhysicalMovement.Moving;
+    this.internal.movementTimer = setTimeout(() => {
+      Promise.resolve(
+        endpoint.act((agent) => {
+          const behavior = agent.get(MatterbridgeCameraAvSettingsUserLevelManagementServer);
+          behavior.internal.movementTimer = undefined;
+          behavior.state.movementState = CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle;
+        }),
+      ).catch((error: unknown) => {
+        endpoint
+          .stateOf(MatterbridgeServer)
+          .log.error(`Failed to restore movementState to Idle after a simulated PTZ movement: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }, MOVEMENT_DURATION_MS);
+  }
+}
+
+/**
+ * matter.js's own Behavior subclasses declare Internal/State/Events this way (see e.g. @matter/node's
+ * SubscriptionsServer.ts); it's how the framework resolves `this.internal`'s type, so an ES module can't replace it.
+ */
+// oxlint-disable-next-line typescript-eslint/no-namespace
+export namespace MatterbridgeCameraAvSettingsUserLevelManagementServer {
+  /**
+   * Internal (endpoint-scoped, not instance-scoped) state for {@link MatterbridgeCameraAvSettingsUserLevelManagementServer}.
+   */
+  export class Internal {
+    /** The pending timer that restores movementState to Idle after a simulated PTZ movement, if one is in progress. */
+    movementTimer?: NodeJS.Timeout;
+  }
+  /* v8 ignore next -- compiler-generated fallback (`Foo || (Foo = {})`) for namespace/class declaration merging;
+   * the class is always already defined by the time this runs, so the assignment branch is structurally unreachable. */
 }

@@ -97,43 +97,103 @@ describe('MatterbridgeCameraAvSettingsUserLevelManagementServer', () => {
     );
   });
 
-  it('should set an absolute pan, tilt and zoom position', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { pan: 45, tilt: 10, zoom: 5 })).resolves.toBeUndefined();
+  it('should set an absolute pan, tilt and zoom position, transitioning movementState from Moving to Idle', async () => {
+    vi.useFakeTimers();
+    try {
+      const movementStates: CameraAvSettingsUserLevelManagement.PhysicalMovement[] = [];
+      device.subscribeAttribute(CameraAvSettingsUserLevelManagement, 'movementState', (newValue: CameraAvSettingsUserLevelManagement.PhysicalMovement) =>
+        movementStates.push(newValue),
+      );
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 45, tilt: 10, zoom: 5 });
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Set mechanical PTZ position to pan 45°, tilt 10°, zoom 5'));
+      await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { pan: 45, tilt: 10, zoom: 5 })).resolves.toBeUndefined();
+
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 45, tilt: 10, zoom: 5 });
+      expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Set mechanical PTZ position to pan 45°, tilt 10°, zoom 5'));
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'movementState')).toBe(CameraAvSettingsUserLevelManagement.PhysicalMovement.Moving);
+
+      // Advance past the simulated movement duration (MOVEMENT_DURATION_MS) for movementState to revert to Idle
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'movementState')).toBe(CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle);
+      expect(movementStates).toEqual([CameraAvSettingsUserLevelManagement.PhysicalMovement.Moving, CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should leave fields not present in the request unchanged', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { zoom: 2 })).resolves.toBeUndefined();
+    vi.useFakeTimers();
+    try {
+      await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { zoom: 2 })).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 45, tilt: 10, zoom: 2 });
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 45, tilt: 10, zoom: 2 });
+
+      // Flush the pending movementState-simulation timer so it never fires later as a real timer
+      await vi.runAllTimersAsync();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('should move by a relative pan, tilt and zoom delta', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { panDelta: -5, tiltDelta: 5, zoomDelta: 3 })).resolves.toBeUndefined();
+  it('should move by a relative pan, tilt and zoom delta, transitioning movementState from Moving to Idle', async () => {
+    vi.useFakeTimers();
+    try {
+      await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { panDelta: -5, tiltDelta: 5, zoomDelta: 3 })).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 40, tilt: 15, zoom: 5 });
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Moved mechanical PTZ position by pan -5°, tilt 5°, zoom 3 to pan 40°, tilt 15°, zoom 5'));
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 40, tilt: 15, zoom: 5 });
+      expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Moved mechanical PTZ position by pan -5°, tilt 5°, zoom 3 to pan 40°, tilt 15°, zoom 5'));
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'movementState')).toBe(CameraAvSettingsUserLevelManagement.PhysicalMovement.Moving);
+
+      // Advance past the simulated movement duration (MOVEMENT_DURATION_MS) for movementState to revert to Idle
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'movementState')).toBe(CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should clamp a relative move at the pan, tilt and zoom limits', async () => {
-    await expect(
-      device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { panDelta: 1000, tiltDelta: 1000, zoomDelta: -1000 }),
-    ).resolves.toBeUndefined();
+    vi.useFakeTimers();
+    try {
+      await expect(
+        device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { panDelta: 1000, tiltDelta: 1000, zoomDelta: -1000 }),
+      ).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 170, tilt: 90, zoom: 1 });
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 170, tilt: 90, zoom: 1 });
+
+      // Flush the pending movementState-simulation timer so it never fires later as a real timer
+      await vi.runAllTimersAsync();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should ignore fields not present in a relative move request', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', {})).resolves.toBeUndefined();
+    vi.useFakeTimers();
+    try {
+      await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', {})).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 170, tilt: 90, zoom: 1 });
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 170, tilt: 90, zoom: 1 });
+
+      // Flush the pending movementState-simulation timer so it never fires later as a real timer
+      await vi.runAllTimersAsync();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should preserve tilt and zoom when only pan is present in an absolute position request', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { pan: -170 })).resolves.toBeUndefined();
+    vi.useFakeTimers();
+    try {
+      await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { pan: -170 })).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: -170, tilt: 90, zoom: 1 });
+      expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: -170, tilt: 90, zoom: 1 });
+
+      // Flush the pending movementState-simulation timer so it never fires later as a real timer
+      await vi.runAllTimersAsync();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

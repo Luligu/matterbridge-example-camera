@@ -54,6 +54,8 @@ If you like this project and find it useful, please consider giving it a star on
 ### Fixed
 
 - [webrtc]: The per-session requested webcam resolution (from a client's `CameraAvStreamManagement.VideoStreamAllocate`) was never actually applied: `buildFfmpegVideoInputArgs` read `MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION` directly before falling back to `getConfiguredVideoResolution(requestedResolution)`, and since the plugin always sets that env var (default `640x480` at the time of this fix, before `videoResolution` defaulted to `auto`), the fallback — and therefore the requested resolution — was never reached.
+- [ptz camera]: `movementState` never left `Idle`: `MatterbridgeCameraAvSettingsUserLevelManagementServer`'s `mptzSetPosition`/`mptzRelativeMove` handlers updated `mptzPosition` but never touched `movementState`. Both handlers now set it to `Moving` and schedule a return to `Idle` after a simulated movement duration (restarting the timer if a new move command arrives first), so subscribers actually observe the transition.
+- [tests]: Add `movementState` transition coverage (`Idle` → `Moving` → `Idle`, including the subscription-visible change) in `vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts`.
 
 ## [0.0.7] - 2026-07-25
 
