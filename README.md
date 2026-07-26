@@ -186,7 +186,7 @@ So, to let either Intercom 1 or Intercom 2 start a call, on the fabric they shar
 
 With both directions in place, either Intercom can call the other; a call initiated the other way only needs its own binding/ACL pair, already covered above since both were set up symmetrically.
 
-## WebRTC test video injection
+## WebRTC video injection
 
 `WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video track into the negotiated connection, so the end-to-end media path can be validated without a real camera capture pipeline.
 
@@ -230,6 +230,19 @@ Example, capturing from a real Windows webcam at 720p with a higher bitrate:
   "videoBitrate": 2000
 }
 ```
+
+Finding your camera's RTSP url for `videoSource` when `videoGenerator` is `rtsp`:
+
+- The general format is `rtsp://<username>:<password>@<camera-ip>:<port>/<path>`.
+- `username`/`password` are the camera's own local admin account (set in its web UI or during first setup), not a cloud/app account.
+- `camera-ip` is its LAN IP — check your router's DHCP client list, the camera's own app, or an IP scanner.
+- `port` is almost always `554` unless changed in the camera's settings.
+- `path` is vendor/model-specific and varies the most — check the camera's manual or web UI's RTSP settings page, or query it with an ONVIF tool (e.g. ONVIF Device Manager) for the exact `GetStreamUri` result. Some common examples:
+  - Hikvision/Ezviz-style: `/ch1/main` (main stream) or `/ch1/sub` (substream, lower resolution)
+  - Dahua: `/cam/realmonitor?channel=1&subtype=0`
+  - Reolink: `/h264Preview_01_main`
+
+Verify the url works standalone before adding it to the config, e.g. `ffprobe rtsp://admin:password@192.168.1.100:554/ch1/main`, or open it in VLC via "Open Network Stream". Note that the url (with credentials in plaintext) ends up stored in Matterbridge's plugin config on disk, like any other password-bearing config value.
 
 Example, pulling from a real RTSP camera, scaled to a fixed 1280x720 and re-encoded at `videoBitrate` (the camera's own frame rate is kept):
 
@@ -300,6 +313,7 @@ Legend:
 - **ICE — Interactive Connectivity Establishment:** discovers and tests possible network paths between the peers. ICE candidates contain addresses and ports that may be used to establish the direct WebRTC connection.
 - **DTLS — Datagram Transport Layer Security:** authenticates the peers and encrypts communication over the selected UDP network path. WebRTC uses the negotiated DTLS connection to protect subsequent media and data transport.
 - **SCTP — Stream Control Transmission Protocol:** transports WebRTC data-channel messages over the secure DTLS connection. In this test, it carries `start-live-view` and `live-view-started` between the controller and camera.
+- **RTSP — Real Time Streaming Protocol:** a separate, older protocol (not part of the WebRTC flow above) used to pull a live stream from a real IP camera. See the `rtsp` video generator earlier in this README: `ffmpeg` connects to the camera's RTSP url and re-encodes its stream into the WebRTC video track injected into this same peer connection.
 
 `createOffer()` and `createAnswer()` produce the SDP descriptions. Applying each local description gathers that peer's ICE candidates. After each peer receives the other peer's description and candidates, werift selects a network path, performs the DTLS handshake, and opens the SCTP data channel. The two control messages prove that data can travel in both directions. The camera peer then sends `assets/test-camera.mp4` to the controller in 16 KiB binary chunks; the test reconstructs it and compares its byte length and SHA-256 hash before closing both peers.
 

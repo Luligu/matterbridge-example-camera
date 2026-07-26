@@ -7,6 +7,7 @@
 
 const NAME = 'WeriftSession';
 
+import type { ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -856,6 +857,35 @@ describe('WeriftWebRtcSession', () => {
 
       expect((session as unknown as TestAudioState).testAudioAttached).toBe(false);
       expect((session as unknown as TestAudioState).testAudioGenerator).toBeUndefined();
+    });
+  });
+
+  describe('process exit cleanup', () => {
+    it('should kill a leftover ffmpeg process when the process emits exit', async () => {
+      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
+      type SessionState = { testVideoGenerator?: ChildProcess };
+      const session = new WeriftWebRtcSession(1);
+      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+
+      await session.createOffer({ video: true, audio: false });
+      const videoGenerator = (session as unknown as SessionState).testVideoGenerator;
+
+      if (!videoGenerator) throw new Error('videoGenerator was not attached');
+      const killSpy = vi.spyOn(videoGenerator, 'kill');
+
+      process.emit('exit', 0);
+
+      expect(killSpy).toHaveBeenCalledWith('SIGTERM');
+
+      await session.close();
+    });
+
+    it('should not throw when the process emits exit for a session with no leftover ffmpeg process', async () => {
+      const session = new WeriftWebRtcSession(1);
+
+      expect(() => process.emit('exit', 0)).not.toThrow();
+
+      await session.close();
     });
   });
 });

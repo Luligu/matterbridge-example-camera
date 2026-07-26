@@ -71,6 +71,15 @@ export interface WeriftOfferOptions {
  * MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1.
  */
 export class WeriftWebRtcSession {
+  /**
+   * Every live session, so the process `exit` handler below can kill any ffmpeg processes still running if the host
+   * process exits without every session's close() being called (e.g. Matterbridge being killed rather than shut
+   * down gracefully).
+   */
+  private static readonly activeSessions = new Set<WeriftWebRtcSession>();
+
+  private static exitHandlerRegistered = false;
+
   /** The underlying werift peer connection for this session. */
   readonly peerConnection: RTCPeerConnection;
 
@@ -129,6 +138,19 @@ export class WeriftWebRtcSession {
       this.log.info(`Peer connection state: ${state}`);
     });
     this.log.debug(`Created RTCPeerConnection with codecs: audio=[OPUS, PCMU], video=[H264, VP8] for session ${webRtcSessionId}`);
+
+    WeriftWebRtcSession.activeSessions.add(this);
+    if (!WeriftWebRtcSession.exitHandlerRegistered) {
+      WeriftWebRtcSession.exitHandlerRegistered = true;
+      process.on('exit', () => {
+        for (const session of WeriftWebRtcSession.activeSessions) {
+          if (!session.testVideoGenerator && !session.testAudioGenerator) continue;
+          session.log.info('Process exiting: killing leftover ffmpeg processes for this session');
+          session.testVideoGenerator?.kill('SIGTERM');
+          session.testAudioGenerator?.kill('SIGTERM');
+        }
+      });
+    }
   }
 
   /**
@@ -816,6 +838,7 @@ export class WeriftWebRtcSession {
     await this.peerConnection.close();
     this.cleanupTestVideoArtifacts();
     this.cleanupTestAudioArtifacts();
+    WeriftWebRtcSession.activeSessions.delete(this);
     this.log.info(`RTCPeerConnection closed (connectionState=${this.peerConnection.connectionState})`);
   }
 }
