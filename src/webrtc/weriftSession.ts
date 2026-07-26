@@ -37,6 +37,8 @@ import { navigator } from 'werift/nonstandard';
 
 type VideoSource = 'none' | 'test' | 'webcam' | 'rtsp';
 
+type AudioSource = 'none' | 'test' | 'microphone' | 'rtsp';
+
 /**
  * Media kinds to negotiate when creating a real WebRTC offer for a WebRtcTransportProvider session.
  */
@@ -68,9 +70,12 @@ export interface WeriftOfferOptions {
  * rtsp://user:password@host:554/path) for `rtsp`. The webcam capture resolution defaults to 640x480 and can be set
  * to 1280x720 or 1920x1080 with MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION.
  *
- * Similarly, a recorded test-voice clip can be injected as the audio track (e.g. for an Intercom's "Listen" live
- * view) so the audio path can be validated without a real microphone capture pipeline, when
- * `MATTERBRIDGE_CAMERA_AUDIO_SOURCE=test`; unset or `none` negotiates the audio transceiver without attaching a track.
+ * Similarly, the audio track can inject a recorded test-voice clip (e.g. for an Intercom's "Listen" live view) when
+ * `MATTERBRIDGE_CAMERA_AUDIO_SOURCE=test`, capture from a local microphone when the source is `microphone`, or pull
+ * the audio from a real RTSP camera stream when the source is `rtsp`; unset or `none` negotiates the audio
+ * transceiver without attaching a track. MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE identifies the microphone device
+ * (e.g. a hw:X,Y ALSA device on Linux, an avfoundation audio index on macOS, or a dshow device name on Windows) for
+ * `microphone`, or the RTSP url for `rtsp`.
  */
 export class WeriftWebRtcSession {
   /**
@@ -648,19 +653,89 @@ export class WeriftWebRtcSession {
   private static readonly TEST_VOICE_PATH = fileURLToPath(new URL('../../assets/test-voice.opus', import.meta.url));
 
   /**
-   * Attaches the recorded test-voice clip ({@link TEST_VOICE_PATH}) as the audio track for this session, so an
-   * end-to-end audio path (e.g. an Intercom's "Listen" live view) can be verified without a real microphone capture
-   * pipeline. Mirrors {@link generateVideoTrack}; only injects when MATTERBRIDGE_CAMERA_AUDIO_SOURCE=test.
+   * Resolves the configured injected audio source.
+   *
+   * @returns {AudioSource} `none` by default, or the configured `test`/`microphone`/`rtsp` source.
+   */
+  private getConfiguredAudioSource(): AudioSource {
+    const source = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE?.trim().toLowerCase() ?? 'none';
+    switch (source) {
+      case 'none':
+      case 'test':
+      case 'microphone':
+      case 'rtsp':
+        return source;
+      default:
+        this.log.warn(`Unsupported MATTERBRIDGE_CAMERA_AUDIO_SOURCE "${source}" (supported: test, microphone, rtsp, none); falling back to none`);
+        return 'none';
+    }
+  }
+
+  /**
+   * Resolves the ffmpeg input arguments and a human-readable description for the configured audio source.
+   *
+   * Uses the recorded test-voice clip (looped) for `test`, or MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE for
+   * `microphone`/`rtsp` (the RTSP url for `rtsp`); falls back to the test-voice clip (logging a warning) if the
+   * device/url is missing or microphone capture isn't supported on this platform.
+   *
+   * @param {'test' | 'microphone' | 'rtsp'} audioSource - The configured audio source after `none` has been handled by the caller.
+   * @returns {{ args: string[]; description: string; volumeFilter?: string }} The ffmpeg input arguments, a description of the source for logging, and an optional `-af` volume-boost filter (only for the test-voice clip, which was recorded quietly).
+   */
+  private buildFfmpegAudioInputArgs(audioSource: 'test' | 'microphone' | 'rtsp'): { args: string[]; description: string; volumeFilter?: string } {
+    const testVoiceInput = {
+      args: ['-re', '-stream_loop', '-1', '-i', WeriftWebRtcSession.TEST_VOICE_PATH],
+      description: 'recorded test-voice clip',
+      volumeFilter: 'volume=6dB',
+    };
+    if (audioSource === 'test') return testVoiceInput;
+
+    const device = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
+    if (!device) {
+      this.log.warn(`MATTERBRIDGE_CAMERA_AUDIO_SOURCE=${audioSource} requires MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE to be set; falling back to the recorded test-voice clip`);
+      return testVoiceInput;
+    }
+
+    if (audioSource === 'rtsp') {
+      const description = `RTSP camera audio (${device})`;
+      this.log.debug(`RTSP audio capture params: url=${device}, description="${description}"`);
+      return { args: ['-rtsp_transport', 'tcp', '-i', device], description };
+    }
+
+    const description = `local microphone (${device})`;
+    this.log.debug(`Microphone capture params: device=${device}, description="${description}"`);
+    switch (process.platform) {
+      case 'linux':
+        return { args: ['-f', 'alsa', '-i', device], description };
+      case 'darwin':
+        return { args: ['-f', 'avfoundation', '-i', `:${device}`], description };
+      case 'win32':
+        return { args: ['-f', 'dshow', '-i', `audio=${device}`], description };
+      default:
+        this.log.warn(`Microphone capture via ffmpeg is not supported on platform "${process.platform}"; falling back to the recorded test-voice clip`);
+        return testVoiceInput;
+    }
+  }
+
+  /**
+   * Attaches an injected audio track (test-voice clip, microphone, or RTSP camera audio, per
+   * {@link buildFfmpegAudioInputArgs}) to the peer connection by spawning ffmpeg to encode into it over a local
+   * UDP/RTP loop, so an end-to-end audio path (e.g. an Intercom's "Listen" live view) can be verified without a
+   * real microphone capture pipeline. Mirrors {@link generateVideoTrack}; only injects when
+   * MATTERBRIDGE_CAMERA_AUDIO_SOURCE is `test`, `microphone`, or `rtsp`.
    *
    * @param {RTCRtpCodecParameters} codec - The negotiated Opus codec parameters to encode and send as.
    * @returns {Promise<void>} Resolves once the track is attached, or once injection is skipped/failed (logged, not thrown).
    */
   private async generateAudioTrack(codec: RTCRtpCodecParameters): Promise<void> {
     if (this.testAudioAttached) return;
-    if (process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE !== 'test') {
-      this.log.debug(`Test audio injection skipped (MATTERBRIDGE_CAMERA_AUDIO_SOURCE=${process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE ?? 'none'})`);
+    const audioSource = this.getConfiguredAudioSource();
+    if (audioSource === 'none') {
+      this.log.debug('Audio injection disabled by MATTERBRIDGE_CAMERA_AUDIO_SOURCE=none');
       return;
     }
+
+    const audioInput = this.buildFfmpegAudioInputArgs(audioSource);
+    this.log.debug(`Attempting to attach ${audioInput.description} audio track`);
 
     const ffmpegCommand = await this.resolveCommand('ffmpeg');
     if (!ffmpegCommand) {
@@ -684,14 +759,9 @@ export class WeriftWebRtcSession {
         '-hide_banner',
         '-loglevel',
         'error',
-        '-re',
-        '-stream_loop',
-        '-1',
-        '-i',
-        WeriftWebRtcSession.TEST_VOICE_PATH,
+        ...audioInput.args,
         '-vn',
-        '-af',
-        'volume=6dB',
+        ...(audioInput.volumeFilter ? ['-af', audioInput.volumeFilter] : []),
         '-c:a',
         'libopus',
         '-b:a',
@@ -720,11 +790,13 @@ export class WeriftWebRtcSession {
       this.testAudioUdpDisposer = disposer;
       this.testAudioGenerator = generator;
       this.testAudioAttached = true;
-      this.log.info(`Attached test-voice audio track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`);
+      this.log.info(
+        `Attached ${audioInput.description} audio track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
+      );
       /* v8 ignore start -- requires a lower-level failure (UDP port allocation racing, werift/nonstandard media
        * internals throwing) that isn't practically triggerable in this harness without mocking werift internals. */
     } catch (error) {
-      this.log.warn(`Failed to attach test-voice audio track: ${getErrorMessage(error)}`);
+      this.log.warn(`Failed to attach ${audioInput.description} audio track: ${getErrorMessage(error)}`);
     }
     /* v8 ignore stop */
   }
