@@ -30,6 +30,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AnsiLogger, LogLevel, MAGENTA, TimestampFormat } from 'matterbridge/logger';
+import type { RTCDtlsTransport, RTCIceCandidatePairStats, RTCOutboundRtpStreamStats } from 'werift';
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264, useOPUS, usePCMU, useVP8 } from 'werift';
 import { navigator } from 'werift/nonstandard';
 
@@ -102,6 +103,34 @@ export class WeriftWebRtcSession {
   private testAudioAttached = false;
 
   /**
+   * Periodic diagnostics timer started in the constructor and cleared in {@link close}; see
+   * {@link logDiagnosticsSnapshot}.
+   */
+  private diagnosticsInterval?: NodeJS.Timeout;
+
+  /**
+   * How often {@link logDiagnosticsSnapshot} runs while a session is alive. Purely observational for now, so a
+   * conservative interval keeps the log readable while we gather real-world state transitions (e.g. whether a
+   * controller-abandoned session's ICE/DTLS/connection state settles into something detectable, and whether it ever
+   * recovers from `disconnected` on its own) before any auto-close behavior is designed.
+   */
+  private static readonly DIAGNOSTICS_INTERVAL_MS = 10_000;
+
+  /**
+   * The nominated candidate-pair and outbound-rtp packet counters from the previous {@link logDiagnosticsSnapshot}
+   * tick, so it can report deltas (packets actually moved since the last tick) instead of only cumulative totals.
+   * Unlike iceConnectionState, these counters come straight off werift's ICE `CandidatePair`/RTP sender objects and
+   * are not affected by the one-shot RFC 7675 consent-check bug documented on {@link logDiagnosticsSnapshot}.
+   */
+  private lastDiagnosticsCounters?: { candidatePairPacketsSent: number; candidatePairPacketsReceived: number; outboundRtpPacketsSent: number };
+
+  /**
+   * DTLS transports already covered by {@link logDtlsTransportStateChanges}'s onStateChange subscription, so a
+   * transport already listened to is not subscribed twice if that method runs again (e.g. an ICE restart).
+   */
+  private readonly dtlsTransportsWithStateLogging = new Set<RTCDtlsTransport>();
+
+  /**
    * Creates a new werift RTCPeerConnection configured with the codecs this session can negotiate and inject.
    *
    * @param {number} webRtcSessionId - The WebRtcTransportProvider session identifier this instance backs, used as this session's log name.
@@ -142,6 +171,8 @@ export class WeriftWebRtcSession {
       this.log.info(`Peer connection state: ${state}`);
     });
     this.log.debug(`Created RTCPeerConnection with codecs: audio=[OPUS, PCMU], video=[H264, VP8] for session ${webRtcSessionId}`);
+
+    this.diagnosticsInterval = setInterval(() => void this.logDiagnosticsSnapshot(), WeriftWebRtcSession.DIAGNOSTICS_INTERVAL_MS);
 
     WeriftWebRtcSession.activeSessions.add(this);
     if (!WeriftWebRtcSession.exitHandlerRegistered) {
@@ -753,6 +784,7 @@ export class WeriftWebRtcSession {
     // oxlint-disable-next-line typescript-eslint/no-non-null-assertion
     const sdp = this.peerConnection.localDescription!.sdp;
     this.log.info(`Created local SDP offer (${this.summarizeSdp(sdp)})`);
+    this.logDtlsTransportStateChanges();
     return sdp;
   }
 
@@ -804,6 +836,7 @@ export class WeriftWebRtcSession {
     // oxlint-disable-next-line typescript-eslint/no-non-null-assertion
     const sdp = this.peerConnection.localDescription!.sdp;
     this.log.info(`Created local SDP answer (${this.summarizeSdp(sdp)})`);
+    this.logDtlsTransportStateChanges();
     return sdp;
   }
 
@@ -817,6 +850,7 @@ export class WeriftWebRtcSession {
     this.log.debug(`ApplyAnswer requested (${this.summarizeSdp(answerSdp)})`);
     await this.peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
     this.log.info(`Remote SDP answer applied (signalingState=${this.peerConnection.signalingState})`);
+    this.logDtlsTransportStateChanges();
   }
 
   /**
@@ -833,12 +867,95 @@ export class WeriftWebRtcSession {
   }
 
   /**
+   * Subscribes a dedicated log line to each of this session's DTLS transports' onStateChange event, rather than
+   * relying only on the periodic {@link logDiagnosticsSnapshot} tick to notice a transition. Safe to call more than
+   * once (e.g. after createOffer and again after createAnswer) — already-subscribed transports are skipped via
+   * {@link dtlsTransportsWithStateLogging}.
+   *
+   * This matters because a DTLS transport reaching `closed`/`failed` looks like a real, one-way teardown signal from
+   * the peer (see the `dtls.onClose`/`onError` handlers in werift/lib/webrtc/src/transport/dtls.js), unlike
+   * iceConnectionState's `disconnected` (see {@link logDiagnosticsSnapshot}'s doc comment) — and unlike
+   * iceConnectionState, peerConnection.connectionState never reflects it either, so without this dedicated
+   * subscription the only way to notice it at all is the periodic diagnostics snapshot.
+   *
+   * @returns {void}
+   */
+  private logDtlsTransportStateChanges(): void {
+    for (const transport of this.peerConnection.dtlsTransports) {
+      if (this.dtlsTransportsWithStateLogging.has(transport)) continue;
+      this.dtlsTransportsWithStateLogging.add(transport);
+      transport.onStateChange.subscribe((state) => {
+        this.log.info(`DTLS transport state: ${state}`);
+      });
+    }
+  }
+
+  /**
+   * Logs a snapshot of every state this session's werift peer connection exposes: the aggregate connection and
+   * signaling states, the per-transport ICE and DTLS states, and real packet-flow counters from getStats(). Purely
+   * observational (see {@link diagnosticsInterval}) — nothing here reacts to the state, it just makes it visible in
+   * the log so a controller-abandoned session (no EndSession ever sent) can be characterized before any auto-close
+   * logic is designed.
+   *
+   * iceConnectionState/iceTransportStates alone are not a reliable liveness signal here: werift's RFC 7675
+   * consent-check loop (see werift/lib/ice/src/ice.js's queryConsent) latches the ICE transport at `disconnected`
+   * after a single missed keepalive and never retries, so a perfectly healthy, actively-streaming session can show
+   * `disconnected` forever. The nominated candidate-pair and outbound-rtp packet counters below come from a
+   * different code path (werift's ICE `CandidatePair`/RTP sender objects, incremented on every actual UDP
+   * send/receive) and are unaffected by that bug, so their deltas are a genuine "is data still moving" signal.
+   *
+   * @returns {Promise<void>} Resolves once the snapshot has been logged.
+   */
+  private async logDiagnosticsSnapshot(): Promise<void> {
+    const iceStates = this.peerConnection.iceTransports.map((transport) => transport.state).join(',') || 'none';
+    const dtlsStates = this.peerConnection.dtlsTransports.map((transport) => transport.state).join(',') || 'none';
+
+    const stats = [...(await this.peerConnection.getStats()).values()];
+    // werift's RTCStats subtypes (RTCIceCandidatePairStats, RTCOutboundRtpStreamStats, ...) aren't combined into a
+    // discriminated union in its type declarations, so narrowing past the `type` check still needs an assertion.
+    // oxlint-disable typescript/no-unsafe-type-assertion
+    const nominatedPair = stats
+      .filter((stat) => stat.type === 'candidate-pair')
+      .map((stat) => stat as RTCIceCandidatePairStats)
+      .find((pair) => pair.nominated === true);
+    const outboundRtp = stats.filter((stat) => stat.type === 'outbound-rtp').map((stat) => stat as RTCOutboundRtpStreamStats);
+    // oxlint-enable typescript/no-unsafe-type-assertion
+
+    const candidatePairPacketsSent = nominatedPair?.packetsSent ?? 0;
+    const candidatePairPacketsReceived = nominatedPair?.packetsReceived ?? 0;
+    const outboundRtpPacketsSent = outboundRtp.reduce((sum, stat) => sum + (stat.packetsSent ?? 0), 0);
+
+    const previous = this.lastDiagnosticsCounters;
+    this.lastDiagnosticsCounters = { candidatePairPacketsSent, candidatePairPacketsReceived, outboundRtpPacketsSent };
+
+    const delta = (current: number, previousValue: number | undefined): string =>
+      previousValue === undefined ? 'n/a' : `${current - previousValue >= 0 ? '+' : ''}${current - previousValue}`;
+    const outboundRtpSummary = outboundRtp.map((stat) => `${stat.kind ?? 'unknown'}:packetsSent=${stat.packetsSent ?? 0}`).join(', ') || 'none';
+
+    this.log.debug(
+      [
+        'Diagnostics:',
+        `- connectionState=${this.peerConnection.connectionState}`,
+        `- iceConnectionState=${this.peerConnection.iceConnectionState}`,
+        `- iceGatheringState=${this.peerConnection.iceGatheringState}`,
+        `- signalingState=${this.peerConnection.signalingState}`,
+        `- iceTransportStates=[${iceStates}]`,
+        `- dtlsTransportStates=[${dtlsStates}]`,
+        `- nominatedPair(packetsSent=${candidatePairPacketsSent} Δ${delta(candidatePairPacketsSent, previous?.candidatePairPacketsSent)}, packetsReceived=${candidatePairPacketsReceived} Δ${delta(candidatePairPacketsReceived, previous?.candidatePairPacketsReceived)})`,
+        `- outboundRtp[${outboundRtpSummary}] (totalPacketsSent Δ${delta(outboundRtpPacketsSent, previous?.outboundRtpPacketsSent)})`,
+      ].join('\n'),
+    );
+  }
+
+  /**
    * Closes the underlying peer connection.
    *
    * @returns {Promise<void>} Resolves once the peer connection is closed.
    */
   async close(): Promise<void> {
     this.log.debug('Closing RTCPeerConnection');
+    clearInterval(this.diagnosticsInterval);
+    this.diagnosticsInterval = undefined;
     await this.peerConnection.close();
     this.cleanupTestVideoArtifacts();
     this.cleanupTestAudioArtifacts();
