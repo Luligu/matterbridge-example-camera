@@ -43,6 +43,13 @@ If you like this project and find it useful, please consider giving it a star on
 - [platform]: Add an `audioGenerator` config property (`none`/`test`, defaulting to `none`) replacing the undocumented `MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1` env var toggle, mirroring `videoGenerator`'s pattern via the new `MATTERBRIDGE_CAMERA_AUDIO_SOURCE` env var. Test-voice audio injection is now opt-in instead of on by default.
 - [docs]: Document `audioGenerator` in the README and schema.
 - [tests]: Extend `vitest/module.test.ts` with `audioGenerator` normalization/apply coverage; update `vitest/webrtc/weriftSession.test.ts` for the new `MATTERBRIDGE_CAMERA_AUDIO_SOURCE` gate.
+- [webrtc]: Add a periodic diagnostics log (`WeriftWebRtcSession.logDiagnosticsSnapshot`, every 10s) reporting `connectionState`, `iceConnectionState`, `iceGatheringState`, `signalingState`, per-transport ICE/DTLS states, and `getStats()`-derived packet-flow counters (nominated candidate-pair and outbound-rtp packets, with deltas since the previous tick). Needed because werift's ICE consent-freshness check (RFC 7675) can latch `iceConnectionState` at `disconnected` forever after a single missed keepalive, even on a healthy, actively-streaming session — the packet-flow deltas are unaffected by that bug and are a reliable "is media still moving" signal. A dedicated log line also fires immediately on any DTLS transport state change instead of waiting for the next tick.
+- [webrtc]: Auto-close a `WeriftWebRtcSession` (peer connection plus any injected ffmpeg generators) when one of its DTLS transports reaches `closed` or `failed` on its own — a real, one-way teardown signal from the peer, unlike `iceConnectionState`'s `disconnected`, which must never trigger a close by itself. Fixes an orphaned-session leak: a controller that abandons a live view without ever sending `EndSession` (e.g. just closing the window) previously left the peer connection and its ffmpeg processes running indefinitely, piling up on every reconnect.
+- [tests]: Add DTLS-triggered auto-close coverage in `vitest/webrtc/weriftSession.test.ts` (`closed`, `failed`, and a regression test ensuring a normal `close()` doesn't re-enter itself via the same DTLS state change).
+
+### Changed
+
+- [webrtc]: Replace inline `error instanceof Error ? error.message : String(error)` error-message extraction with `getErrorMessage` from `matterbridge/utils` throughout `weriftSession.ts`; use `fireAndForget` for the auto-close's fire-and-forget `close()` call, matching the pattern already used elsewhere in the plugin.
 
 ### Fixed
 

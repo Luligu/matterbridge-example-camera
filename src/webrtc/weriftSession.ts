@@ -30,6 +30,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AnsiLogger, LogLevel, MAGENTA, TimestampFormat } from 'matterbridge/logger';
+import { fireAndForget, getErrorMessage } from 'matterbridge/utils';
 import type { RTCDtlsTransport, RTCIceCandidatePairStats, RTCOutboundRtpStreamStats } from 'werift';
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264, useOPUS, usePCMU, useVP8 } from 'werift';
 import { navigator } from 'werift/nonstandard';
@@ -579,7 +580,7 @@ export class WeriftWebRtcSession {
        * it runs (e.g. the binary is removed between the check and this spawn), which this harness can't simulate
        * without deleting real system binaries or mocking node:child_process. */
       generator.once('error', (error: unknown) => {
-        this.log.warn(`Video generator failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.log.warn(`Video generator failed: ${getErrorMessage(error)}`);
       });
       /* v8 ignore stop */
 
@@ -592,7 +593,7 @@ export class WeriftWebRtcSession {
       /* v8 ignore start -- requires a lower-level failure (UDP port allocation racing, werift/nonstandard media
        * internals throwing) that isn't practically triggerable in this harness without mocking werift internals. */
     } catch (error) {
-      this.log.warn(`Failed to attach ${videoInput.description} video track: ${error instanceof Error ? error.message : String(error)}`);
+      this.log.warn(`Failed to attach ${videoInput.description} video track: ${getErrorMessage(error)}`);
     }
     /* v8 ignore stop */
   }
@@ -712,7 +713,7 @@ export class WeriftWebRtcSession {
        * it runs (e.g. the binary is removed between the check and this spawn), which this harness can't simulate
        * without deleting real system binaries or mocking node:child_process. */
       generator.once('error', (error: unknown) => {
-        this.log.warn(`Audio generator failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.log.warn(`Audio generator failed: ${getErrorMessage(error)}`);
       });
       /* v8 ignore stop */
 
@@ -723,7 +724,7 @@ export class WeriftWebRtcSession {
       /* v8 ignore start -- requires a lower-level failure (UDP port allocation racing, werift/nonstandard media
        * internals throwing) that isn't practically triggerable in this harness without mocking werift internals. */
     } catch (error) {
-      this.log.warn(`Failed to attach test-voice audio track: ${error instanceof Error ? error.message : String(error)}`);
+      this.log.warn(`Failed to attach test-voice audio track: ${getErrorMessage(error)}`);
     }
     /* v8 ignore stop */
   }
@@ -867,16 +868,29 @@ export class WeriftWebRtcSession {
   }
 
   /**
-   * Subscribes a dedicated log line to each of this session's DTLS transports' onStateChange event, rather than
-   * relying only on the periodic {@link logDiagnosticsSnapshot} tick to notice a transition. Safe to call more than
-   * once (e.g. after createOffer and again after createAnswer) — already-subscribed transports are skipped via
-   * {@link dtlsTransportsWithStateLogging}.
+   * Set at the very start of {@link close}, before it awaits anything, so:
+   * - a concurrent/duplicate call to {@link close} (e.g. from {@link logDtlsTransportStateChanges}'s own auto-close,
+   *   or a second DTLS transport reaching `closed`/`failed`) is a no-op instead of doing the cleanup work twice.
+   * - {@link logDtlsTransportStateChanges} can tell a DTLS transport reaching `closed` as a *side effect of our own*
+   *   close() (every close — EndSession, closeAll(), this same auto-close — stops the DTLS transports, which
+   *   triggers this same onStateChange) apart from one reaching `closed` on its own, unprompted, which is the real
+   *   orphaned-session signal that should trigger an auto-close.
+   */
+  private closing = false;
+
+  /**
+   * Subscribes each of this session's DTLS transports' onStateChange event to a dedicated log line — rather than
+   * relying only on the periodic {@link logDiagnosticsSnapshot} tick to notice a transition — and, once a transport
+   * reaches `closed` or `failed`, closes this session. Safe to call more than once (e.g. after createOffer and again
+   * after createAnswer) — already-subscribed transports are skipped via {@link dtlsTransportsWithStateLogging}.
    *
    * This matters because a DTLS transport reaching `closed`/`failed` looks like a real, one-way teardown signal from
    * the peer (see the `dtls.onClose`/`onError` handlers in werift/lib/webrtc/src/transport/dtls.js), unlike
-   * iceConnectionState's `disconnected` (see {@link logDiagnosticsSnapshot}'s doc comment) — and unlike
-   * iceConnectionState, peerConnection.connectionState never reflects it either, so without this dedicated
-   * subscription the only way to notice it at all is the periodic diagnostics snapshot.
+   * iceConnectionState's `disconnected` (see {@link logDiagnosticsSnapshot}'s doc comment), which can latch on a
+   * single missed keepalive on an otherwise healthy, actively-streaming session and must never trigger a close by
+   * itself. Unlike iceConnectionState, peerConnection.connectionState never reflects a closed DTLS transport either,
+   * so without this dedicated subscription an abandoned session (e.g. a controller that never sends EndSession)
+   * would otherwise stay open — peer connection, ffmpeg generators and all — until the whole platform shuts down.
    *
    * @returns {void}
    */
@@ -886,6 +900,10 @@ export class WeriftWebRtcSession {
       this.dtlsTransportsWithStateLogging.add(transport);
       transport.onStateChange.subscribe((state) => {
         this.log.info(`DTLS transport state: ${state}`);
+        if ((state === 'closed' || state === 'failed') && !this.closing) {
+          this.log.info(`Closing session ${this.webRtcSessionId}: DTLS transport reached ${state}`);
+          fireAndForget(this.close(), this.log, `Failed to auto-close session ${this.webRtcSessionId} after DTLS transport reached ${state}`);
+        }
       });
     }
   }
@@ -948,11 +966,13 @@ export class WeriftWebRtcSession {
   }
 
   /**
-   * Closes the underlying peer connection.
+   * Closes the underlying peer connection. A no-op if this session is already closing/closed — see {@link closing}.
    *
    * @returns {Promise<void>} Resolves once the peer connection is closed.
    */
   async close(): Promise<void> {
+    if (this.closing) return;
+    this.closing = true;
     this.log.debug('Closing RTCPeerConnection');
     clearInterval(this.diagnosticsInterval);
     this.diagnosticsInterval = undefined;

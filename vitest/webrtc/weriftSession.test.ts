@@ -911,4 +911,47 @@ describe('WeriftWebRtcSession', () => {
       await expect(WeriftWebRtcSession.closeAll()).resolves.toBeUndefined();
     });
   });
+
+  describe('DTLS-triggered auto-close', () => {
+    it('should close the session once a DTLS transport reaches closed on its own', async () => {
+      type DtlsTransportState = { setState(state: string, emitEvent?: boolean): void };
+      const session = new WeriftWebRtcSession(1);
+      const closeSpy = vi.spyOn(session, 'close');
+      await session.createOffer({ video: true, audio: false });
+      const [dtlsTransport] = session.peerConnection.dtlsTransports;
+      if (!dtlsTransport) throw new Error('no DTLS transport negotiated');
+
+      (dtlsTransport as unknown as DtlsTransportState).setState('closed');
+
+      await vi.waitFor(() => expect(closeSpy).toHaveBeenCalledTimes(1));
+      await closeSpy.mock.results[0]?.value;
+      expect((session as unknown as { closing: boolean }).closing).toBe(true);
+    });
+
+    it('should close the session once a DTLS transport reaches failed on its own', async () => {
+      type DtlsTransportState = { setState(state: string, emitEvent?: boolean): void };
+      const session = new WeriftWebRtcSession(1);
+      const closeSpy = vi.spyOn(session, 'close');
+      await session.createOffer({ video: true, audio: false });
+      const [dtlsTransport] = session.peerConnection.dtlsTransports;
+      if (!dtlsTransport) throw new Error('no DTLS transport negotiated');
+
+      (dtlsTransport as unknown as DtlsTransportState).setState('failed');
+
+      await vi.waitFor(() => expect(closeSpy).toHaveBeenCalledTimes(1));
+      await closeSpy.mock.results[0]?.value;
+    });
+
+    it('should not call close a second time when a normal close() itself drives the DTLS transport to closed', async () => {
+      const session = new WeriftWebRtcSession(1);
+      const closeSpy = vi.spyOn(session, 'close');
+      await session.createOffer({ video: true, audio: false });
+
+      await session.close();
+
+      // A normal close() also stops the DTLS transports (see the doc comment on `closing`), which must not re-enter
+      // close() a second time via the same onStateChange subscription that drives the auto-close above.
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+    });
+  });
 });
