@@ -28,7 +28,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
-## [0.0.8] - Dev branch
+## [0.0.8] - 2026-07-26
 
 ### Added
 
@@ -46,6 +46,9 @@ If you like this project and find it useful, please consider giving it a star on
 - [webrtc]: Add a periodic diagnostics log (`WeriftWebRtcSession.logDiagnosticsSnapshot`, every 10s) reporting `connectionState`, `iceConnectionState`, `iceGatheringState`, `signalingState`, per-transport ICE/DTLS states, and `getStats()`-derived packet-flow counters (nominated candidate-pair and outbound-rtp packets, with deltas since the previous tick). Needed because werift's ICE consent-freshness check (RFC 7675) can latch `iceConnectionState` at `disconnected` forever after a single missed keepalive, even on a healthy, actively-streaming session — the packet-flow deltas are unaffected by that bug and are a reliable "is media still moving" signal. A dedicated log line also fires immediately on any DTLS transport state change instead of waiting for the next tick.
 - [webrtc]: Auto-close a `WeriftWebRtcSession` (peer connection plus any injected ffmpeg generators) when one of its DTLS transports reaches `closed` or `failed` on its own — a real, one-way teardown signal from the peer, unlike `iceConnectionState`'s `disconnected`, which must never trigger a close by itself. Fixes an orphaned-session leak: a controller that abandons a live view without ever sending `EndSession` (e.g. just closing the window) previously left the peer connection and its ffmpeg processes running indefinitely, piling up on every reconnect.
 - [tests]: Add DTLS-triggered auto-close coverage in `vitest/webrtc/weriftSession.test.ts` (`closed`, `failed`, and a regression test ensuring a normal `close()` doesn't re-enter itself via the same DTLS state change).
+- [webrtc]: Add `microphone` and `rtsp` options to `audioGenerator`, mirroring `videoGenerator`'s pattern: `microphone` captures from a local capture device via `ffmpeg -f alsa/avfoundation/dshow`, and `rtsp` pulls just the audio from a real RTSP camera stream (dropping any video) via `ffmpeg -rtsp_transport tcp -i <url> -vn`. Add the corresponding `audioSource` config property and `MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE` env var (device identifier for `microphone`, or the RTSP url for `rtsp`), mirroring `videoSource`/`MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE`. The `-af volume=6dB` boost is now only applied to the `test` clip (recorded quietly), not to `microphone`/`rtsp` capture.
+- [docs]: Document the `microphone` and `rtsp` audio generators and the new `audioSource` property in the README and schema, with example configurations.
+- [tests]: Extend `vitest/module.test.ts` and `vitest/webrtc/weriftSession.test.ts` with `microphone`/`rtsp` audio source coverage.
 
 ### Changed
 
@@ -56,6 +59,8 @@ If you like this project and find it useful, please consider giving it a star on
 - [webrtc]: The per-session requested webcam resolution (from a client's `CameraAvStreamManagement.VideoStreamAllocate`) was never actually applied: `buildFfmpegVideoInputArgs` read `MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION` directly before falling back to `getConfiguredVideoResolution(requestedResolution)`, and since the plugin always sets that env var (default `640x480` at the time of this fix, before `videoResolution` defaulted to `auto`), the fallback — and therefore the requested resolution — was never reached.
 - [ptz camera]: `movementState` never left `Idle`: `MatterbridgeCameraAvSettingsUserLevelManagementServer`'s `mptzSetPosition`/`mptzRelativeMove` handlers updated `mptzPosition` but never touched `movementState`. Both handlers now set it to `Moving` and schedule a return to `Idle` after a simulated movement duration (restarting the timer if a new move command arrives first), so subscribers actually observe the transition.
 - [tests]: Add `movementState` transition coverage (`Idle` → `Moving` → `Idle`, including the subscription-visible change) in `vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts`.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
 ## [0.0.7] - 2026-07-25
 

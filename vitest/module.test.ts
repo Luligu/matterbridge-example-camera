@@ -33,6 +33,7 @@ describe('TestPlatform', () => {
   const originalVideoSourceDevice = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
   const originalVideoResolution = process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
   const originalAudioSource = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
+  const originalAudioSourceDevice = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
 
   let matterbridge: PlatformMatterbridge;
   let platform: ExampleMatterbridgeCameraPlatform;
@@ -92,6 +93,8 @@ describe('TestPlatform', () => {
     else process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = originalVideoResolution;
     if (originalAudioSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
     else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = originalAudioSource;
+    if (originalAudioSourceDevice === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE = originalAudioSourceDevice;
   });
 
   it('should throw error in load when version is not valid', () => {
@@ -132,11 +135,18 @@ describe('TestPlatform', () => {
     expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe(videoGenerator);
   });
 
-  it.each(['none', 'test'] as const)('should apply the configured %s audio generator', (audioGenerator) => {
+  it.each(['none', 'test', 'microphone', 'rtsp'] as const)('should apply the configured %s audio generator', (audioGenerator) => {
     const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, audioGenerator });
 
     expect(generatorPlatform.config.audioGenerator).toBe(audioGenerator);
     expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe(audioGenerator);
+  });
+
+  it('should apply the configured microphone audioSource', () => {
+    const microphonePlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, audioGenerator: 'microphone', audioSource: 'hw:0,0' });
+
+    expect(microphonePlatform.config.audioSource).toBe('hw:0,0');
+    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE).toBe('hw:0,0');
   });
 
   it('should default audioGenerator to none when the config omits it', () => {
