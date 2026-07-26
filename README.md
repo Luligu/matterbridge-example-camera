@@ -186,9 +186,9 @@ So, to let either Intercom 1 or Intercom 2 start a call, on the fabric they shar
 
 With both directions in place, either Intercom can call the other; a call initiated the other way only needs its own binding/ACL pair, already covered above since both were set up symmetrically.
 
-## WebRTC video injection
+## WebRTC video and audio injection
 
-`WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video track into the negotiated connection, so the end-to-end media path can be validated without a real camera capture pipeline.
+`WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video and/or audio track into the negotiated connection, so the end-to-end media path can be validated without a real camera/microphone capture pipeline.
 
 The platform configuration controls WebRTC video injection with these properties:
 
@@ -199,6 +199,10 @@ The platform configuration controls WebRTC video injection with these properties
 - `videoResolution` is required and accepts `auto`, `640x480`, `1280x720`, or `1920x1080`. It defaults to `auto`, which uses the resolution requested by the controller for the session (see below), falling back to `640x480` when no request is available or it names an unsupported resolution. A fixed resolution always wins over what the controller requested. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
 
 - `videoBitrate` is required and accepts a number (the target encoder bitrate in kbps). It defaults to `1000`. It applies to the `webcam` and `rtsp` sources only; the `test` pattern is always encoded at a fixed 1000 kbps regardless of this setting. Since the encoder always uses `-preset ultrafast -tune zerolatency` for low-latency live view (lower compression efficiency than slower presets), suggested values are higher than typical streaming guides: ~800 for `640x480`, ~2000 for `1280x720`, ~2500 for `1920x1080`.
+
+The platform configuration controls WebRTC audio injection with this property:
+
+- `audioGenerator` is required and accepts `none` or `test`. It defaults to `none`, which negotiates the audio transceiver (e.g. for an Intercom's "Listen" live view) without attaching a track. `test` injects a recorded test-voice clip, looped, so the end-to-end audio path can be validated without a real microphone capture pipeline.
 
 With `videoResolution: "auto"`, a real client's resolution/quality picker (e.g. in Home Assistant) drives the capture/output resolution: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the resolution for the session. For `webcam` this is the capture resolution passed to ffmpeg; for `rtsp` the camera keeps streaming at its own native resolution and ffmpeg scales it to match.
 

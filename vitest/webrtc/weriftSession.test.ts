@@ -100,14 +100,18 @@ async function createRemoteAnswerSdp(offerSdp: string): Promise<string> {
 
 describe('WeriftWebRtcSession', () => {
   const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
+  const originalAudioSource = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
 
   beforeEach(() => {
     process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'test';
+    process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'test';
   });
 
   afterAll(() => {
     if (originalVideoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
     else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
+    if (originalAudioSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
+    else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = originalAudioSource;
   });
 
   it('should create a real SDP offer with a video transceiver when video is requested', async () => {
@@ -429,12 +433,8 @@ describe('WeriftWebRtcSession', () => {
   });
 
   describe('test audio injection toggle', () => {
-    afterEach(() => {
-      delete process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO;
-    });
-
-    it('should still negotiate an audio transceiver but not inject a track when MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1', async () => {
-      process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO = '1';
+    it('should still negotiate an audio transceiver but not inject a track when MATTERBRIDGE_CAMERA_AUDIO_SOURCE=none', async () => {
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'none';
       const session = new WeriftWebRtcSession(1);
       const offerSdp = await createRemoteAudioOfferSdp();
 

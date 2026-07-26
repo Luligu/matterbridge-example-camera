@@ -54,6 +54,7 @@ export type CameraPlatformConfig = PlatformConfig & {
   videoSource?: string;
   videoResolution: 'auto' | '640x480' | '1280x720' | '1920x1080';
   videoBitrate: number;
+  audioGenerator: 'none' | 'test';
   animationInterval: number;
 };
 
@@ -94,6 +95,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     this.config.videoGenerator ??= 'none';
     this.config.videoResolution ??= 'auto';
     this.config.videoBitrate ??= 1000;
+    this.config.audioGenerator ??= 'none';
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;
     this.config.unregisterOnShutdown ??= false;
@@ -102,6 +104,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = this.config.videoSource;
     process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = this.config.videoResolution;
     process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE = String(this.config.videoBitrate);
+    process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = this.config.audioGenerator;
 
     this.log.debug(`Platform ${this.config.name} config:\n${RESET}${inspect(this.config, { depth: 10, colors: true })}`);
     this.log.debug(
@@ -111,6 +114,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
           MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE,
           MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION: process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION,
           MATTERBRIDGE_CAMERA_VIDEO_BITRATE: process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE,
+          MATTERBRIDGE_CAMERA_AUDIO_SOURCE: process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE,
         },
         { depth: 10, colors: true },
       )}`,

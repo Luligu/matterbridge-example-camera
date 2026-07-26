@@ -32,6 +32,7 @@ describe('TestPlatform', () => {
   const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
   const originalVideoSourceDevice = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
   const originalVideoResolution = process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
+  const originalAudioSource = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
 
   let matterbridge: PlatformMatterbridge;
   let platform: ExampleMatterbridgeCameraPlatform;
@@ -45,6 +46,7 @@ describe('TestPlatform', () => {
     videoGenerator: 'none',
     videoResolution: '640x480',
     videoBitrate: 1000,
+    audioGenerator: 'none',
     animationInterval: 0,
     debug: false,
     unregisterOnShutdown: false,
@@ -88,6 +90,8 @@ describe('TestPlatform', () => {
     else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = originalVideoSourceDevice;
     if (originalVideoResolution === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
     else process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = originalVideoResolution;
+    if (originalAudioSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
+    else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = originalAudioSource;
   });
 
   it('should throw error in load when version is not valid', () => {
@@ -110,9 +114,11 @@ describe('TestPlatform', () => {
       expect(emptyConfigPlatform.config.videoGenerator).toBe('none');
       expect(emptyConfigPlatform.config.videoSource).toBeUndefined();
       expect(emptyConfigPlatform.config.videoResolution).toBe('640x480');
+      expect(emptyConfigPlatform.config.audioGenerator).toBe('none');
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('none');
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE).toBeUndefined();
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe('640x480');
+      expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe('none');
       expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(12);
     } finally {
       await emptyConfigPlatform.onShutdown();
@@ -124,6 +130,21 @@ describe('TestPlatform', () => {
 
     expect(generatorPlatform.config.videoGenerator).toBe(videoGenerator);
     expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe(videoGenerator);
+  });
+
+  it.each(['none', 'test'] as const)('should apply the configured %s audio generator', (audioGenerator) => {
+    const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, audioGenerator });
+
+    expect(generatorPlatform.config.audioGenerator).toBe(audioGenerator);
+    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe(audioGenerator);
+  });
+
+  it('should default audioGenerator to none when the config omits it', () => {
+    const defaultAudioConfig = { ...config, audioGenerator: undefined } as unknown as CameraPlatformConfig;
+    const defaultAudioPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, defaultAudioConfig);
+
+    expect(defaultAudioPlatform.config.audioGenerator).toBe('none');
+    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe('none');
   });
 
   it('should default videoResolution to auto when the config omits it', () => {

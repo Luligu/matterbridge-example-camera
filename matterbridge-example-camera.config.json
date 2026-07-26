@@ -6,6 +6,7 @@
   "videoGenerator": "none",
   "videoResolution": "auto",
   "videoBitrate": 1000,
+  "audioGenerator": "none",
   "animationInterval": 60,
   "debug": false,
   "unregisterOnShutdown": false

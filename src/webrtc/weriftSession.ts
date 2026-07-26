@@ -68,8 +68,8 @@ export interface WeriftOfferOptions {
  * to 1280x720 or 1920x1080 with MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION.
  *
  * Similarly, a recorded test-voice clip can be injected as the audio track (e.g. for an Intercom's "Listen" live
- * view) so the audio path can be validated without a real microphone capture pipeline; disable with
- * MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1.
+ * view) so the audio path can be validated without a real microphone capture pipeline, when
+ * `MATTERBRIDGE_CAMERA_AUDIO_SOURCE=test`; unset or `none` negotiates the audio transceiver without attaching a track.
  */
 export class WeriftWebRtcSession {
   /**
@@ -649,15 +649,15 @@ export class WeriftWebRtcSession {
   /**
    * Attaches the recorded test-voice clip ({@link TEST_VOICE_PATH}) as the audio track for this session, so an
    * end-to-end audio path (e.g. an Intercom's "Listen" live view) can be verified without a real microphone capture
-   * pipeline. Mirrors {@link generateVideoTrack}; disable with MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1.
+   * pipeline. Mirrors {@link generateVideoTrack}; only injects when MATTERBRIDGE_CAMERA_AUDIO_SOURCE=test.
    *
    * @param {RTCRtpCodecParameters} codec - The negotiated Opus codec parameters to encode and send as.
    * @returns {Promise<void>} Resolves once the track is attached, or once injection is skipped/failed (logged, not thrown).
    */
-  private async ensureTestAudioTrack(codec: RTCRtpCodecParameters): Promise<void> {
+  private async generateAudioTrack(codec: RTCRtpCodecParameters): Promise<void> {
     if (this.testAudioAttached) return;
-    if (process.env.MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO === '1') {
-      this.log.debug('Test audio injection disabled by MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1');
+    if (process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE !== 'test') {
+      this.log.debug(`Test audio injection skipped (MATTERBRIDGE_CAMERA_AUDIO_SOURCE=${process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE ?? 'none'})`);
       return;
     }
 
@@ -819,7 +819,7 @@ export class WeriftWebRtcSession {
       const preferredAudioCodec = this.getPreferredInjectableAudioCodec();
       if (preferredAudioCodec) {
         this.preferAudioCodecOnTransceivers(preferredAudioCodec.mimeType.toLowerCase());
-        await this.ensureTestAudioTrack(preferredAudioCodec);
+        await this.generateAudioTrack(preferredAudioCodec);
       } else {
         this.log.warn('No injectable audio codec available on negotiated transceivers (supported: Opus)');
       }

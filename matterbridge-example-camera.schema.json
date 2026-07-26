@@ -2,7 +2,7 @@
   "title": "Matterbridge example camera plugin",
   "description": "matterbridge-example-camera v. 1.0.0 by https://github.com/Luligu",
   "type": "object",
-  "required": ["videoGenerator", "videoResolution"],
+  "required": ["videoGenerator", "videoResolution", "audioGenerator"],
   "properties": {
     "name": {
       "description": "Plugin Name",
@@ -66,6 +66,13 @@
       "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam or RTSP camera, regardless of resolution. Default is 1000. Suggested values: ~800 for 640x480, ~2000 for 1280x720, ~2500 for 1920x1080.",
       "type": "number",
       "default": 1000
+    },
+    "audioGenerator": {
+      "title": "Audio Generator",
+      "description": "Select the WebRTC audio generator: none disables track injection (only the audio transceiver is negotiated), and test injects a recorded test-voice clip, looped, e.g. for an Intercom's Listen live view.",
+      "type": "string",
+      "enum": ["none", "test"],
+      "default": "none"
     },
     "debug": {
       "title": "Enable Debug",

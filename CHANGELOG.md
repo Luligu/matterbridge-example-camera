@@ -40,6 +40,9 @@ If you like this project and find it useful, please consider giving it a star on
 - [tests]: Add `rtsp` video source and `videoResolution` precedence (`auto` vs. fixed, webcam and rtsp) coverage in `vitest/webrtc/weriftSession.test.ts`; extend `vitest/module.test.ts` with the `videoGenerator` normalization test and a test for the `videoResolution` default of `auto`.
 - [webrtc]: Add `WeriftWebRtcSession.closeAll()`, a static helper that closes every active session (peer connection plus any injected ffmpeg generators). `onShutdown` now calls it so a graceful platform shutdown cleans up leftover WebRTC sessions itself instead of relying solely on the `process.on('exit', ...)` fallback.
 - [tests]: Add `closeAll` coverage in `vitest/webrtc/weriftSession.test.ts`, covering closing all active sessions and the no-active-sessions case.
+- [platform]: Add an `audioGenerator` config property (`none`/`test`, defaulting to `none`) replacing the undocumented `MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1` env var toggle, mirroring `videoGenerator`'s pattern via the new `MATTERBRIDGE_CAMERA_AUDIO_SOURCE` env var. Test-voice audio injection is now opt-in instead of on by default.
+- [docs]: Document `audioGenerator` in the README and schema.
+- [tests]: Extend `vitest/module.test.ts` with `audioGenerator` normalization/apply coverage; update `vitest/webrtc/weriftSession.test.ts` for the new `MATTERBRIDGE_CAMERA_AUDIO_SOURCE` gate.
 
 ### Fixed
 
