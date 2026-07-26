@@ -45,6 +45,7 @@ import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 import { VideoDoorbell } from './devices/videoDoorbell.js';
+import { WeriftWebRtcSession } from './webrtc/weriftSession.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
@@ -338,6 +339,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
     clearInterval(this.animationInterval);
     this.animationInterval = undefined;
+
+    this.log.info('Shutdown: closing WebRTC sessions...');
+    await WeriftWebRtcSession.closeAll();
 
     if (this.config.unregisterOnShutdown) await this.unregisterAllDevices();
 

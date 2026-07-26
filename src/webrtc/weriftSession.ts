@@ -86,6 +86,9 @@ export class WeriftWebRtcSession {
   /** The logger for this session. */
   private readonly log: AnsiLogger;
 
+  /** The WebRtcTransportProvider session identifier this instance backs. */
+  private readonly webRtcSessionId: number;
+
   private testVideoGenerator?: ChildProcess;
 
   private testVideoUdpDisposer?: () => void;
@@ -104,6 +107,7 @@ export class WeriftWebRtcSession {
    * @param {number} webRtcSessionId - The WebRtcTransportProvider session identifier this instance backs, used as this session's log name.
    */
   constructor(webRtcSessionId: number) {
+    this.webRtcSessionId = webRtcSessionId;
     this.peerConnection = new RTCPeerConnection({ codecs: { audio: [useOPUS(), usePCMU()], video: [useH264(), useVP8()] } });
     this.log = new AnsiLogger({ logName: `WebRTC session ${webRtcSessionId}`, logLevel: LogLevel.DEBUG, logNameColor: MAGENTA, logTimestampFormat: TimestampFormat.TIME_MILLIS });
     // Log when local ICE candidate discovery starts or completes.
@@ -840,5 +844,17 @@ export class WeriftWebRtcSession {
     this.cleanupTestAudioArtifacts();
     WeriftWebRtcSession.activeSessions.delete(this);
     this.log.info(`RTCPeerConnection closed (connectionState=${this.peerConnection.connectionState})`);
+  }
+
+  /**
+   * Closes every currently active session, e.g. during a graceful platform shutdown.
+   *
+   * @returns {Promise<void>} Resolves once every active session has been closed.
+   */
+  static async closeAll(): Promise<void> {
+    for (const session of WeriftWebRtcSession.activeSessions) {
+      session.log.info(`Closing session ${session.webRtcSessionId} as part of closeAll()`);
+      await session.close();
+    }
   }
 }

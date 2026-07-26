@@ -888,4 +888,27 @@ describe('WeriftWebRtcSession', () => {
       await session.close();
     });
   });
+
+  describe('closeAll', () => {
+    it('should close every active session and remove them from the active session registry', async () => {
+      const first = new WeriftWebRtcSession(1);
+      const second = new WeriftWebRtcSession(2);
+      const firstCloseSpy = vi.spyOn(first, 'close');
+      const secondCloseSpy = vi.spyOn(second, 'close');
+
+      await WeriftWebRtcSession.closeAll();
+
+      expect(firstCloseSpy).toHaveBeenCalledTimes(1);
+      expect(secondCloseSpy).toHaveBeenCalledTimes(1);
+
+      // Closing again should be a no-op since closeAll() already removed both sessions from the registry.
+      await expect(WeriftWebRtcSession.closeAll()).resolves.toBeUndefined();
+      expect(firstCloseSpy).toHaveBeenCalledTimes(1);
+      expect(secondCloseSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not throw when there are no active sessions', async () => {
+      await expect(WeriftWebRtcSession.closeAll()).resolves.toBeUndefined();
+    });
+  });
 });
