@@ -2,6 +2,7 @@
  * @file src/rootNode.ts
  * @description This file contains the addRootNodeCamera() helper that configures the Root Node of a Camera device's own Matter server node.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-14
  * @version 1.0.0
  * @license Apache-2.0

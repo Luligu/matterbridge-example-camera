@@ -28,6 +28,38 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.0.8] - 2026-07-26
+
+### Added
+
+- [webrtc]: Add an `rtsp` video generator option that pulls from a real RTSP camera via `ffmpeg -rtsp_transport tcp -i <url>` instead of only the synthetic test pattern or a local webcam.
+- [platform]: Rename the `webcam`/`webcamResolution`/`webcamBitrate` config properties to `videoSource`/`videoResolution`/`videoBitrate` (and the corresponding `MATTERBRIDGE_CAMERA_WEBCAM_*` env vars to `MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE`/`MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION`/`MATTERBRIDGE_CAMERA_VIDEO_BITRATE`), since `videoSource` now also holds the RTSP url for the `rtsp` generator.
+- [platform]: Rename the `generator` config property to `videoGenerator`.
+- [webrtc]: Add an `auto` value for `videoResolution` (now the default) that uses the controller's requested per-session resolution (the allocated video stream's `maxResolution`) instead of a fixed value; a fixed `videoResolution` still always wins over the controller's request. For `rtsp`, the resolved resolution (fixed or auto) is now applied to the injected track with an ffmpeg `scale` filter instead of being ignored.
+- [docs]: Document the `rtsp` video generator, the renamed config properties, the `auto`/fixed `videoResolution` precedence, and the previously undocumented `videoBitrate` property (with suggested per-resolution values) in the README and schema, with example configurations.
+- [tests]: Add `rtsp` video source and `videoResolution` precedence (`auto` vs. fixed, webcam and rtsp) coverage in `vitest/webrtc/weriftSession.test.ts`; extend `vitest/module.test.ts` with the `videoGenerator` normalization test and a test for the `videoResolution` default of `auto`.
+- [webrtc]: Add `WeriftWebRtcSession.closeAll()`, a static helper that closes every active session (peer connection plus any injected ffmpeg generators). `onShutdown` now calls it so a graceful platform shutdown cleans up leftover WebRTC sessions itself instead of relying solely on the `process.on('exit', ...)` fallback.
+- [tests]: Add `closeAll` coverage in `vitest/webrtc/weriftSession.test.ts`, covering closing all active sessions and the no-active-sessions case.
+- [platform]: Add an `audioGenerator` config property (`none`/`test`, defaulting to `none`) replacing the undocumented `MATTERBRIDGE_CAMERA_DISABLE_TEST_AUDIO=1` env var toggle, mirroring `videoGenerator`'s pattern via the new `MATTERBRIDGE_CAMERA_AUDIO_SOURCE` env var. Test-voice audio injection is now opt-in instead of on by default.
+- [docs]: Document `audioGenerator` in the README and schema.
+- [tests]: Extend `vitest/module.test.ts` with `audioGenerator` normalization/apply coverage; update `vitest/webrtc/weriftSession.test.ts` for the new `MATTERBRIDGE_CAMERA_AUDIO_SOURCE` gate.
+- [webrtc]: Add a periodic diagnostics log (`WeriftWebRtcSession.logDiagnosticsSnapshot`, every 10s) reporting `connectionState`, `iceConnectionState`, `iceGatheringState`, `signalingState`, per-transport ICE/DTLS states, and `getStats()`-derived packet-flow counters (nominated candidate-pair and outbound-rtp packets, with deltas since the previous tick). Needed because werift's ICE consent-freshness check (RFC 7675) can latch `iceConnectionState` at `disconnected` forever after a single missed keepalive, even on a healthy, actively-streaming session — the packet-flow deltas are unaffected by that bug and are a reliable "is media still moving" signal. A dedicated log line also fires immediately on any DTLS transport state change instead of waiting for the next tick.
+- [webrtc]: Auto-close a `WeriftWebRtcSession` (peer connection plus any injected ffmpeg generators) when one of its DTLS transports reaches `closed` or `failed` on its own — a real, one-way teardown signal from the peer, unlike `iceConnectionState`'s `disconnected`, which must never trigger a close by itself. Fixes an orphaned-session leak: a controller that abandons a live view without ever sending `EndSession` (e.g. just closing the window) previously left the peer connection and its ffmpeg processes running indefinitely, piling up on every reconnect.
+- [tests]: Add DTLS-triggered auto-close coverage in `vitest/webrtc/weriftSession.test.ts` (`closed`, `failed`, and a regression test ensuring a normal `close()` doesn't re-enter itself via the same DTLS state change).
+- [webrtc]: Add `microphone` and `rtsp` options to `audioGenerator`, mirroring `videoGenerator`'s pattern: `microphone` captures from a local capture device via `ffmpeg -f alsa/avfoundation/dshow`, and `rtsp` pulls just the audio from a real RTSP camera stream (dropping any video) via `ffmpeg -rtsp_transport tcp -i <url> -vn`. Add the corresponding `audioSource` config property and `MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE` env var (device identifier for `microphone`, or the RTSP url for `rtsp`), mirroring `videoSource`/`MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE`. The `-af volume=6dB` boost is now only applied to the `test` clip (recorded quietly), not to `microphone`/`rtsp` capture.
+- [docs]: Document the `microphone` and `rtsp` audio generators and the new `audioSource` property in the README and schema, with example configurations.
+- [tests]: Extend `vitest/module.test.ts` and `vitest/webrtc/weriftSession.test.ts` with `microphone`/`rtsp` audio source coverage.
+
+### Changed
+
+- [webrtc]: Replace inline `error instanceof Error ? error.message : String(error)` error-message extraction with `getErrorMessage` from `matterbridge/utils` throughout `weriftSession.ts`; use `fireAndForget` for the auto-close's fire-and-forget `close()` call, matching the pattern already used elsewhere in the plugin.
+
+### Fixed
+
+- [webrtc]: The per-session requested webcam resolution (from a client's `CameraAvStreamManagement.VideoStreamAllocate`) was never actually applied: `buildFfmpegVideoInputArgs` read `MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION` directly before falling back to `getConfiguredVideoResolution(requestedResolution)`, and since the plugin always sets that env var (default `640x480` at the time of this fix, before `videoResolution` defaulted to `auto`), the fallback — and therefore the requested resolution — was never reached.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
+
 ## [0.0.7] - 2026-07-25
 
 ### Added

@@ -1,7 +1,8 @@
 /**
  * @file src/behaviors/cameraAvSettingsUserLevelManagementServer.ts
  * @description This file contains the MatterbridgeCameraAvSettingsUserLevelManagementServer class of Matterbridge.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-07-23
  * @version 1.0.0
  * @license Apache-2.0

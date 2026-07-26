@@ -499,9 +499,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
 
   it('should use the allocated video stream resolution for the injected webcam capture, matching a real client resolution/quality picker', async () => {
     const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
-    const originalWebcamDevice = process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
+    const originalVideoSourceDevice = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
     process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'webcam';
-    process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = 'test-webcam-device';
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = 'test-webcam-device';
 
     try {
       await device.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
@@ -535,7 +535,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       await device.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamDeallocate', { videoStreamId });
     } finally {
       process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
-      process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = originalWebcamDevice;
+      process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = originalVideoSourceDevice;
     }
   });
 

@@ -2,6 +2,7 @@
  * @file src/module.ts
  * @description This file contains the class ExampleMatterbridgeCameraPlatform.
  * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  * @created 2026-01-27
  * @version 1.0.0
  * @license Apache-2.0
@@ -44,14 +45,17 @@ import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 import { VideoDoorbell } from './devices/videoDoorbell.js';
+import { WeriftWebRtcSession } from './webrtc/weriftSession.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
   blackList: string[];
-  generator: 'none' | 'test' | 'webcam';
-  webcam?: string;
-  webcamResolution: '640x480' | '1280x720' | '1920x1080';
-  webcamBitrate: number;
+  videoGenerator: 'none' | 'test' | 'webcam' | 'rtsp';
+  videoSource?: string;
+  videoResolution: 'auto' | '640x480' | '1280x720' | '1920x1080';
+  videoBitrate: number;
+  audioGenerator: 'none' | 'test' | 'microphone' | 'rtsp';
+  audioSource?: string;
   animationInterval: number;
 };
 
@@ -89,26 +93,32 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     // Normalize old config values to new ones
     this.config.whiteList ??= [];
     this.config.blackList ??= [];
-    this.config.generator ??= 'none';
-    this.config.webcamResolution ??= '640x480';
-    this.config.webcamBitrate ??= 1000;
+    this.config.videoGenerator ??= 'none';
+    this.config.videoResolution ??= 'auto';
+    this.config.videoBitrate ??= 1000;
+    this.config.audioGenerator ??= 'none';
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;
     this.config.unregisterOnShutdown ??= false;
-    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = this.config.generator;
-    if (this.config.webcam === undefined) delete process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE;
-    else process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE = this.config.webcam;
-    process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION = this.config.webcamResolution;
-    process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE = String(this.config.webcamBitrate);
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = this.config.videoGenerator;
+    if (this.config.videoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = this.config.videoSource;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = this.config.videoResolution;
+    process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE = String(this.config.videoBitrate);
+    process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = this.config.audioGenerator;
+    if (this.config.audioSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
+    else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE = this.config.audioSource;
 
     this.log.debug(`Platform ${this.config.name} config:\n${RESET}${inspect(this.config, { depth: 10, colors: true })}`);
     this.log.debug(
       `Platform ${this.config.name} environment variables:\n${RESET}${inspect(
         {
           MATTERBRIDGE_CAMERA_VIDEO_SOURCE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE,
-          MATTERBRIDGE_CAMERA_WEBCAM_DEVICE: process.env.MATTERBRIDGE_CAMERA_WEBCAM_DEVICE,
-          MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION: process.env.MATTERBRIDGE_CAMERA_WEBCAM_RESOLUTION,
-          MATTERBRIDGE_CAMERA_WEBCAM_BITRATE: process.env.MATTERBRIDGE_CAMERA_WEBCAM_BITRATE,
+          MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE,
+          MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION: process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION,
+          MATTERBRIDGE_CAMERA_VIDEO_BITRATE: process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE,
+          MATTERBRIDGE_CAMERA_AUDIO_SOURCE: process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE,
+          MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE: process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE,
         },
         { depth: 10, colors: true },
       )}`,
@@ -233,9 +243,6 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     );
     await exampleChime?.setCluster(ChimeCluster, { enabled: true, selectedChime: 0 }, exampleChime.log);
 
-    const exampleIntercom1: Intercom | undefined = this.getDeviceById('Intercom1-INTERCOM1-001');
-    if (!exampleIntercom1) throw new Error(`Intercom device not found. Please ensure the device is registered before configuration.`);
-
     const serverChime: Chime | undefined = this.getDeviceById('ServerChime-SERVER-CHIME-001');
     await serverChime?.setCluster(
       PowerSource,
@@ -340,6 +347,9 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
     clearInterval(this.animationInterval);
     this.animationInterval = undefined;
+
+    this.log.info('Shutdown: closing WebRTC sessions...');
+    await WeriftWebRtcSession.closeAll();
 
     if (this.config.unregisterOnShutdown) await this.unregisterAllDevices();
 

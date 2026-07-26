@@ -1,7 +1,8 @@
 /**
  * @file vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts
  * @description This file contains the tests for the MatterbridgeCameraAvSettingsUserLevelManagementServer behavior.
- * @author Ludovic BOUÉ
+ * @author Luca Liguori
+ * @contributor Ludovic BOUÉ
  */
 
 const NAME = 'CameraAvSettingsUserLevelManagementServerBehavior';

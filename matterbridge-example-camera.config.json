@@ -3,9 +3,10 @@
   "type": "DynamicPlatform",
   "whiteList": [],
   "blackList": [],
-  "generator": "none",
-  "webcamResolution": "640x480",
-  "webcamBitrate": 1000,
+  "videoGenerator": "none",
+  "videoResolution": "auto",
+  "videoBitrate": 1000,
+  "audioGenerator": "none",
   "animationInterval": 60,
   "debug": false,
   "unregisterOnShutdown": false

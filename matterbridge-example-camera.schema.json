@@ -2,7 +2,7 @@
   "title": "Matterbridge example camera plugin",
   "description": "matterbridge-example-camera v. 1.0.0 by https://github.com/Luligu",
   "type": "object",
-  "required": ["generator", "webcamResolution"],
+  "required": ["videoGenerator", "videoResolution", "audioGenerator"],
   "properties": {
     "name": {
       "description": "Plugin Name",
@@ -42,30 +42,42 @@
       "type": "number",
       "default": 60
     },
-    "generator": {
+    "videoGenerator": {
       "title": "Video Generator",
-      "description": "Select the WebRTC video source: none disables track injection, test generates a synthetic moving test pattern, and webcam captures from the configured local webcam.",
+      "description": "Select the WebRTC video generator: none disables track injection, test generates a synthetic moving test pattern, webcam captures from the configured local webcam, and rtsp pulls from the RTSP url configured in Video Source.",
       "type": "string",
-      "enum": ["none", "test", "webcam"],
+      "enum": ["none", "test", "webcam", "rtsp"],
       "default": "none"
     },
-    "webcam": {
-      "title": "Webcam Device",
-      "description": "OS-specific ffmpeg webcam identifier, such as /dev/video0 on Linux, 0 on macOS, or Integrated Camera on Windows.",
+    "videoSource": {
+      "title": "Video Source",
+      "description": "OS-specific ffmpeg webcam identifier, such as /dev/video0 on Linux, 0 on macOS, or Integrated Camera on Windows. When Video Generator is rtsp, this holds the RTSP url instead, e.g. rtsp://user:password@host:554/path.",
       "type": "string"
     },
-    "webcamResolution": {
-      "title": "Webcam Resolution",
-      "description": "Resolution used when capturing from the configured webcam.",
+    "videoResolution": {
+      "title": "Video Resolution",
+      "description": "Resolution used when capturing from the configured webcam or RTSP camera. auto uses the resolution requested by the controller (the allocated video stream's maxResolution) instead of a fixed value.",
       "type": "string",
-      "enum": ["640x480", "1280x720", "1920x1080"],
-      "default": "640x480"
+      "enum": ["auto", "640x480", "1280x720", "1920x1080"],
+      "default": "auto"
     },
-    "webcamBitrate": {
-      "title": "Webcam Bitrate",
-      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam, regardless of resolution.",
+    "videoBitrate": {
+      "title": "Video Bitrate",
+      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam or RTSP camera, regardless of resolution. Default is 1000. Suggested values: ~800 for 640x480, ~2000 for 1280x720, ~2500 for 1920x1080.",
       "type": "number",
       "default": 1000
+    },
+    "audioGenerator": {
+      "title": "Audio Generator",
+      "description": "Select the WebRTC audio generator: none disables track injection (only the audio transceiver is negotiated), test injects a recorded test-voice clip, looped, e.g. for an Intercom's Listen live view, microphone captures from the configured local microphone, and rtsp pulls the audio from the RTSP url configured in Audio Source.",
+      "type": "string",
+      "enum": ["none", "test", "microphone", "rtsp"],
+      "default": "none"
+    },
+    "audioSource": {
+      "title": "Audio Source",
+      "description": "OS-specific ffmpeg microphone identifier, such as hw:0,0 on Linux (alsa), 0 on macOS (avfoundation audio index), or Microphone Array on Windows (dshow). When Audio Generator is rtsp, this holds the RTSP url instead, e.g. rtsp://user:password@host:554/path.",
+      "type": "string"
     },
     "debug": {
       "title": "Enable Debug",
