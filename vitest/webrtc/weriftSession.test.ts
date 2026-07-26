@@ -446,6 +446,90 @@ describe('WeriftWebRtcSession', () => {
     });
   });
 
+  describe('audio source selection', () => {
+    const originalPlatform = process.platform;
+
+    afterEach(() => {
+      delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
+    });
+
+    it('should fall back to the test-voice clip when MATTERBRIDGE_CAMERA_AUDIO_SOURCE is unsupported', async () => {
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'unsupported';
+      const session = new WeriftWebRtcSession(1);
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+      expect((session as unknown as { testAudioAttached: boolean }).testAudioAttached).toBe(false);
+
+      await session.close();
+    });
+
+    it('should still attach an audio track, falling back to the test-voice clip, when MATTERBRIDGE_CAMERA_AUDIO_SOURCE=microphone is set without a device', async () => {
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'microphone';
+      const session = new WeriftWebRtcSession(1);
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
+
+    it.each([
+      ['linux', 'hw:0,0'],
+      ['darwin', '0'],
+      ['win32', 'Microphone Array'],
+      ['freebsd', 'hw:0,0'],
+    ])('should attach an audio track from the configured microphone device on platform %s', async (platform, device) => {
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'microphone';
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE = device;
+      Object.defineProperty(process, 'platform', { value: platform });
+      const session = new WeriftWebRtcSession(1);
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
+  });
+
+  describe('rtsp audio source', () => {
+    afterEach(() => {
+      delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
+    });
+
+    it('should still attach an audio track, falling back to the test-voice clip, when MATTERBRIDGE_CAMERA_AUDIO_SOURCE=rtsp is set without a url', async () => {
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'rtsp';
+      const session = new WeriftWebRtcSession(1);
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
+
+    it('should attach an audio track from the configured RTSP url', async () => {
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'rtsp';
+      process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE = 'rtsp://admin:password@192.168.1.100:554/ch1/main';
+      const session = new WeriftWebRtcSession(1);
+      const offerSdp = await createRemoteAudioOfferSdp();
+
+      const answerSdp = await session.createAnswer(offerSdp);
+
+      expect(answerSdp).toContain('m=audio');
+
+      await session.close();
+    });
+  });
+
   describe('injectable codec selection', () => {
     it('should prefer an already-negotiated injectable codec when creating a subsequent offer', async () => {
       const session = new WeriftWebRtcSession(1);

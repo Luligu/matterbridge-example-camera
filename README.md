@@ -200,15 +200,43 @@ The platform configuration controls WebRTC video injection with these properties
 
 - `videoBitrate` is required and accepts a number (the target encoder bitrate in kbps). It defaults to `1000`. It applies to the `webcam` and `rtsp` sources only; the `test` pattern is always encoded at a fixed 1000 kbps regardless of this setting. Since the encoder always uses `-preset ultrafast -tune zerolatency` for low-latency live view (lower compression efficiency than slower presets), suggested values are higher than typical streaming guides: ~800 for `640x480`, ~2000 for `1280x720`, ~2500 for `1920x1080`.
 
-The platform configuration controls WebRTC audio injection with this property:
+The platform configuration controls WebRTC audio injection with these properties:
 
-- `audioGenerator` is required and accepts `none` or `test`. It defaults to `none`, which negotiates the audio transceiver (e.g. for an Intercom's "Listen" live view) without attaching a track. `test` injects a recorded test-voice clip, looped, so the end-to-end audio path can be validated without a real microphone capture pipeline.
+- `audioGenerator` is required and accepts `none`, `test`, `microphone`, or `rtsp`. It defaults to `none`, which negotiates the audio transceiver (e.g. for an Intercom's "Listen" live view) without attaching a track. `test` injects a recorded test-voice clip, looped, so the end-to-end audio path can be validated without a real microphone capture pipeline. `microphone` captures from the configured local microphone, and `rtsp` pulls just the audio from the RTSP url configured in `audioSource` (any video in the stream is dropped).
+
+- `audioSource` is optional and has no default. For the `microphone` generator it contains the OS-specific ffmpeg device identifier — e.g. an ALSA device such as `hw:0,0` on Linux, an avfoundation audio index such as `0` on macOS, or a device name such as `Microphone Array` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path` (it can be a different camera/url than `videoSource`). Selecting the `microphone` or `rtsp` generator without this property falls back to the test-voice clip with a warning.
+
+Use ffmpeg itself to list the [available capture devices](https://trac.ffmpeg.org/wiki/Capture/Webcam) and find the right value for `audioSource`:
+
+- Linux (alsa): `arecord -l`, or `ffmpeg -f alsa -i default` to try the default device.
+- macOS (avfoundation): `ffmpeg -f avfoundation -list_devices true -i dummy` — audio devices are listed with their index under "AVFoundation audio devices", e.g. `[0] MacBook Pro Microphone`; use that index (e.g. `0`) as the device value.
+- Windows (dshow): `ffmpeg -f dshow -list_devices true -i dummy` — audio devices are listed by name under "DirectShow audio devices", e.g. `"Microphone Array"`; use that exact name as the device value.
+
+Example configuration for a real Linux microphone:
+
+```json
+{
+  "audioGenerator": "microphone",
+  "audioSource": "hw:0,0"
+}
+```
+
+Example, pulling the audio from the same RTSP camera used for `videoSource`:
+
+```json
+{
+  "videoGenerator": "rtsp",
+  "videoSource": "rtsp://admin:password@192.168.1.100:554/ch1/main",
+  "audioGenerator": "rtsp",
+  "audioSource": "rtsp://admin:password@192.168.1.100:554/ch1/main"
+}
+```
 
 With `videoResolution: "auto"`, a real client's resolution/quality picker (e.g. in Home Assistant) drives the capture/output resolution: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the resolution for the session. For `webcam` this is the capture resolution passed to ffmpeg; for `rtsp` the camera keeps streaming at its own native resolution and ffmpeg scales it to match.
 
-Requires `ffmpeg` to be installed. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
+Requires [`ffmpeg`](https://ffmpeg.org/) to be installed. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
-Use ffmpeg itself to list the available capture devices and find the right value for `videoSource`:
+Use ffmpeg itself to list the [available capture devices](https://trac.ffmpeg.org/wiki/Capture/Webcam) and find the right value for `videoSource`:
 
 - Linux (v4l2): `v4l2-ctl --list-devices` (from `v4l-utils`), or `ls /dev/video*`.
 - macOS (avfoundation): `ffmpeg -f avfoundation -list_devices true -i dummy` — video devices are listed with their index, e.g. `[0] FaceTime HD Camera`; use that index (e.g. `0`) as the device value.
@@ -246,7 +274,7 @@ Finding your camera's RTSP url for `videoSource` when `videoGenerator` is `rtsp`
   - Dahua: `/cam/realmonitor?channel=1&subtype=0`
   - Reolink: `/h264Preview_01_main`
 
-Verify the url works standalone before adding it to the config, e.g. `ffprobe rtsp://admin:password@192.168.1.100:554/ch1/main`, or open it in VLC via "Open Network Stream". Note that the url (with credentials in plaintext) ends up stored in Matterbridge's plugin config on disk, like any other password-bearing config value.
+Verify the url works standalone before adding it to the config, e.g. `ffprobe rtsp://admin:password@192.168.1.100:554/ch1/main` or `ffplay rtsp://admin:password@192.168.1.100:554/ch1/main`, or open it in VLC via "Open Network Stream". Note that the url (with credentials in plaintext) ends up stored in Matterbridge's plugin config on disk, like any other password-bearing config value.
 
 Example, pulling from a real RTSP camera, scaled to a fixed 1280x720 and re-encoded at `videoBitrate` (the camera's own frame rate is kept):
 
@@ -334,7 +362,7 @@ npm run test -- vitest/werift.test.ts
 The `assets` directory contains deterministic three-second media fixtures for extending the werift test to real media tracks:
 
 - `test-video.h264`: raw H.264 Constrained Baseline video, 640×360 at 15 FPS, with a moving test pattern. Use this elementary stream when implementing H.264 NAL-unit parsing and RTP packetization.
-- `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a 1 kHz test tone. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
+- `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a recorded voice track. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
 - `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track. The werift test transfers the complete file over its SCTP data channel and verifies its integrity. This exercises binary file transport, not a WebRTC video RTP track.
 - `camera-color-1920-1080.jpeg`: 1920×1080 simplified ffmpeg-generated color-rectangle snapshot.
 - `camera-color-1280-720.jpeg`: 1280×720 simplified ffmpeg-generated color-rectangle snapshot.
