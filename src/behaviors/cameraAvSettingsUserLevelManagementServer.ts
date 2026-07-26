@@ -23,12 +23,13 @@
  */
 
 import { MatterbridgeServer } from 'matterbridge/behaviors';
+import { Millis, Time, type Timer } from 'matterbridge/matter';
 import { CameraAvSettingsUserLevelManagementServer } from 'matterbridge/matter/behaviors';
 import { CameraAvSettingsUserLevelManagement } from 'matterbridge/matter/clusters';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
-/** Simulated duration, in milliseconds, of a mechanical PTZ movement before movementState reverts to Idle. */
-const MOVEMENT_DURATION_MS = 1000;
+/** Simulated duration of a mechanical PTZ movement before movementState reverts to Idle. */
+const MOVEMENT_DURATION = Millis(1000);
 
 /**
  * Clamps a value between a minimum and a maximum.
@@ -59,6 +60,23 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
    * the command that starts a movement to a later command that restarts it before the previous one's timer fires.
    */
   declare internal: MatterbridgeCameraAvSettingsUserLevelManagementServer.Internal;
+
+  /**
+   * Creates the one-shot movement-simulation timer, wired through {@link Behavior.callback} so its expiry runs
+   * inside a proper reactor transaction on the endpoint instead of a bare `setTimeout` callback.
+   */
+  override initialize(): void {
+    // oxlint-disable-next-line typescript/unbound-method -- Behavior.callback() rebinds `this` to the active instance itself; per its own docs the reactor must be a real method reference, not an arrow function.
+    this.internal.movementTimer = Time.getTimer('Simulated PTZ movement', MOVEMENT_DURATION, this.callback(this.#restoreIdle, { lock: true }));
+  }
+
+  /**
+   * Stops the pending movement-simulation timer, if any, when the endpoint tears down.
+   */
+  override async [Symbol.asyncDispose](): Promise<void> {
+    this.internal.movementTimer?.stop();
+    await super[Symbol.asyncDispose]?.();
+  }
 
   /**
    * Handles the MPTZSetPosition command.
@@ -118,27 +136,20 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
   }
 
   /**
-   * Marks the camera as Moving and schedules a return to Idle after a simulated movement duration.
-   * Restarts the timer if a movement is already in progress, so a burst of move commands keeps movementState at
-   * Moving until the last one settles instead of flapping back to Idle between them.
+   * Marks the camera as Moving and (re)starts the timer that returns movementState to Idle after a simulated
+   * movement duration. Starting an already-running timer restarts it from zero, so a burst of move commands keeps
+   * movementState at Moving until the last one settles instead of flapping back to Idle between them.
    */
   #simulateMovement(): void {
-    const endpoint = this.endpoint;
-    if (this.internal.movementTimer !== undefined) clearTimeout(this.internal.movementTimer);
     this.state.movementState = CameraAvSettingsUserLevelManagement.PhysicalMovement.Moving;
-    this.internal.movementTimer = setTimeout(() => {
-      Promise.resolve(
-        endpoint.act((agent) => {
-          const behavior = agent.get(MatterbridgeCameraAvSettingsUserLevelManagementServer);
-          behavior.internal.movementTimer = undefined;
-          behavior.state.movementState = CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle;
-        }),
-      ).catch((error: unknown) => {
-        endpoint
-          .stateOf(MatterbridgeServer)
-          .log.error(`Failed to restore movementState to Idle after a simulated PTZ movement: ${error instanceof Error ? error.message : String(error)}`);
-      });
-    }, MOVEMENT_DURATION_MS);
+    this.internal.movementTimer?.start();
+  }
+
+  /**
+   * Restores movementState to Idle. Invoked by the movement-simulation timer via {@link Behavior.callback}.
+   */
+  #restoreIdle(): void {
+    this.state.movementState = CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle;
   }
 }
 
@@ -152,8 +163,8 @@ export namespace MatterbridgeCameraAvSettingsUserLevelManagementServer {
    * Internal (endpoint-scoped, not instance-scoped) state for {@link MatterbridgeCameraAvSettingsUserLevelManagementServer}.
    */
   export class Internal {
-    /** The pending timer that restores movementState to Idle after a simulated PTZ movement, if one is in progress. */
-    movementTimer?: NodeJS.Timeout;
+    /** The timer that restores movementState to Idle after a simulated PTZ movement. */
+    movementTimer?: Timer;
   }
   /* v8 ignore next -- compiler-generated fallback (`Foo || (Foo = {})`) for namespace/class declaration merging;
    * the class is always already defined by the time this runs, so the assignment branch is structurally unreachable. */
