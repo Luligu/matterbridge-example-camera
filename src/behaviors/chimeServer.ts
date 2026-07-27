@@ -40,6 +40,31 @@ const ChimeServerBase = ChimeServer.enable({ events: { chimeStartedPlaying: true
  * Chime server that forwards the PlayChimeSound command to the Matterbridge command handler and generates the ChimeStartedPlaying event.
  */
 export class MatterbridgeChimeServer extends ChimeServerBase {
+  override initialize(): void {
+    // Must stay an unbound method reference: matter.js calls reactors via `reactor.call(transactionScopedThis, ...)`,
+    // rebinding `this` to a fresh per-write transactional proxy. A bound arrow function ignores that rebind and
+    // keeps referencing the stale construction-time `this`, causing "context has exited" errors on every write.
+    // oxlint-disable-next-line typescript/unbound-method
+    this.reactTo(this.events.selectedChime$Changing, this.#assertSelectedChime);
+  }
+
+  /**
+   * Rejects writes to SelectedChime that are not present in installedChimeSounds.
+   * Per Matter 1.6 Application Cluster spec §11.8.5.2, an attempt to write a value not contained
+   * within InstalledChimeSounds SHALL be failed with a NOT_FOUND response.
+   *
+   * @param {number} chimeId - The chimeId value being written to SelectedChime.
+   * @throws {StatusResponseError} With status NotFound if chimeId is not present in installedChimeSounds.
+   */
+  #assertSelectedChime(chimeId: number): void {
+    if (!this.state.installedChimeSounds.some((chimeSound) => chimeSound.chimeId === chimeId)) {
+      throw new StatusResponseError(
+        `MatterbridgeChimeServer: chime sound ${chimeId} is not present in installedChimeSounds (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
+    }
+  }
+
   /**
    * Handles the PlayChimeSound command.
    * Plays the chime sound passed in the request or, if none is passed, the currently selected chime, and generates the ChimeStartedPlaying event.

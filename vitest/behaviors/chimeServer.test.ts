@@ -96,6 +96,18 @@ describe('MatterbridgeChimeServer', () => {
     expect(loggerInfoSpy).not.toHaveBeenCalledWith(expect.stringContaining('playing chime sound 99'));
   });
 
+  it('should accept writing SelectedChime to a chimeId present in installedChimeSounds', async () => {
+    await expect(device.setAttribute(ChimeCluster, 'selectedChime', 1, device.log)).resolves.toBe(true);
+    expect(device.getAttribute(ChimeCluster, 'selectedChime')).toBe(1);
+
+    await device.setAttribute(ChimeCluster, 'selectedChime', 0, device.log);
+  });
+
+  it('should reject with NotFound when writing SelectedChime to a chimeId not in installedChimeSounds', async () => {
+    await expect(device.setAttribute(ChimeCluster, 'selectedChime', 99, device.log)).rejects.toThrow('chime sound 99 is not present in installedChimeSounds');
+    expect(device.getAttribute(ChimeCluster, 'selectedChime')).toBe(0);
+  });
+
   it('should succeed with no side effects when enabled is false', async () => {
     await device.setAttribute(ChimeCluster, 'enabled', false, device.log);
     vi.clearAllMocks();
