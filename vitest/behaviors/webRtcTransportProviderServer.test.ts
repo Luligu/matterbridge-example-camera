@@ -83,7 +83,9 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
   });
 
   it('should create and register a camera device using the MatterbridgeWebRtcTransportProviderServer behavior', async () => {
-    device = new Camera('WebRtc Behavior', 'WEBRTC-BEHAVIOR');
+    // maxConcurrentEncoders is raised above the default of 1 because this shared device accumulates auto-allocated
+    // and explicitly allocated video streams across many tests in this file.
+    device = new Camera('WebRtc Behavior', 'WEBRTC-BEHAVIOR', { maxConcurrentEncoders: 10 });
     expect(device.behaviors.has(MatterbridgeWebRtcTransportProviderServer)).toBeTruthy();
     expect(await addDevice(aggregator, device)).toBeTruthy();
   });
@@ -504,13 +506,14 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = 'test-webcam-device';
 
     try {
+      // maxResolution must bracket the device's default rateDistortionTradeOffPoints entry (1920x1080, Matter 1.6 §11.2.8.4.8).
       await device.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
         streamUsage: StreamUsage.LiveView,
         videoCodec: CameraAvStreamManagement.VideoCodec.H264,
         minFrameRate: 15,
         maxFrameRate: 30,
         minResolution: { width: 640, height: 480 },
-        maxResolution: { width: 1280, height: 720 },
+        maxResolution: { width: 1920, height: 1080 },
         minBitRate: 1_000_000,
         maxBitRate: 2_000_000,
         keyFrameInterval: 4000,
@@ -526,7 +529,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
         }),
       ).resolves.toBeUndefined();
 
-      expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('local webcam (test-webcam-device, 1280x720)'));
+      expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('local webcam (test-webcam-device, 1920x1080)'));
       clearExpectedWarnings('No injectable video codec available on negotiated transceivers', 'Cannot inject video stream: missing dependency ffmpeg');
 
       const currentSessions = device.getAttribute(WebRtcTransportProvider, 'currentSessions') ?? [];

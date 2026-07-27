@@ -76,6 +76,7 @@
     "git": true,
     "version": false,
     "publish": false,
+    "chip": true,
     "coverage": {
       "lines": 100,
       "functions": 100,

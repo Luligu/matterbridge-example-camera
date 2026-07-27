@@ -124,6 +124,37 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Allocated snapshot stream 3'));
   });
 
+  it('should reject allocating a snapshot stream with a resolution range not present in snapshotCapabilities', async () => {
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamAllocate', {
+        imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
+        maxFrameRate: 10,
+        minResolution: { width: 100, height: 100 },
+        maxResolution: { width: 200, height: 200 },
+        quality: 90,
+      }),
+    ).rejects.toThrow('SnapshotStreamAllocate requested minResolution/maxResolution range does not match any entry in snapshotCapabilities');
+  });
+
+  it('should reuse an existing snapshot stream whose resolution range overlaps a narrower request', async () => {
+    // Overlaps only the stream allocated above (snapshotStreamId 3, range 320x240-1280x720), not the pre-existing
+    // one (snapshotStreamId 2, range 320x240-640x480), and still matches the 1280x720 snapshotCapabilities entry.
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamAllocate', {
+        imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
+        maxFrameRate: 10,
+        minResolution: { width: 700, height: 500 },
+        maxResolution: { width: 1280, height: 720 },
+        quality: 90,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toContainEqual(
+      expect.objectContaining({ snapshotStreamId: 3, minResolution: { width: 700, height: 500 }, maxResolution: { width: 1280, height: 720 } }),
+    );
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Reused snapshot stream 3'));
+  });
+
   it('should deallocate an existing snapshot stream', async () => {
     await expect(device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 3 })).resolves.toBeUndefined();
 
@@ -160,6 +191,15 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Capturing snapshot auto'));
   });
 
+  it('should reject capturing a snapshot with a snapshotStreamId not present in allocatedSnapshotStreams', async () => {
+    await expect(
+      device.invokeBehaviorCommand(CameraAvStreamManagement, 'captureSnapshot', {
+        snapshotStreamId: 77,
+        requestedResolution: { width: 640, height: 480 },
+      }),
+    ).rejects.toThrow('Snapshot stream 77 is not present in allocatedSnapshotStreams');
+  });
+
   it.each([
     [
       { width: 640, height: 480 },
@@ -187,6 +227,15 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
       streamUsagePriorities: [StreamUsage.Recording, StreamUsage.LiveView],
     });
     expect(await addDevice(aggregator, priorityDevice)).toBeTruthy();
+  });
+
+  it('should reject capturing a snapshot with automatic selection when no snapshot stream is allocated', async () => {
+    await expect(
+      priorityDevice.invokeBehaviorCommand(CameraAvStreamManagement, 'captureSnapshot', {
+        snapshotStreamId: null,
+        requestedResolution: { width: 640, height: 480 },
+      }),
+    ).rejects.toThrow('Snapshot stream auto is not present in allocatedSnapshotStreams');
   });
 
   it('should reject setting stream priorities with an unsupported stream usage', async () => {
@@ -217,7 +266,7 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
   });
 
   it('should create and register a camera using the Camera AV Stream Management behavior', async () => {
-    camera = new Camera('Camera Behavior', 'CAMERA-AV-BEHAVIOR');
+    camera = new Camera('Camera Behavior', 'CAMERA-AV-BEHAVIOR', { maxConcurrentEncoders: 2 });
     expect(await addDevice(aggregator, camera)).toBeTruthy();
   });
 
@@ -234,7 +283,87 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
         maxBitRate: 2_000_000,
         keyFrameInterval: 2000,
       }),
-    ).rejects.toThrow('Stream usage 2 is not present in supportedStreamUsages');
+    ).rejects.toThrow('Stream usage 2 is not present in streamUsagePriorities');
+  });
+
+  it('should reject allocating a video stream with stream usage Internal', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.Internal,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 360 },
+        maxResolution: { width: 1920, height: 1080 },
+        minBitRate: 500_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).rejects.toThrow('Stream usage Internal is not allowed for VideoStreamAllocate');
+  });
+
+  it('should reject allocating a video stream with an invalid videoCodec', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        videoCodec: 10 as CameraAvStreamManagement.VideoCodec,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 360 },
+        maxResolution: { width: 1920, height: 1080 },
+        minBitRate: 500_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).rejects.toThrow('VideoCodec 10 is not a valid VideoCodecEnum value');
+  });
+
+  it('should reject allocating a video stream with minFrameRate greater than maxFrameRate', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 31,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 360 },
+        maxResolution: { width: 1920, height: 1080 },
+        minBitRate: 500_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).rejects.toThrow('MinFrameRate 31 must not be greater than MaxFrameRate 30');
+  });
+
+  it('should reject allocating a video stream with minBitRate greater than maxBitRate', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 360 },
+        maxResolution: { width: 1920, height: 1080 },
+        minBitRate: 2_000_001,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).rejects.toThrow('MinBitRate 2000001 must not be greater than MaxBitRate 2000000');
+  });
+
+  it('should reject allocating a video stream that does not match any rateDistortionTradeOffPoints entry', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 7680, height: 4320 },
+        maxResolution: { width: 7680, height: 4320 },
+        minBitRate: 500_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).rejects.toThrow('VideoStreamAllocate requested parameters do not match any entry in rateDistortionTradeOffPoints or exceed videoSensorParams');
   });
 
   it('should allocate a video stream with the next available identifier', async () => {
@@ -256,6 +385,58 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
       expect.objectContaining({ videoStreamId: 0, streamUsage: StreamUsage.LiveView, referenceCount: 0 }),
     );
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Allocated video stream 0 for usage 3'));
+  });
+
+  it('should reuse an existing video stream that matches an identical request', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 360 },
+        maxResolution: { width: 1920, height: 1080 },
+        minBitRate: 500_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toHaveLength(1);
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Reused video stream 0 for usage 3'));
+  });
+
+  it('should reject allocating a video stream that would exceed maxConcurrentEncoders', async () => {
+    const singleEncoderCamera = new Camera('Camera Single Encoder', 'CAMERA-SINGLE-ENCODER');
+    expect(await addDevice(aggregator, singleEncoderCamera)).toBeTruthy();
+
+    await expect(
+      singleEncoderCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 360 },
+        maxResolution: { width: 1920, height: 1080 },
+        minBitRate: 500_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      singleEncoderCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
+        streamUsage: StreamUsage.Recording,
+        videoCodec: CameraAvStreamManagement.VideoCodec.H264,
+        minFrameRate: 15,
+        maxFrameRate: 30,
+        minResolution: { width: 640, height: 360 },
+        maxResolution: { width: 1920, height: 1080 },
+        minBitRate: 500_000,
+        maxBitRate: 2_000_000,
+        keyFrameInterval: 2000,
+      }),
+    ).rejects.toThrow('VideoStreamAllocate would exceed maxConcurrentEncoders (1)');
   });
 
   it('should allocate a second video stream with an incremented identifier', async () => {
@@ -301,7 +482,59 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
         bitRate: 32000,
         bitDepth: 16,
       }),
-    ).rejects.toThrow('Stream usage 2 is not present in supportedStreamUsages');
+    ).rejects.toThrow('Stream usage 2 is not present in streamUsagePriorities');
+  });
+
+  it('should reject allocating an audio stream with stream usage Internal', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.Internal,
+        audioCodec: CameraAvStreamManagement.AudioCodec.Opus,
+        channelCount: 1,
+        sampleRate: 48000,
+        bitRate: 32000,
+        bitDepth: 16,
+      }),
+    ).rejects.toThrow('Stream usage Internal is not allowed for AudioStreamAllocate');
+  });
+
+  it('should reject allocating an audio stream with an invalid audioCodec', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        audioCodec: 10 as CameraAvStreamManagement.AudioCodec,
+        channelCount: 1,
+        sampleRate: 48000,
+        bitRate: 32000,
+        bitDepth: 16,
+      }),
+    ).rejects.toThrow('AudioCodec 10 is not a valid AudioCodecEnum value');
+  });
+
+  it('should reject allocating an audio stream with an invalid bitDepth', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        audioCodec: CameraAvStreamManagement.AudioCodec.Opus,
+        channelCount: 1,
+        sampleRate: 48000,
+        bitRate: 32000,
+        bitDepth: 48,
+      }),
+    ).rejects.toThrow('BitDepth 48 is not one of 8, 16, 24, 32');
+  });
+
+  it('should reject allocating an audio stream not supported by microphoneCapabilities', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        audioCodec: CameraAvStreamManagement.AudioCodec.Opus,
+        channelCount: 1,
+        sampleRate: 44100,
+        bitRate: 32000,
+        bitDepth: 16,
+      }),
+    ).rejects.toThrow('AudioStreamAllocate requested audioCodec, channelCount, sampleRate or bitDepth is not supported by microphoneCapabilities');
   });
 
   it('should allocate an audio stream with the next available identifier', async () => {
@@ -320,6 +553,22 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
       expect.objectContaining({ audioStreamId: 0, streamUsage: StreamUsage.LiveView, referenceCount: 0 }),
     );
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Allocated audio stream 0 for usage 3'));
+  });
+
+  it('should reuse an existing audio stream that matches an identical request', async () => {
+    await expect(
+      camera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
+        streamUsage: StreamUsage.LiveView,
+        audioCodec: CameraAvStreamManagement.AudioCodec.Opus,
+        channelCount: 1,
+        sampleRate: 48000,
+        bitRate: 32000,
+        bitDepth: 16,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams')).toHaveLength(1);
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Reused audio stream 0 for usage 3'));
   });
 
   it('should allocate a second audio stream with an incremented identifier', async () => {

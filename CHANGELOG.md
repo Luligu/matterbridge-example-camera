@@ -34,6 +34,8 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [Dev Container]: Update Dev Container v.1.2.0.
 - [scripts]: Add `scripts/run-chip-tests.mjs` to manage the `luligu/matterbridge:chip-test` docker container and run the CHIP python test suite defined in `chipTests.json`. `--start` builds and adds the plugin to a fresh container, `--stop` stops it and restores the local dev environment (reinstall, relink, rebuild), `--test NAME` filters to matching tests, and results are logged to `chipTests.log`.
+- [scripts]: `run-chip-tests.mjs` now supports a per-test `"reset": true` field in `chipTests.json` that clears persisted stateful cluster storage and restarts the plugin (without recreating the container) before a test that needs a clean device state, and a per-test `"comment"` field that documents a known/expected failure, printed under its ❌ line in the run summary. The run summary is also written to `chipTestsSummary.log`, separate from the full `chipTests.log`.
+- [tests]: Add `TC_AVSUM_2_1`, `TC_AVSUM_2_2`, `TC_AVSUM_2_3` and `TC_AVSUM_2_9` (Camera AV Settings User Level Management / Mechanical PTZ) to `chipTests.json` and the README, running against the `PTZCamera` example device (endpoint 7).
 
 ### Changed
 
@@ -42,7 +44,12 @@ If you like this project and find it useful, please consider giving it a star on
 ### Fixed
 
 - [chime]: `MatterbridgeChimeServer` now rejects writes to the `SelectedChime` attribute with `NOT_FOUND` when the written chime ID is not present in `InstalledChimeSounds`, per Matter 1.6 Application Cluster spec §11.8.5.2. Previously any value was silently accepted, failing `TC_CHIME_2_3`.
+- [camera]: `CameraAvStreamManagement.captureSnapshot` now rejects with `NOT_FOUND` when the requested `snapshotStreamId` (or automatic selection with no allocated snapshot stream) does not match an entry in `AllocatedSnapshotStreams`, per Matter 1.6 §11.2.8.13. Previously it always returned a snapshot. Fixed `TC_AVSM_2_10`.
+- [camera]: `SnapshotStreamAllocate` now reuses an existing snapshot stream whose resolution range overlaps the request (narrowing its stored resolution to the new range) instead of only matching on exact field equality, per Matter 1.6 §11.2.8.8.8. Fixed `TC_AVSM_2_15` and `TC_AVSM_StreamReuseRangeParams`.
+- [camera]: `VideoStreamAllocate` now enforces `MaxConcurrentEncoders`, rejecting a new (non-reused) allocation with `RESOURCE_EXHAUSTED` once the limit is reached, and validates the `MinFrameRate`/`MaxFrameRate` and `MinBitRate`/`MaxBitRate` cross-field constraints ("1 to Max...", Matter 1.6 §11.2.8.4) with `CONSTRAINT_ERROR`, neither of which matter.js enforces automatically.
+- [camera]: `MPTZSetPosition` and `MPTZRelativeMove` now reject with `INVALID_COMMAND` when all of their fields (pan/tilt/zoom, or panDelta/tiltDelta/zoomDelta) are omitted, per Matter 1.6 §11.3.7. Previously an empty command was silently accepted as a no-op. Fixed `TC_AVSUM_2_2` and `TC_AVSUM_2_3`.
 - [tests]: Add `SelectedChime` write coverage (accepted and rejected chime IDs) in `vitest/behaviors/chimeServer.test.ts`.
+- [tests]: Add coverage for all the `CameraAvStreamManagement` and `CameraAvSettingsUserLevelManagement` fixes above in `vitest/behaviors/cameraAvStreamManagementServer.test.ts` and `vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts` (both files at 100% statements/branches/functions/lines).
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 

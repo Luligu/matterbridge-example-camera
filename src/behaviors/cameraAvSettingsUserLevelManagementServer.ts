@@ -55,11 +55,15 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
    * the corresponding value unchanged.
    *
    * @param {CameraAvSettingsUserLevelManagement.MptzSetPositionRequest} request - MPTZSetPosition request payload.
+   * @throws {StatusResponseError} With status InvalidCommand if pan, tilt and zoom are all omitted.
    * @throws {StatusResponseError} With status ConstraintError if pan, tilt or zoom is outside of the supported range.
    */
   override mptzSetPosition(request: CameraAvSettingsUserLevelManagement.MptzSetPositionRequest): void {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     const { pan, tilt, zoom } = request;
+    if (pan === undefined && tilt === undefined && zoom === undefined) {
+      throw new StatusResponseError('MPTZSetPosition requires at least one of pan, tilt or zoom to be present', Status.InvalidCommand);
+    }
     if (pan !== undefined && (pan < this.state.panMin || pan > this.state.panMax)) {
       throw new StatusResponseError(`Pan ${pan} is outside of the supported range [${this.state.panMin}, ${this.state.panMax}]`, Status.ConstraintError);
     }
@@ -86,9 +90,13 @@ export class MatterbridgeCameraAvSettingsUserLevelManagementServer extends Camer
    * tilt and zoom ranges.
    *
    * @param {CameraAvSettingsUserLevelManagement.MptzRelativeMoveRequest} request - MPTZRelativeMove request payload.
+   * @throws {StatusResponseError} With status InvalidCommand if panDelta, tiltDelta and zoomDelta are all omitted.
    */
   override mptzRelativeMove(request: CameraAvSettingsUserLevelManagement.MptzRelativeMoveRequest): void {
     const device = this.endpoint.stateOf(MatterbridgeServer);
+    if (request.panDelta === undefined && request.tiltDelta === undefined && request.zoomDelta === undefined) {
+      throw new StatusResponseError('MPTZRelativeMove requires at least one of panDelta, tiltDelta or zoomDelta to be present', Status.InvalidCommand);
+    }
     const current = this.state.mptzPosition;
     /* v8 ignore next -- pan/tilt/zoom are conformance-mandatory once MechanicalPan/MechanicalTilt/MechanicalZoom are
      * enabled, which this class's fixed feature set always does (see the class declaration), so mptzPosition always

@@ -3,7 +3,8 @@
  * Version: 1.0.0
  *
  * Manage the `luligu/matterbridge:chip-test` docker container for this plugin and run the
- * Matter CHIP python test suite defined in chipTests.json, logging results to chipTests.log.
+ * Matter CHIP python test suite defined in chipTests.json, logging full results to chipTests.log
+ * and just the pass/fail summary to chipTestsSummary.log.
  * Each chipTests.json entry may set an "input" string, piped to the test's stdin, for tests
  * that prompt for interactive confirmation (for example "y\ny\n").
  *
@@ -12,6 +13,11 @@
  *   node scripts/run-chip-tests.mjs --stop           Stop the chip-test container, then reinstall, relink, and rebuild the local matterbridge instance.
  *   node scripts/run-chip-tests.mjs                  Run the tests listed in chipTests.json inside the running container.
  *   node scripts/run-chip-tests.mjs --test NAME       Run only the tests whose "name" or "test" property includes NAME (case-insensitive).
+ *
+ * A chipTests.json entry may set "reset": true to clear persisted stateful cluster storage (for example
+ * CameraAvStreamManagement allocated streams) and restart the matterbridge process before that test runs,
+ * without recreating the container (no docker rm/pull/npm install/build). This is much cheaper than --start
+ * and is only needed for tests that depend on starting from a clean, un-allocated device state.
  */
 
 /* eslint-disable no-console */
@@ -26,6 +32,16 @@ const image = 'luligu/matterbridge:chip-test';
 const pluginName = 'matterbridge-example-camera';
 const testsFile = resolve(root, 'chipTests.json');
 const logFile = resolve(root, 'chipTests.log');
+const summaryLogFile = resolve(root, 'chipTestsSummary.log');
+// Node storage for the bridged endpoints; only stateful cluster attributes that get written during a
+// test create a file here, so these globs only ever remove test-mutated state, never device identity.
+const matterstorageRoot = '/root/.matterbridge/matterstorage/Matterbridge';
+const statefulClusterGlobs = ['*.cameraAvStreamManagement.*', '*.chime.*'];
+// Printed once the plugin has finished (re)configuring its devices after a restart; polled from `docker
+// logs`. The node coming online happens well before this and is not sufficient: on an already-commissioned
+// restart the node skips straight to "online", but the plugin (and its cluster state) isn't ready for
+// another ~30s after that, so waiting on the node-online line alone lets tests race a half-configured plugin.
+const readyLogMarker = `Platform ${pluginName} configured successfully`;
 const isWindows = process.platform === 'win32';
 // On Windows npm is a .cmd shim, not a PE executable: spawnSync can't CreateProcess it directly
 // (ENOENT/EINVAL even when resolved to npm.cmd), so it must be run through the shell.
@@ -113,7 +129,9 @@ function pruneDevDependencies() {
     }
 
     if (attempt === maxAttempts) {
-      console.warn(`npm prune failed after ${maxAttempts} attempts (exit ${result.status}) — likely a devDependency binary locked by an editor process. Continuing without pruning.`);
+      console.warn(
+        `npm prune failed after ${maxAttempts} attempts (exit ${result.status}) — likely a devDependency binary locked by an editor process. Continuing without pruning.`,
+      );
       return;
     }
 
@@ -177,6 +195,37 @@ function stop() {
   console.log('Chip-test container stopped.');
 }
 
+// Waits for matterbridge to finish re-commissioning its server node after a restart by polling the
+// container logs for readyLogMarker, so the next test doesn't race a not-yet-ready device.
+function waitForContainerReady(timeoutMs = 45000, pollMs = 1000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = run('docker', ['logs', '--tail', '80', containerName], { capture: true });
+    // Matterbridge colorizes its log output with ANSI escapes even without a TTY, splitting the marker
+    // text across escape sequences (e.g. "Matterbridge " <esc> "is online"); strip them before matching.
+    // eslint-disable-next-line no-control-regex
+    const plainOutput = `${result.stdout ?? ''}${result.stderr ?? ''}`.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+    if (plainOutput.includes(readyLogMarker)) {
+      return;
+    }
+    sleepSync(pollMs);
+  }
+  console.warn(`Timed out waiting for "${readyLogMarker}" in container logs; continuing anyway.`);
+}
+
+// Clears persisted stateful cluster storage and restarts the matterbridge process inside the already
+// running container, without recreating it (no docker rm/pull/npm install/build), so tests that need a
+// clean, un-allocated device state can run fast without paying the full --start cost between every test.
+function resetContainerState() {
+  console.log('Resetting stateful cluster storage...');
+  const findExpr = statefulClusterGlobs.map((glob) => `-name '${glob}'`).join(' -o ');
+  run('docker', ['exec', containerName, 'sh', '-c', `find ${matterstorageRoot} -type f \\( ${findExpr} \\) -delete`]);
+
+  console.log('Restarting matterbridge...');
+  runOrFail('docker', ['restart', containerName]);
+  waitForContainerReady();
+}
+
 function loadTests() {
   let raw;
   try {
@@ -222,7 +271,8 @@ function filterTests(tests, nameFilter) {
 
 function runTests(nameFilter) {
   const tests = filterTests(loadTests(), nameFilter);
-  writeFileSync(logFile, `Chip tests run started at ${new Date().toISOString()}\n\n`);
+  const startedAt = `Chip tests run started at ${new Date().toISOString()}\n\n`;
+  writeFileSync(logFile, startedAt);
 
   const results = [];
   for (const test of tests) {
@@ -230,6 +280,11 @@ function runTests(nameFilter) {
     const args = buildArgs(test);
     const commandLine = ['python3', scriptPath, ...args].join(' ');
     const label = `${test.name} (${test.test})`;
+
+    if (test.reset) {
+      appendFileSync(logFile, `--- reset stateful cluster storage before ${label} ---\n`);
+      resetContainerState();
+    }
 
     console.log(`Running: ${label}`);
     appendFileSync(logFile, `=== ${label} ===\n${commandLine}\n`);
@@ -247,12 +302,19 @@ function runTests(nameFilter) {
     appendFileSync(logFile, `Result: ${passed ? 'PASS' : 'FAIL'} (exit ${result.status})\n\n`);
     console.log(passed ? `PASS: ${label}` : `FAIL: ${label} (exit ${result.status})`);
 
-    results.push(passed);
+    results.push({ label, passed, comment: test.comment });
   }
 
-  const passedCount = results.filter(Boolean).length;
+  const passedCount = results.filter((result) => result.passed).length;
+  const resultLines = results.flatMap((result) => {
+    const line = `${result.passed ? '✅' : '❌'} ${result.label}`;
+    return result.passed || !result.comment ? [line] : [line, `   ↳ ${result.comment}`];
+  });
   const summary = `Summary: ${passedCount}/${results.length} tests passed.`;
-  appendFileSync(logFile, `${summary}\n`);
+
+  appendFileSync(logFile, `${resultLines.join('\n')}\n\n${summary}\n`);
+  writeFileSync(summaryLogFile, `${startedAt}${resultLines.join('\n')}\n\n${summary}\n`);
+  console.log(resultLines.join('\n'));
   console.log(summary);
 
   if (passedCount !== results.length) {
