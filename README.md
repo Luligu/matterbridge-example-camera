@@ -38,22 +38,27 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 
 ## Requirements
 
-Requires [`ffmpeg`](https://ffmpeg.org/) to be installed. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
+Requires [`ffmpeg`](https://ffmpeg.org/) to be installed on the host or in the container. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
 Install it with the platform's package manager:
 
+### Linux (Debian/Ubuntu)
+
+If you run in a container, install it in the same way.
+
 ```bash
-# Linux (Debian/Ubuntu)
 sudo apt update && sudo apt install -y ffmpeg
 ```
 
+### Windows
+
 ```powershell
-# Windows
 winget install --id Gyan.FFmpeg -e
 ```
 
+### macOS
+
 ```bash
-# macOS
 brew install ffmpeg
 ```
 
@@ -104,6 +109,8 @@ Features:
 Supported by:
 
 - [Matterserver dashboard](screenshots/matterserver-camera.png)
+
+- [Matterserver dashboard with MPTZ](screenshots/matterserver-ptz-camera.png)
 
 ### Snapshot Camera
 
@@ -162,42 +169,33 @@ Features:
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
 - Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around the same matter.js bug described above for Audio Doorbell.
 
-#### Pairing two Intercoms for two-way calling
+Supported by:
 
-`src/module.ts` registers exactly this pair for testing: `Intercom 1` (bridged, under the Matterbridge aggregator) and `Intercom 2` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
+- [Matterserver dashboard](screenshots/matterserver-intercom.png)
 
-`Intercom 2` has to be `mode: 'server'` rather than a second bridged endpoint: peer resolution (see below) identifies the caller from the `peerNodeId`/`fabricIndex` of the command's CASE session, and a CASE session only exists between two distinct node identities on the fabric. Two bridged endpoints share the bridge's single node identity, so there is no CASE session, Binding, or ACL between them to test — invoking one from the other would just be a local, in-process behavior call. `mode: 'server'` is what gives an endpoint its own independent Matter node, which is what a real second, physical Intercom would be.
+### Pairing the Server Chime and Server Doorbell to let the Doorbell play a chime
+
+`src/module.ts` registers exactly this pair for testing: `Server Chime` (`mode: 'server'`, its own Matter node) and `Server Doorbell` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
+
+1. **Binding on Server Doorbell → Server Chime**, so Server Doorbell knows where to play a chime.
+
+Bind Server Doorbell to Server Chime with ![Matter Server Dashboard](screenshots/binding.png)
+
+### Pairing the two Server Intercoms for two-way calling
+
+`src/module.ts` registers exactly this pair for testing: `Server Intercom 1` (`mode: 'server'`, its own Matter node) and `Server Intercom 2` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
 
 Unlike a Doorbell/Chime pair, where only the Doorbell invokes commands on the Chime, an Intercom both hosts (server) and invokes (client) WebRtcTransportProvider and WebRtcTransportRequestor (see `#resolvePeerRequestorEndpoint` in `src/behaviors/webRtcTransportProviderServer.ts`). Once a peer invokes SolicitOffer/ProvideOffer on an Intercom's WebRtcTransportProvider, that Intercom resolves the caller's WebRtcTransportRequestor endpoint directly from the invoking peer's node id/fabric index carried by the command's CASE session — not via the Binding cluster — so the Offer/Answer "return leg" needs no binding of its own. Only the initiating invoke needs one.
 
-So, to let either Intercom 1 or Intercom 2 start a call, on the fabric they share (commission both onto the same controller/ecosystem first, e.g. via chip-tool, Apple Home, or Google Home):
+So, to let either Server Intercom 1 or Server Intercom 2 start a call, on the fabric they share.
 
-1. **Binding on 1 → 2**, so Intercom 1 knows where to send SolicitOffer/ProvideOffer. Binding on 2 → 1 is the mirror, for the other direction:
+1. **Binding on Server Intercom 1 → Server Intercom 2**, so Server Intercom 1 knows where to send SolicitOffer/ProvideOffer.
 
-   ```bash
-   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_2>, "endpoint": <ENDPOINT_2>, "cluster": 1363}]' <NODE_ID_1> <ENDPOINT_1>
-   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_1>, "endpoint": <ENDPOINT_1>, "cluster": 1363}]' <NODE_ID_2> <ENDPOINT_2>
-   ```
+Bind Server Intercom 1 to Server Intercom 2 with ![Matter Server Dashboard](screenshots/binding-intercom1.png)
 
-   `1363` (`0x553`) is the WebRtcTransportProvider cluster id; `<ENDPOINT_1>`/`<ENDPOINT_2>` are each Intercom's endpoint number (find them from the commissioning output or the Matterbridge frontend).
+2. **Binding on Server Intercom 2 → Server Intercom 1**, so Server Intercom 2 knows where to send SolicitOffer/ProvideOffer.
 
-2. **ACL on 2 granting 1**, and **ACL on 1 granting 2**, Operate access to both WebRtcTransportProvider (`1363`) and WebRtcTransportRequestor (`1364`, `0x554`) — Intercom 1 needs it on 2 for the initiating invoke, and Intercom 2 needs it on 1 for the return invoke, regardless of who starts the call:
-
-   ```bash
-   chip-tool accesscontrol write acl '[
-     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
-     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_1>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
-   ]' <NODE_ID_2> 0
-
-   chip-tool accesscontrol write acl '[
-     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
-     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_2>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
-   ]' <NODE_ID_1> 0
-   ```
-
-   The ACL attribute is a full replace, not a merge: keep the existing Administer entry for `<ADMIN_NODE_ID>` (your controller/commissioner) in the list, or you lock yourself out of that node.
-
-With both directions in place, either Intercom can call the other; a call initiated the other way only needs its own binding/ACL pair, already covered above since both were set up symmetrically.
+Bind Server Intercom 2 to Server Intercom 1 with ![Matter Server Dashboard](screenshots/binding-intercom2.png)
 
 ## WebRTC video and audio injection
 

@@ -122,7 +122,7 @@ describe('TestPlatform', () => {
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE).toBeUndefined();
       expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe('640x480');
       expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe('none');
-      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(12);
+      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(13);
     } finally {
       await emptyConfigPlatform.onShutdown();
     }
@@ -211,12 +211,14 @@ describe('TestPlatform', () => {
     expect(exampleCamera).toBeDefined();
     expect(platform.getDeviceById('PTZCamera-PTZCAMERA-001')).toBeDefined();
     expect(platform.getDeviceById('FloodlightCamera-FLOODLIGHTCAMERA-001')).toBeDefined();
-    expect(platform.getDeviceById('Intercom1-INTERCOM1-001')).toBeDefined();
+    expect(platform.getDeviceById('Intercom-INTERCOM-001')).toBeDefined();
     expect(platform.getDeviceById('VideoDoorbell-VIDEODOORBELL-001')).toBeDefined();
     const serverChime = platform.getDeviceById('ServerChime-SERVER-CHIME-001');
     expect(serverChime).toBeDefined();
     expect(platform.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001')).toBeDefined();
-    expect(platform.size()).toBe(12);
+    expect(platform.getDeviceById('ServerIntercom1-SERVER-INTERCOM1-001')).toBeDefined();
+    expect(platform.getDeviceById('ServerIntercom2-SERVER-INTERCOM2-001')).toBeDefined();
+    expect(platform.size()).toBe(13);
 
     // Bridged and server-mode devices alike should carry the plugin version as software version
     // and the Matterbridge version as hardware version, set by addDevice() before registration.

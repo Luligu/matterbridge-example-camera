@@ -189,18 +189,20 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     });
     await this.addDevice(exampleFloodlightCamera);
 
-    const exampleIntercom1 = new Intercom('Intercom 1', 'INTERCOM1-001', {
+    const exampleIntercom = new Intercom('Intercom', 'INTERCOM-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Replaceable',
     });
-    await this.addDevice(exampleIntercom1);
+    await this.addDevice(exampleIntercom);
 
     const exampleVideoDoorbell = new VideoDoorbell('Video Doorbell', 'VIDEODOORBELL-001', {
       powerSourceType: 'Wired',
       cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
     });
     await this.addDevice(exampleVideoDoorbell);
+
+    // We add below the server chime and doorbell as separate Matter nodes (mode: 'server'), rather than as bridged endpoints, so that they can be bound to each other to test Doorbell (see the README's Doorbell pairing section).
 
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', {
       identifyTime: 5,
@@ -223,10 +225,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', { mode: 'server' });
     await this.addDevice(serverDoorbell);
 
-    // A separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
+    // 2 separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
     // be bound to each other to test two-way calling (see the README's Intercom pairing section).
-    const exampleIntercom2 = new Intercom('Intercom 2', 'INTERCOM2-001', { mode: 'server' });
-    await this.addDevice(exampleIntercom2);
+    const serverIntercom1 = new Intercom('Server Intercom 1', 'SERVER-INTERCOM1-001', { mode: 'server' });
+    await this.addDevice(serverIntercom1);
+
+    const serverIntercom2 = new Intercom('Server Intercom 2', 'SERVER-INTERCOM2-001', { mode: 'server' });
+    await this.addDevice(serverIntercom2);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
