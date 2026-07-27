@@ -29,7 +29,7 @@ docker exec -it plugin-chip-test bash
 In the shell:
 
 ```bash
-# Generic device composition and conformance ✅ (one test fails for a known matter.js bug that forse to use feature ImageControl when is not allowed)
+# Generic device composition and conformance ✅ (all pass)
 python3 src/python_testing/TC_DeviceBasicComposition.py
 python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
 python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true

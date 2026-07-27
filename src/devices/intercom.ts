@@ -79,15 +79,6 @@ export class Intercom extends MatterbridgeEndpoint {
    * receive and solicit WebRTC offers to/from a peer intercom. The optional Chime client cluster is added
    * automatically by {@link addChimeClient}, so a bound Chime device can be triggered.
    *
-   * Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled
-   * here, even though the specification only allows it when the Video or Snapshot feature is present (neither of
-   * which applies to this Audio/Speaker-only device). This works around a matter.js bug where the
-   * ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one of these three shall be present" choice
-   * conformance is enforced unconditionally, instead of only when ImageControl is enabled, making an Audio-only
-   * CameraAvStreamManagement server otherwise impossible to construct. See
-   * {@link createDefaultIntercomCameraAvStreamManagementClusterServer} below. Remove once matter.js fixes this
-   * upstream.
-   *
    * @param {string} name - The name of the intercom.
    * @param {string} serial - The serial number of the intercom.
    * @param {IntercomOptions} [options] - Optional configuration values. Missing fields use defaults.
@@ -191,18 +182,10 @@ export interface IntercomCameraAvStreamManagementClusterOptions {
 
 /**
  * Creates a default CameraAvStreamManagement cluster server, specialized for the Audio and Speaker features, on the
- * given endpoint. The Video and Snapshot features are not enabled, as required by the Matter specification for the
- * Intercom device type. Unlike {@link createDefaultAudioCameraAvStreamManagementClusterServer} in
- * `src/devices/audioDoorbell.ts` (Audio only, one-way from the visitor to the resident), the Intercom needs the
+ * given endpoint. The Video, Snapshot and ImageControl features are not enabled, as required by the Matter
+ * specification for the Intercom device type. Unlike {@link createDefaultAudioCameraAvStreamManagementClusterServer}
+ * in `src/devices/audioDoorbell.ts` (Audio only, one-way from the visitor to the resident), the Intercom needs the
  * Speaker feature too so it can both capture and play back audio for genuine two-way communication.
- *
- * The ImageControl feature is enabled as well, even though the Matter specification only allows it when Video or
- * Snapshot is present (neither of which applies here). This is a deliberate deviation from the specification, needed
- * to work around a matter.js bug: the ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one of these
- * three shall be present" choice conformance is enforced unconditionally, instead of only when ImageControl is
- * enabled, which otherwise makes it impossible to construct an Audio-only CameraAvStreamManagement server (the three
- * attributes can neither be provided nor omitted). Remove imageRotation/imageFlipVertical/imageFlipHorizontal below,
- * and CameraAvStreamManagement.Feature.ImageControl above, once matter.js fixes this upstream.
  *
  * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
  * @param {IntercomCameraAvStreamManagementClusterOptions} options - The initial state of the CameraAvStreamManagement cluster server.
@@ -212,30 +195,20 @@ export function createDefaultIntercomCameraAvStreamManagementClusterServer(
   endpoint: MatterbridgeEndpoint,
   options: IntercomCameraAvStreamManagementClusterOptions,
 ): MatterbridgeEndpoint {
-  endpoint.behaviors.require(
-    MatterbridgeCameraAvStreamManagementServer.with(
-      CameraAvStreamManagement.Feature.Audio,
-      CameraAvStreamManagement.Feature.Speaker,
-      CameraAvStreamManagement.Feature.ImageControl,
-    ),
-    {
-      ...options,
-      hardPrivacyModeOn: false,
-      statusLightEnabled: false,
-      allocatedAudioStreams: [],
-      microphoneMuted: false,
-      microphoneVolumeLevel: 128,
-      microphoneMaxLevel: 254,
-      microphoneMinLevel: 0,
-      microphoneAgcEnabled: false,
-      speakerMuted: false,
-      speakerVolumeLevel: 128,
-      speakerMaxLevel: 254,
-      speakerMinLevel: 0,
-      imageRotation: 0,
-      imageFlipVertical: false,
-      imageFlipHorizontal: false,
-    },
-  );
+  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Audio, CameraAvStreamManagement.Feature.Speaker), {
+    ...options,
+    hardPrivacyModeOn: false,
+    statusLightEnabled: false,
+    allocatedAudioStreams: [],
+    microphoneMuted: false,
+    microphoneVolumeLevel: 128,
+    microphoneMaxLevel: 254,
+    microphoneMinLevel: 0,
+    microphoneAgcEnabled: false,
+    speakerMuted: false,
+    speakerVolumeLevel: 128,
+    speakerMaxLevel: 254,
+    speakerMinLevel: 0,
+  });
   return endpoint;
 }

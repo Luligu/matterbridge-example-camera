@@ -62,10 +62,6 @@ winget install --id Gyan.FFmpeg -e
 brew install ffmpeg
 ```
 
-## TODO
-
-- Track matter.js PR #4128 (https://github.com/matter-js/matter.js/pull/4128) and, once merged and released in the consumed `@matter/*` version, remove the temporary ImageControl workaround used by Audio Doorbell and Intercom for CameraAvStreamManagement choice conformance.
-
 ## Supported device types
 
 ### Chime
@@ -116,7 +112,7 @@ Supported by:
 
 Features:
 
-- Exposes the Camera AV Stream Management cluster with the Snapshot and Image Control features.
+- Exposes the Camera AV Stream Management cluster with the Snapshot feature.
 - Supports configurable snapshot capabilities, encoder limits, content buffer size, and network bandwidth.
 - Supports configuring stream usages and their priority order with the SetStreamPriorities command.
 - Allocates and deallocates snapshot streams with generated stream identifiers.
@@ -138,7 +134,6 @@ Features:
 - Adds the required Chime client cluster automatically via `addChimeClient`, so a bound Chime device can be triggered when the doorbell button is pressed.
 - Identify cluster is always created (it is a required server cluster for this device type), with configurable identify time and type.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
-- Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around a matter.js bug where the ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one shall be present" choice conformance is enforced unconditionally instead of only when ImageControl is enabled (see the JSDoc in `src/devices/audioDoorbell.ts`).
 
 ### Floodlight Camera
 
@@ -167,7 +162,6 @@ Features:
 - Adds the optional Chime client cluster automatically via `addChimeClient`, so a bound Chime device can be triggered.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
-- Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around the same matter.js bug described above for Audio Doorbell.
 
 Supported by:
 

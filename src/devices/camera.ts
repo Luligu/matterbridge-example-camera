@@ -103,7 +103,7 @@ export class Camera extends MatterbridgeEndpoint {
    * Creates an instance of the Camera class.
    *
    * A Camera device provides interfaces for controlling and transporting captured media. This example only implements the
-   * CameraAvStreamManagement cluster with the Video, Audio and ImageControl features enabled, and the WebRtcTransportProvider cluster.
+   * CameraAvStreamManagement cluster with the Video, Audio, Snapshot and ImageControl features enabled, and the WebRtcTransportProvider cluster.
    *
    * @param {string} name - The name of the camera.
    * @param {string} serial - The serial number of the camera.
@@ -258,6 +258,13 @@ export interface CameraAvStreamManagementClusterOptions {
  * Creates a default CameraAvStreamManagement cluster server, with the Video, Audio, Snapshot and ImageControl features
  * enabled, on the given endpoint.
  *
+ * The ImageControl feature is required here (even though it doesn't implement any real image-processing logic) so
+ * that this endpoint's registered behavior matches {@link MatterbridgeCameraAvStreamManagementServer}'s own declared
+ * feature set (Video, Audio, Snapshot, ImageControl): `webRtcTransportProviderServer.ts`'s automatic stream
+ * assignment gates on `endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)`, which requires an exact
+ * match against that base class, not just a compatible subset. Removing ImageControl here would make that check
+ * fail and break WebRTC SolicitOffer/ProvideOffer automatic stream selection for this device.
+ *
  * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
  * @param {CameraAvStreamManagementClusterOptions} options - The initial state of the CameraAvStreamManagement cluster server.
  * @returns {MatterbridgeEndpoint} The endpoint with the CameraAvStreamManagement cluster server created.
@@ -282,8 +289,6 @@ export function createDefaultCameraAvStreamManagementClusterServer(endpoint: Mat
       microphoneMaxLevel: 254,
       microphoneMinLevel: 0,
       microphoneAgcEnabled: false,
-      // TODO: open issue on matter.js cause it treats ICTL mandatory but is not so we add for now
-      // CameraAvStreamManagement.Feature.ImageControl
       imageRotation: 0,
       imageFlipVertical: false,
       imageFlipHorizontal: false,

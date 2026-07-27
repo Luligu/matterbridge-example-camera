@@ -85,9 +85,7 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
         },
       ],
     });
-    expect(
-      device.behaviors.has(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot, CameraAvStreamManagement.Feature.ImageControl)),
-    ).toBeTruthy();
+    expect(device.behaviors.has(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot))).toBeTruthy();
     expect(await addDevice(aggregator, device)).toBeTruthy();
   });
 

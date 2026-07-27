@@ -68,9 +68,7 @@ describe('SnapshotCamera', () => {
     expect(device.hasClusterServer(Identify.id)).toBeFalsy();
     expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
     expect(device.hasClusterServer(CameraAvStreamManagement.id)).toBeTruthy();
-    expect(
-      device.behaviors.has(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot, CameraAvStreamManagement.Feature.ImageControl)),
-    ).toBeTruthy();
+    expect(device.behaviors.has(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot))).toBeTruthy();
 
     expect(await addDevice(aggregator, device)).toBeTruthy();
     expect(device.getAttribute(CameraAvStreamManagement, 'maxConcurrentEncoders')).toBe(1);

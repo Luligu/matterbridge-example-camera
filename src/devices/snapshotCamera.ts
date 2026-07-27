@@ -178,7 +178,7 @@ export function createDefaultSnapshotCameraAvStreamManagementClusterServer(
   endpoint: MatterbridgeEndpoint,
   options: SnapshotCameraAvStreamManagementClusterOptions,
 ): MatterbridgeEndpoint {
-  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot, CameraAvStreamManagement.Feature.ImageControl), {
+  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot), {
     // mandatory attributes
     maxContentBufferSize: options.maxContentBufferSize, // M
     maxNetworkBandwidth: options.maxNetworkBandwidth, // M
@@ -189,11 +189,6 @@ export function createDefaultSnapshotCameraAvStreamManagementClusterServer(
     maxEncodedPixelRate: options.maxEncodedPixelRate, // VDO | SNP
     snapshotCapabilities: options.snapshotCapabilities, // SNP
     allocatedSnapshotStreams: options.allocatedSnapshotStreams, // SNP
-    // TODO: open issue on matter.js cause it treats ICTL mandatory but is not so we add for now
-    // CameraAvStreamManagement.Feature.ImageControl
-    imageRotation: 0,
-    imageFlipVertical: false,
-    imageFlipHorizontal: false,
   });
   return endpoint;
 }

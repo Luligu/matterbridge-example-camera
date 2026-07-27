@@ -7,8 +7,7 @@
     {
       "name": "Generic device conformance",
       "test": "TC_DeviceConformance.py",
-      "args": ["--bool-arg allow_provisional:true"],
-      "comment": "Known matter.js bug: forces use of the ImageControl feature when it is not allowed."
+      "args": ["--bool-arg allow_provisional:true"]
     },
     {
       "name": "Generic device default warnings",
