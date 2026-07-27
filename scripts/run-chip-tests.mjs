@@ -4,11 +4,14 @@
  *
  * Manage the `luligu/matterbridge:chip-test` docker container for this plugin and run the
  * Matter CHIP python test suite defined in chipTests.json, logging results to chipTests.log.
+ * Each chipTests.json entry may set an "input" string, piped to the test's stdin, for tests
+ * that prompt for interactive confirmation (for example "y\ny\n").
  *
  * Usage:
- *   node scripts/run-chip-tests.mjs --start   Create the chip-test container and add/enable the plugin inside it.
- *   node scripts/run-chip-tests.mjs --stop    Stop the chip-test container, then reinstall, relink, and rebuild the local matterbridge instance.
- *   node scripts/run-chip-tests.mjs           Run the tests listed in chipTests.json inside the running container.
+ *   node scripts/run-chip-tests.mjs --start          Create the chip-test container and add/enable the plugin inside it.
+ *   node scripts/run-chip-tests.mjs --stop           Stop the chip-test container, then reinstall, relink, and rebuild the local matterbridge instance.
+ *   node scripts/run-chip-tests.mjs                  Run the tests listed in chipTests.json inside the running container.
+ *   node scripts/run-chip-tests.mjs --test NAME       Run only the tests whose "name" or "test" property includes NAME (case-insensitive).
  */
 
 /* eslint-disable no-console */
@@ -188,6 +191,11 @@ function loadTests() {
   if (!Array.isArray(tests)) {
     fail(`Expected a "phytonTest" array in ${testsFile}`);
   }
+  for (const test of tests) {
+    if (!test.test) {
+      fail(`Missing "test" file name for entry ${JSON.stringify(test)} in ${testsFile}`);
+    }
+  }
   return tests;
 }
 
@@ -199,30 +207,45 @@ function buildArgs(test) {
   return scriptArgs;
 }
 
-function runTests() {
-  const tests = loadTests();
+function filterTests(tests, nameFilter) {
+  if (!nameFilter) {
+    return tests;
+  }
+
+  const needle = nameFilter.toLowerCase();
+  const filtered = tests.filter((test) => test.name.toLowerCase().includes(needle) || test.test.toLowerCase().includes(needle));
+  if (filtered.length === 0) {
+    fail(`No test found with "name" or "test" including ${JSON.stringify(nameFilter)}`);
+  }
+  return filtered;
+}
+
+function runTests(nameFilter) {
+  const tests = filterTests(loadTests(), nameFilter);
   writeFileSync(logFile, `Chip tests run started at ${new Date().toISOString()}\n\n`);
 
   const results = [];
   for (const test of tests) {
-    const scriptPath = `src/python_testing/${test.name}`;
+    const scriptPath = `src/python_testing/${test.test}`;
     const args = buildArgs(test);
     const commandLine = ['python3', scriptPath, ...args].join(' ');
+    const label = `${test.name} (${test.test})`;
 
-    console.log(`Running: ${commandLine}`);
-    appendFileSync(logFile, `=== ${commandLine} ===\n`);
+    console.log(`Running: ${label}`);
+    appendFileSync(logFile, `=== ${label} ===\n${commandLine}\n`);
 
-    const result = spawnSync('docker', ['exec', containerName, 'python3', scriptPath, ...args], {
+    const result = spawnSync('docker', ['exec', '-i', containerName, 'python3', scriptPath, ...args], {
       cwd: root,
       encoding: 'utf8',
       windowsHide: true,
+      input: test.input ?? '',
     });
 
     appendFileSync(logFile, `${result.stdout ?? ''}${result.stderr ?? ''}\n`);
 
     const passed = result.status === 0;
     appendFileSync(logFile, `Result: ${passed ? 'PASS' : 'FAIL'} (exit ${result.status})\n\n`);
-    console.log(passed ? `PASS: ${test.name}` : `FAIL: ${test.name} (exit ${result.status})`);
+    console.log(passed ? `PASS: ${label}` : `FAIL: ${label} (exit ${result.status})`);
 
     results.push(passed);
   }
@@ -250,7 +273,17 @@ function main() {
     return;
   }
 
-  runTests();
+  const testFlagIndex = args.indexOf('--test');
+  if (testFlagIndex === -1) {
+    runTests();
+    return;
+  }
+
+  const nameFilter = args[testFlagIndex + 1];
+  if (!nameFilter) {
+    fail('--test requires a NAME argument');
+  }
+  runTests(nameFilter);
 }
 
 try {

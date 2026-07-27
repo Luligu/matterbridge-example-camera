@@ -33,10 +33,16 @@ If you like this project and find it useful, please consider giving it a star on
 ### Added
 
 - [Dev Container]: Update Dev Container v.1.2.0.
+- [scripts]: Add `scripts/run-chip-tests.mjs` to manage the `luligu/matterbridge:chip-test` docker container and run the CHIP python test suite defined in `chipTests.json`. `--start` builds and adds the plugin to a fresh container, `--stop` stops it and restores the local dev environment (reinstall, relink, rebuild), `--test NAME` filters to matching tests, and results are logged to `chipTests.log`.
 
 ### Changed
 
 - [screenshots]: Update screenshots.
+
+### Fixed
+
+- [chime]: `MatterbridgeChimeServer` now rejects writes to the `SelectedChime` attribute with `NOT_FOUND` when the written chime ID is not present in `InstalledChimeSounds`, per Matter 1.6 Application Cluster spec §11.8.5.2. Previously any value was silently accepted, failing `TC_CHIME_2_3`.
+- [tests]: Add `SelectedChime` write coverage (accepted and rejected chime IDs) in `vitest/behaviors/chimeServer.test.ts`.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
