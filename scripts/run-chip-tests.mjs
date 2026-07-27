@@ -7,7 +7,7 @@
  *
  * Usage:
  *   node scripts/run-chip-tests.mjs --start   Create the chip-test container and add/enable the plugin inside it.
- *   node scripts/run-chip-tests.mjs --stop    Stop the chip-test container and relink the local matterbridge instance.
+ *   node scripts/run-chip-tests.mjs --stop    Stop the chip-test container, then reinstall, relink, and rebuild the local matterbridge instance.
  *   node scripts/run-chip-tests.mjs           Run the tests listed in chipTests.json inside the running container.
  */
 
@@ -166,8 +166,10 @@ function stop() {
   console.log('Stopping the chip-test container...');
   run('docker', ['stop', containerName]);
 
-  console.log('Relinking the local matterbridge instance...');
-  runNpmOrFail(['run', 'link']);
+  console.log('Restoring devDependencies and relinking the local matterbridge instance...');
+  runNpmOrFail(['install', '--no-fund', '--no-audit', '--verbose']);
+  runNpmOrFail(['link', 'matterbridge', '--no-fund', '--no-audit', '--verbose']);
+  runNpmOrFail(['run', 'build']);
 
   console.log('Chip-test container stopped.');
 }
