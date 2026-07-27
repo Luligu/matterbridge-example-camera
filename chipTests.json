@@ -1,0 +1,15 @@
+{
+  "phytonTest": [
+    {
+      "name": "TC_DeviceBasicComposition.py"
+    },
+    {
+      "name": "TC_DeviceConformance.py",
+      "args": ["--bool-arg allow_provisional:true"]
+    },
+    {
+      "name": "TC_DefaultWarnings.py",
+      "args": ["--bool-arg pixit_allow_default_vendor_id:true"]
+    }
+  ]
+}
