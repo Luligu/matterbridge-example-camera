@@ -23,20 +23,20 @@ echo "Bun version: $(bun -v)"
 echo "Bun global cache: ${HOME}/.bun/install/cache"
 echo ""
 
-echo "1 - Building Matterbridge..."
+echo "1 - Creating directories..."
+sudo mkdir -p /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
+sudo mkdir -p /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm /home/node/.bash-cache /home/node/.bun/install/cache
+
+echo "2 - Setting permissions..."
+sudo chown -R node:node . /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
+sudo chown -R node:node /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm /home/node/.bash-cache /home/node/.bun
+
+echo "3 - Building Matterbridge..."
 sudo chmod +x .devcontainer/install-matterbridge-*.sh
 # Use this for the main branch:
 # .devcontainer/install-matterbridge-main.sh
 # Use this for the dev branch:
 .devcontainer/install-matterbridge-dev.sh
-
-echo "2 - Creating directories..."
-sudo mkdir -p /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
-sudo mkdir -p /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm /home/node/.bash-cache /home/node/.bun/install/cache
-
-echo "3 - Setting permissions..."
-sudo chown -R node:node . /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
-sudo chown -R node:node /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm /home/node/.bash-cache /home/node/.bun
 
 echo "4 - Installing the plugin dependencies..."
 npm install --no-fund --no-audit

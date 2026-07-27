@@ -15,8 +15,6 @@ if [ ! -d "/workspaces" ]; then
 fi
 
 echo "2 - Preparing Matterbridge directory..."
-sudo mkdir -p /home/node/.npm
-sudo chown -R node:node /home/node/.npm
 sudo chown -R node:node matterbridge
 sudo chmod g+s matterbridge
 sudo rm -rf matterbridge/* matterbridge/.[!.]* matterbridge/..?*
@@ -31,12 +29,15 @@ SHA7=$(git rev-parse --short=7 HEAD) && BASE_VERSION=$(node -p "require('./packa
 
 echo "5 - Installing Matterbridge dependencies and building..."
 npm ci --no-fund --no-audit && npm run build
+# bun install --no-fund --no-audit && bun run build
 
 echo "6 - Building Matterbridge frontend..."
 cd apps/frontend && npm ci --no-fund --no-audit && npm run build && cd ../..
+# cd apps/frontend && bun install --no-fund --no-audit && bun run build && cd ../..
 
 echo "7 - Installing Matterbridge globally..."
 sudo npm install . --global --no-fund --no-audit
+# bun link
 sudo rm -rf .agents .cache .claude .codex .devcontainer .git .github .vscode docker docs reflector screenshots scripts systemd
 
 echo "8 - Matterbridge has been installed from the dev branch."
