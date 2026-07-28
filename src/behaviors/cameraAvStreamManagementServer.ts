@@ -180,8 +180,11 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
       // smallest one) dedup-matches this default stream in snapshotStreamAllocate (Matter 1.6 §11.2.8.8.8) instead of
       // spawning an unwanted duplicate allocation. Mirrors how the video default stream spans minViewportResolution to
       // its top rateDistortionTradeOffPoints resolution, above.
+      let smallestCapability = snapshotCapabilities[0];
       let largestCapability = snapshotCapabilities[0];
       for (const capability of snapshotCapabilities) {
+        if (capability.resolution.width * capability.resolution.height < smallestCapability.resolution.width * smallestCapability.resolution.height)
+          smallestCapability = capability;
         if (capability.resolution.width * capability.resolution.height > largestCapability.resolution.width * largestCapability.resolution.height) largestCapability = capability;
       }
       this.state.allocatedSnapshotStreams = [
@@ -189,10 +192,7 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
           snapshotStreamId: 0,
           imageCodec: largestCapability.imageCodec,
           frameRate: largestCapability.maxFrameRate,
-          minResolution: {
-            width: Math.min(...snapshotCapabilities.map((capability) => capability.resolution.width)),
-            height: Math.min(...snapshotCapabilities.map((capability) => capability.resolution.height)),
-          },
+          minResolution: smallestCapability.resolution,
           maxResolution: largestCapability.resolution,
           quality: 90,
           referenceCount: 0,
