@@ -4,7 +4,7 @@
  * @author Luca Liguori
  * @contributor Ludovic BOUÉ
  * @created 2026-07-13
- * @version 1.0.0
+ * @version 2.0.0
  * @license Apache-2.0
  *
  * Copyright 2026, 2027, 2028 Luca Liguori.
@@ -93,6 +93,119 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   CameraAvStreamManagement.Feature.Snapshot,
   CameraAvStreamManagement.Feature.ImageControl,
 ) {
+  /**
+   * Whether {@link initialize}'s default stream self-allocation is skipped entirely. Set via the
+   * `MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT` environment variable (`1` to skip), for the CHIP
+   * WebRTC/AVSM conformance test suite: `TC_AVSM_2_2`/`TC_AVSM_2_5` assert `AllocatedSnapshotStreams`/
+   * `AllocatedAudioStreams` are empty immediately after commissioning, which self-allocation would otherwise violate
+   * — the certification suite models allocation as purely commissioner-driven and never anticipates a device
+   * pre-allocating on its own. Left unset (the default), self-allocation runs normally.
+   *
+   * @returns {boolean} True if self-allocation should be skipped.
+   */
+  #isAutoAllocateSkipped(): boolean {
+    return process.env.MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT === '1';
+  }
+
+  /**
+   * Self-allocates a default video/audio/snapshot stream for any feature this endpoint supports that has none
+   * allocated yet, so `AllocatedVideoStreams`/`AllocatedAudioStreams`/`AllocatedSnapshotStreams` are never
+   * unexpectedly empty for a client that assumes the Matter 1.6/1.5.1 §11.2.1.1 "Stream Lifecycle" recommendation
+   * holds (a Commissioner allocates once at commissioning time, and the resulting streams then have very long
+   * lifetimes) but never actually calls `VideoStreamAllocate`/`AudioStreamAllocate`/`SnapshotStreamAllocate` itself
+   * (e.g. SmartThings, observed in production only ever sending `ProvideOffer` with a guessed stream id and no prior
+   * allocation — see `chipTests.md`'s "Real-World Client Traces"). Also a safety net against
+   * `AllocatedVideoStreams`/`AllocatedAudioStreams`/`AllocatedSnapshotStreams` (`N`-quality, i.e. Matter-mandated
+   * non-volatile per §11.2.7) being legitimately reset by matter.js when this cluster's `FeatureMap` changes between
+   * restarts, since a passive client has no reason to notice or reallocate after that.
+   *
+   * Runs once per endpoint construction, after persisted state (if any) has already been loaded — so this only ever
+   * populates streams that are genuinely absent, never overwrites a real allocation (including one restored from
+   * storage). Bypasses the `videoStreamAllocate`/`audioStreamAllocate`/`snapshotStreamAllocate` command handlers
+   * entirely (calling a command on this same behavior from within its own `initialize()`, before construction
+   * finishes, is not safe) and instead constructs the same struct shape those handlers build, directly. Skipped
+   * entirely when {@link #isAutoAllocateSkipped} is true.
+   */
+  override initialize(): void {
+    if (this.#isAutoAllocateSkipped()) return;
+
+    if (this.features.video && this.state.allocatedVideoStreams.length === 0 && this.state.rateDistortionTradeOffPoints.length > 0 && this.state.streamUsagePriorities.length > 0) {
+      const [{ codec, resolution, minBitRate }] = this.state.rateDistortionTradeOffPoints;
+      this.state.allocatedVideoStreams = [
+        {
+          videoStreamId: 0,
+          streamUsage: this.state.streamUsagePriorities[0],
+          videoCodec: codec,
+          minFrameRate: 1,
+          maxFrameRate: this.state.videoSensorParams.maxFps,
+          minResolution: this.state.minViewportResolution,
+          maxResolution: resolution,
+          minBitRate,
+          maxBitRate: minBitRate,
+          keyFrameInterval: 4000,
+          // watermarkEnabled/osdEnabled are conformance-gated by the Watermark/OnScreenDisplay features (Matter 1.6 §11.2.9.1.9/.10)
+          // and rejected outright when present but unsupported, so they're only included when actually enabled.
+          ...(this.features.watermark ? { watermarkEnabled: false } : {}),
+          ...(this.features.onScreenDisplay ? { osdEnabled: false } : {}),
+          referenceCount: 0,
+        },
+      ];
+    }
+
+    if (
+      this.features.audio &&
+      this.state.allocatedAudioStreams.length === 0 &&
+      this.state.microphoneCapabilities.supportedCodecs.length > 0 &&
+      this.state.streamUsagePriorities.length > 0
+    ) {
+      const { microphoneCapabilities } = this.state;
+      this.state.allocatedAudioStreams = [
+        {
+          audioStreamId: 0,
+          streamUsage: this.state.streamUsagePriorities[0],
+          audioCodec: microphoneCapabilities.supportedCodecs[0],
+          channelCount: microphoneCapabilities.maxNumberOfChannels,
+          sampleRate: microphoneCapabilities.supportedSampleRates[0],
+          bitRate: 32_000,
+          bitDepth: microphoneCapabilities.supportedBitDepths[0],
+          referenceCount: 0,
+        },
+      ];
+    }
+
+    if (this.features.snapshot && this.state.allocatedSnapshotStreams.length === 0 && this.state.snapshotCapabilities.length > 0) {
+      const { snapshotCapabilities } = this.state;
+      // Span the full supported resolution range (smallest to largest capability) rather than a single fixed point, so
+      // that a real client's request for any of the device's own advertised snapshotCapabilities entries (not just the
+      // smallest one) dedup-matches this default stream in snapshotStreamAllocate (Matter 1.6 §11.2.8.8.8) instead of
+      // spawning an unwanted duplicate allocation. Mirrors how the video default stream spans minViewportResolution to
+      // its top rateDistortionTradeOffPoints resolution, above.
+      let largestCapability = snapshotCapabilities[0];
+      for (const capability of snapshotCapabilities) {
+        if (capability.resolution.width * capability.resolution.height > largestCapability.resolution.width * largestCapability.resolution.height) largestCapability = capability;
+      }
+      this.state.allocatedSnapshotStreams = [
+        {
+          snapshotStreamId: 0,
+          imageCodec: largestCapability.imageCodec,
+          frameRate: largestCapability.maxFrameRate,
+          minResolution: {
+            width: Math.min(...snapshotCapabilities.map((capability) => capability.resolution.width)),
+            height: Math.min(...snapshotCapabilities.map((capability) => capability.resolution.height)),
+          },
+          maxResolution: largestCapability.resolution,
+          quality: 90,
+          referenceCount: 0,
+          encodedPixels: false,
+          hardwareEncoder: false,
+          // See the equivalent comment above for allocatedVideoStreams.
+          ...(this.features.watermark ? { watermarkEnabled: false } : {}),
+          ...(this.features.onScreenDisplay ? { osdEnabled: false } : {}),
+        },
+      ];
+    }
+  }
+
   /**
    * Handles the SetStreamPriorities command.
    * Sets the relative priorities of the various stream usages on the camera.

@@ -9,8 +9,9 @@ const NAME = 'CameraAvStreamManagementServerBehavior';
 const MATTER_PORT = 6003;
 const MATTER_CREATE_ONLY = true;
 
+import { camera as cameraDeviceType, MatterbridgeEndpoint } from 'matterbridge';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
-import { StreamUsage } from 'matterbridge/matter/types';
+import { StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
 import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
@@ -225,6 +226,24 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
       streamUsagePriorities: [StreamUsage.Recording, StreamUsage.LiveView],
     });
     expect(await addDevice(aggregator, priorityDevice)).toBeTruthy();
+
+    // A default snapshot stream is self-allocated on construction (see MatterbridgeCameraAvStreamManagementServer#initialize).
+    // Deallocate it so this device starts from a genuinely empty state for the tests below.
+    expect(priorityDevice.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([
+      {
+        snapshotStreamId: 0,
+        imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
+        frameRate: 10,
+        minResolution: { width: 640, height: 480 },
+        maxResolution: { width: 1920, height: 1080 },
+        quality: 90,
+        referenceCount: 0,
+        encodedPixels: false,
+        hardwareEncoder: false,
+      },
+    ]);
+    await priorityDevice.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 0 });
+    expect(priorityDevice.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([]);
   });
 
   it('should reject capturing a snapshot with automatic selection when no snapshot stream is allocated', async () => {
@@ -266,6 +285,19 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
   it('should create and register a camera using the Camera AV Stream Management behavior', async () => {
     camera = new Camera('Camera Behavior', 'CAMERA-AV-BEHAVIOR', { maxConcurrentEncoders: 2 });
     expect(await addDevice(aggregator, camera)).toBeTruthy();
+
+    // Default video/audio/snapshot streams are self-allocated on construction (see
+    // MatterbridgeCameraAvStreamManagementServer#initialize). Deallocate them so this device starts from a
+    // genuinely empty state for the sequential allocation tests below.
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toEqual([expect.objectContaining({ videoStreamId: 0, streamUsage: StreamUsage.LiveView })]);
+    await camera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamDeallocate', { videoStreamId: 0 });
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams')).toEqual([expect.objectContaining({ audioStreamId: 0, streamUsage: StreamUsage.LiveView })]);
+    await camera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamDeallocate', { audioStreamId: 0 });
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([expect.objectContaining({ snapshotStreamId: 0 })]);
+    await camera.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 0 });
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toEqual([]);
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams')).toEqual([]);
+    expect(camera.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([]);
   });
 
   it('should reject allocating a video stream with an unsupported stream usage', async () => {
@@ -407,6 +439,10 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
   it('should reject allocating a video stream that would exceed maxConcurrentEncoders', async () => {
     const singleEncoderCamera = new Camera('Camera Single Encoder', 'CAMERA-SINGLE-ENCODER');
     expect(await addDevice(aggregator, singleEncoderCamera)).toBeTruthy();
+
+    // Deallocate the self-allocated default video stream (see MatterbridgeCameraAvStreamManagementServer#initialize)
+    // so this maxConcurrentEncoders=1 device starts genuinely empty for this test.
+    await singleEncoderCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamDeallocate', { videoStreamId: 0 });
 
     await expect(
       singleEncoderCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
@@ -609,6 +645,12 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     const videoOnlyCamera = new Camera('Camera Video Priorities', 'CAMERA-VIDEO-PRIORITIES');
     expect(await addDevice(aggregator, videoOnlyCamera)).toBeTruthy();
 
+    // Deallocate all self-allocated defaults (see MatterbridgeCameraAvStreamManagementServer#initialize) so only
+    // the explicit video stream allocated below is present, matching this test's stated precondition.
+    await videoOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamDeallocate', { videoStreamId: 0 });
+    await videoOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamDeallocate', { audioStreamId: 0 });
+    await videoOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 0 });
+
     await expect(
       videoOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamAllocate', {
         streamUsage: StreamUsage.LiveView,
@@ -634,6 +676,12 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     const audioOnlyCamera = new Camera('Camera Audio Priorities', 'CAMERA-AUDIO-PRIORITIES');
     expect(await addDevice(aggregator, audioOnlyCamera)).toBeTruthy();
 
+    // Deallocate all self-allocated defaults (see MatterbridgeCameraAvStreamManagementServer#initialize) so only
+    // the explicit audio stream allocated below is present, matching this test's stated precondition.
+    await audioOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'videoStreamDeallocate', { videoStreamId: 0 });
+    await audioOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamDeallocate', { audioStreamId: 0 });
+    await audioOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 0 });
+
     await expect(
       audioOnlyCamera.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamAllocate', {
         streamUsage: StreamUsage.LiveView,
@@ -650,5 +698,64 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
         streamPriorities: [StreamUsage.Recording, StreamUsage.LiveView],
       }),
     ).rejects.toThrow('setStreamPriorities cannot be invoked while snapshot, video or audio streams are allocated');
+  });
+
+  it('should include watermarkEnabled/osdEnabled in the self-allocated default video and snapshot streams when Watermark/OnScreenDisplay are supported', async () => {
+    const endpoint = new MatterbridgeEndpoint([cameraDeviceType], { id: 'WatermarkOsdDefaultStream' });
+    endpoint.behaviors.require(
+      MatterbridgeCameraAvStreamManagementServer.with(
+        CameraAvStreamManagement.Feature.Video,
+        CameraAvStreamManagement.Feature.Snapshot,
+        CameraAvStreamManagement.Feature.Watermark,
+        CameraAvStreamManagement.Feature.OnScreenDisplay,
+      ),
+      {
+        maxContentBufferSize: 4_194_304,
+        maxNetworkBandwidth: 10_000_000,
+        supportedStreamUsages: [StreamUsage.LiveView],
+        streamUsagePriorities: [StreamUsage.LiveView],
+        maxConcurrentEncoders: 1,
+        maxEncodedPixelRate: 1920 * 1080 * 30,
+        videoSensorParams: { sensorWidth: 1920, sensorHeight: 1080, maxFps: 30 },
+        minViewportResolution: { width: 640, height: 360 },
+        rateDistortionTradeOffPoints: [{ codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1920, height: 1080 }, minBitRate: 1_000_000 }],
+        currentFrameRate: 30,
+        viewport: { x1: 0, y1: 0, x2: 1920, y2: 1080 },
+        allocatedVideoStreams: [],
+        snapshotCapabilities: [
+          { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+          { resolution: { width: 640, height: 480 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
+        ],
+        allocatedSnapshotStreams: [],
+        hardPrivacyModeOn: false,
+        statusLightEnabled: false,
+        statusLightBrightness: ThreeLevelAuto.Auto,
+      },
+    );
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    expect(endpoint.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toEqual([
+      expect.objectContaining({ videoStreamId: 0, streamUsage: StreamUsage.LiveView, watermarkEnabled: false, osdEnabled: false }),
+    ]);
+    expect(endpoint.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([
+      expect.objectContaining({ snapshotStreamId: 0, watermarkEnabled: false, osdEnabled: false }),
+    ]);
+  });
+
+  it('should skip self-allocating default streams when MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT=1', async () => {
+    const originalSkip = process.env.MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT;
+    process.env.MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT = '1';
+    try {
+      const endpoint = new Camera('Camera Skip Auto Allocate', 'CAMERA-SKIP-AUTO-ALLOCATE');
+      expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+      expect(endpoint.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toEqual([]);
+      expect(endpoint.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams')).toEqual([]);
+      expect(endpoint.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([]);
+    } finally {
+      if (originalSkip === undefined) delete process.env.MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT;
+      else process.env.MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT = originalSkip;
+    }
   });
 });
