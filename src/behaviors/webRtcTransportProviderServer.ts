@@ -4,7 +4,7 @@
  * @author Luca Liguori
  * @contributor Ludovic BOUÉ
  * @created 2026-07-13
- * @version 1.0.0
+ * @version 2.0.0
  * @license Apache-2.0
  *
  * Copyright 2026, 2027, 2028 Luca Liguori.
@@ -233,6 +233,35 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   }
 
   /**
+   * Whether a SolicitOffer/ProvideOffer request has none of videoStreams, audioStreams, videoStreamId or
+   * audioStreamId present at all (as opposed to present but empty/null).
+   *
+   * @param {{ videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null }} request - The relevant fields of the SolicitOffer/ProvideOffer request.
+   * @returns {boolean} True if none of the four stream-identifying fields is present in the request.
+   */
+  #hasNoStreamFields(request: { videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null }): boolean {
+    return request.videoStreams === undefined && request.audioStreams === undefined && request.videoStreamId === undefined && request.audioStreamId === undefined;
+  }
+
+  /**
+   * Whether SolicitOffer/ProvideOffer requests with no stream-identifying fields at all should be rejected with
+   * InvalidCommand instead of falling back to automatic stream selection (see {@link #autoAssignStreams}).
+   *
+   * The Matter specification's choice conformance for these commands requires at least one of videoStreams,
+   * audioStreams, videoStreamId or audioStreamId to be present; matter.js logs this as a conformance warning but
+   * does not enforce it, so by default this server instead treats a completely empty request as a request for
+   * automatic stream selection, for compatibility with revision-1 clients that never allocate streams explicitly
+   * (e.g. Home Assistant's Matter camera integration). Setting the `MATTERBRIDGE_STRICT_WEBRTCTRANSPORT`
+   * environment variable to `1` switches to strict spec conformance instead, for use against the CHIP WebRTC
+   * Transport Provider conformance test suite (`TC_WEBRTCP_2_2`, `2_3`, `2_5`, `2_27`, `2_28`, `2_29`, `2_31`).
+   *
+   * @returns {boolean} True if a completely empty request should be rejected with InvalidCommand.
+   */
+  #isStrictWebRtcTransport(): boolean {
+    return process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT === '1';
+  }
+
+  /**
    * Resolves the webcam capture resolution matching the client's requested video stream, from the endpoint's
    * CameraAvStreamManagement allocatedVideoStreams state, so a real client's stream/resolution selection (e.g. a
    * quality picker in its UI, which allocates a video stream with a given maxResolution before soliciting/providing
@@ -252,14 +281,50 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   }
 
   /**
+   * Selects an already allocated video stream id matching the request's stream usage, falling back to the
+   * endpoint's first allocated video stream, without allocating a new one. Used to auto-select from an existing
+   * `AllocatedVideoStreams` entry when a request's `VideoStreamID` is present and `null` (Matter 1.6/1.5.1
+   * Application Cluster Specification §11.5.6.1.10: "Automatically select an existing video stream").
+   *
+   * @param {StreamUsage} streamUsage - The requested stream usage.
+   * @returns {number | undefined} The selected video stream id, or undefined if the endpoint has no
+   * CameraAvStreamManagement cluster or no video stream is allocated at all.
+   */
+  #selectExistingVideoStreamId(streamUsage: StreamUsage): number | undefined {
+    if (!this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)) return undefined;
+    // Spread into a plain array first: state's list attributes throw on out-of-bounds index access (e.g. `[0]` on
+    // an empty list) instead of returning undefined like a normal JS array.
+    const allocatedVideoStreams = [...this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer).allocatedVideoStreams];
+    return (allocatedVideoStreams.find((stream) => stream.streamUsage === streamUsage) ?? allocatedVideoStreams[0])?.videoStreamId;
+  }
+
+  /**
+   * Selects an already allocated audio stream id matching the request's stream usage, falling back to the
+   * endpoint's first allocated audio stream, without allocating a new one. See {@link #selectExistingVideoStreamId},
+   * the audio counterpart.
+   *
+   * @param {StreamUsage} streamUsage - The requested stream usage.
+   * @returns {number | undefined} The selected audio stream id, or undefined if the endpoint has no
+   * CameraAvStreamManagement cluster or no audio stream is allocated at all.
+   */
+  #selectExistingAudioStreamId(streamUsage: StreamUsage): number | undefined {
+    if (!this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)) return undefined;
+    const allocatedAudioStreams = [...this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer).allocatedAudioStreams];
+    return (allocatedAudioStreams.find((stream) => stream.streamUsage === streamUsage) ?? allocatedAudioStreams[0])?.audioStreamId;
+  }
+
+  /**
    * Resolves the video/audio stream ids for a SolicitOffer/ProvideOffer request that omitted videoStreams and
    * audioStreams (and their deprecated single-id counterparts), per the Matter specification's automatic stream
-   * selection for revision 1 clients (e.g. Home Assistant's Matter camera integration), which never allocates
-   * streams explicitly and expects the camera to select or allocate them on its own.
+   * selection for revision 1 clients (e.g. Home Assistant's Matter camera integration and SmartThings, neither of
+   * which allocates streams explicitly), which never allocates streams explicitly and expects the camera to select
+   * or allocate them on its own.
    *
-   * Reuses an already allocated stream matching the request's stream usage, falling back to the endpoint's first
-   * allocated stream of that kind, and only allocates a new one, from the endpoint's CameraAvStreamManagement default
-   * video/audio capabilities, when none exists yet.
+   * Reuses an already allocated stream matching the request's stream usage (via {@link #selectExistingVideoStreamId}/
+   * {@link #selectExistingAudioStreamId}), and only allocates a new one, from the endpoint's CameraAvStreamManagement
+   * default video/audio capabilities, when none exists yet. This is a deliberate compatibility extension beyond the
+   * Matter specification (see {@link #validateAllocatedStreamIds}'s doc comment) — used only when
+   * {@link #isStrictWebRtcTransport} is false.
    *
    * @param {StreamUsage} streamUsage - The requested stream usage.
    * @returns {Promise<{ videoStreams?: number[]; audioStreams?: number[] }>} The resolved video/audio stream id lists; a list is omitted if the endpoint has no CameraAvStreamManagement cluster or no allocatable stream of that kind.
@@ -268,10 +333,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
     if (!this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)) return {};
     const state = this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer);
 
-    // Spread into plain arrays first: state's list attributes throw on out-of-bounds index access (e.g. `[0]` on an
-    // empty list) instead of returning undefined like a normal JS array.
-    const allocatedVideoStreams = [...state.allocatedVideoStreams];
-    let videoStreamId = (allocatedVideoStreams.find((stream) => stream.streamUsage === streamUsage) ?? allocatedVideoStreams[0])?.videoStreamId;
+    let videoStreamId = this.#selectExistingVideoStreamId(streamUsage);
     if (videoStreamId === undefined && state.rateDistortionTradeOffPoints.length > 0) {
       const [{ codec, resolution, minBitRate }] = state.rateDistortionTradeOffPoints;
       ({ videoStreamId } = await this.endpoint.act((agent) =>
@@ -289,8 +351,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       ));
     }
 
-    const allocatedAudioStreams = [...state.allocatedAudioStreams];
-    let audioStreamId = (allocatedAudioStreams.find((stream) => stream.streamUsage === streamUsage) ?? allocatedAudioStreams[0])?.audioStreamId;
+    let audioStreamId = this.#selectExistingAudioStreamId(streamUsage);
     if (audioStreamId === undefined && state.microphoneCapabilities.supportedCodecs.length > 0) {
       const { microphoneCapabilities } = state;
       ({ audioStreamId } = await this.endpoint.act((agent) =>
@@ -312,6 +373,86 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
        * (see its class declaration); audioStreamId can therefore never be undefined here. */
       audioStreams: audioStreamId === undefined ? undefined : [audioStreamId],
     };
+  }
+
+  /**
+   * Validates a resolved `videoStreams`/`audioStreams` id list against the endpoint's `AllocatedVideoStreams`/
+   * `AllocatedAudioStreams` attribute, per Matter 1.6/1.5.1 Application Cluster Specification §11.5.6.1.10 (mirrored
+   * for ProvideOffer at §11.5.6.3.5): "If VideoStreams is present: If AllocatedVideoStreams is empty, fail with
+   * InvalidInState; if there are duplicate entries, fail with AlreadyExists; for each entry, if not found in
+   * AllocatedVideoStreams, fail with DynamicConstraintError" (identically for AudioStreams/AllocatedAudioStreams).
+   *
+   * `AllocatedVideoStreams`/`AllocatedAudioStreams` (§11.2.7.16/.17) are `CameraAvStreamManagement` attributes,
+   * populated exclusively by that cluster's own `VideoStreamAllocate`/`AudioStreamAllocate` commands —
+   * `WebRtcTransportProvider` has no authority anywhere in the spec to create entries in them. Only enforced when
+   * {@link #isStrictWebRtcTransport} is true; the default (non-strict) behavior is {@link #autoAssignStreams}'s
+   * looser compatibility extension instead, since real clients observed in production (e.g. SmartThings) send
+   * stream ids without ever calling `VideoStreamAllocate`/`AudioStreamAllocate` at all.
+   *
+   * @param {'video' | 'audio'} kind - Which stream type is being validated.
+   * @param {number[]} ids - The resolved videoStreams/audioStreams id list to validate.
+   * @throws {StatusResponseError} With status InvalidInState if no stream of this kind is allocated at all.
+   * @throws {StatusResponseError} With status AlreadyExists if `ids` contains a duplicate entry.
+   * @throws {StatusResponseError} With status DynamicConstraintError if an id in `ids` is not present in the allocated list.
+   */
+  #validateAllocatedStreamIds(kind: 'video' | 'audio', ids: number[]): void {
+    const state = this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer) ? this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer) : undefined;
+    const attributeName = kind === 'video' ? 'AllocatedVideoStreams' : 'AllocatedAudioStreams';
+    const allocatedIds =
+      kind === 'video' ? (state?.allocatedVideoStreams.map((stream) => stream.videoStreamId) ?? []) : (state?.allocatedAudioStreams.map((stream) => stream.audioStreamId) ?? []);
+    if (allocatedIds.length === 0) {
+      throw new StatusResponseError(`MatterbridgeWebRtcTransportProviderServer: no ${kind} stream is allocated (${attributeName} is empty)`, Status.InvalidInState);
+    }
+    if (new Set(ids).size !== ids.length) {
+      throw new StatusResponseError(`MatterbridgeWebRtcTransportProviderServer: duplicate ${kind} stream id in the request`, Status.AlreadyExists);
+    }
+    for (const id of ids) {
+      if (!allocatedIds.includes(id)) {
+        throw new StatusResponseError(`MatterbridgeWebRtcTransportProviderServer: ${kind} stream ${id} is not present in ${attributeName}`, Status.DynamicConstraintError);
+      }
+    }
+  }
+
+  /**
+   * Resolves and validates the video/audio stream ids for a SolicitOffer/ProvideOffer request under strict Matter
+   * specification conformance (see {@link #isStrictWebRtcTransport}), per §11.5.6.1.10/§11.5.6.3.5: a present
+   * `VideoStreamID`/`AudioStreamID` that is `null` is resolved by selecting from already-allocated streams (see
+   * {@link #selectExistingVideoStreamId}/{@link #selectExistingAudioStreamId}, never allocating a new one); a
+   * present non-null id, or an explicit `videoStreams`/`audioStreams` list, is used as-is. Either way, the result is
+   * then validated against `AllocatedVideoStreams`/`AllocatedAudioStreams` via {@link #validateAllocatedStreamIds}.
+   *
+   * @param {{ videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null }} request - The relevant fields of the SolicitOffer/ProvideOffer request.
+   * @param {StreamUsage} streamUsage - The requested stream usage.
+   * @returns {{ videoStreams?: number[]; audioStreams?: number[] }} The resolved and validated stream id lists; a list is omitted if the corresponding fields were not present in the request at all.
+   * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError — see {@link #validateAllocatedStreamIds}.
+   */
+  #resolveStrictStreamLists(
+    request: { videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null },
+    streamUsage: StreamUsage,
+  ): { videoStreams?: number[]; audioStreams?: number[] } {
+    let videoStreams: number[] | undefined;
+    if (request.videoStreams !== undefined) {
+      videoStreams = request.videoStreams;
+    } else if (request.videoStreamId === null) {
+      const selected = this.#selectExistingVideoStreamId(streamUsage);
+      videoStreams = selected === undefined ? [] : [selected];
+    } else if (request.videoStreamId !== undefined) {
+      videoStreams = [request.videoStreamId];
+    }
+    if (videoStreams !== undefined) this.#validateAllocatedStreamIds('video', videoStreams);
+
+    let audioStreams: number[] | undefined;
+    if (request.audioStreams !== undefined) {
+      audioStreams = request.audioStreams;
+    } else if (request.audioStreamId === null) {
+      const selected = this.#selectExistingAudioStreamId(streamUsage);
+      audioStreams = selected === undefined ? [] : [selected];
+    } else if (request.audioStreamId !== undefined) {
+      audioStreams = [request.audioStreamId];
+    }
+    if (audioStreams !== undefined) this.#validateAllocatedStreamIds('audio', audioStreams);
+
+    return { videoStreams, audioStreams };
   }
 
   /**
@@ -347,12 +488,26 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    *
    * @param {WebRtcTransportProvider.SolicitOfferRequest} request - SolicitOffer request payload.
    * @returns {Promise<WebRtcTransportProvider.SolicitOfferResponse>} The newly allocated session identifier, with deferredOffer set to true.
+   * @throws {StatusResponseError} With status InvalidCommand if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 and none of videoStreams, audioStreams, videoStreamId or audioStreamId is present (see {@link #isStrictWebRtcTransport}).
+   * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (see {@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}).
    * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
    */
   override async solicitOffer(request: WebRtcTransportProvider.SolicitOfferRequest): Promise<WebRtcTransportProvider.SolicitOfferResponse> {
-    let { videoStreams, audioStreams } = this.#resolveStreamLists(request);
-    if (!videoStreams?.length && !audioStreams?.length) {
-      ({ videoStreams, audioStreams } = await this.#autoAssignStreams(request.streamUsage));
+    let videoStreams: number[] | undefined;
+    let audioStreams: number[] | undefined;
+    if (this.#isStrictWebRtcTransport()) {
+      if (this.#hasNoStreamFields(request)) {
+        throw new StatusResponseError(
+          'MatterbridgeWebRtcTransportProviderServer.solicitOffer requires at least one of videoStreams, audioStreams, videoStreamId or audioStreamId to be present',
+          Status.InvalidCommand,
+        );
+      }
+      ({ videoStreams, audioStreams } = this.#resolveStrictStreamLists(request, request.streamUsage));
+    } else {
+      ({ videoStreams, audioStreams } = this.#resolveStreamLists(request));
+      if (!videoStreams?.length && !audioStreams?.length) {
+        ({ videoStreams, audioStreams } = await this.#autoAssignStreams(request.streamUsage));
+      }
     }
     if (!videoStreams?.length && !audioStreams?.length) {
       throw new StatusResponseError(
@@ -411,15 +566,29 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @param {WebRtcTransportProvider.ProvideOfferRequest} request - ProvideOffer request payload.
    * @returns {Promise<WebRtcTransportProvider.ProvideOfferResponse>} The session identifier the offer was recorded against.
    * @throws {StatusResponseError} With status NotFound if a non-null webRtcSessionId is not present in currentSessions.
+   * @throws {StatusResponseError} With status InvalidCommand if webRtcSessionId is null, MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1, and none of videoStreams, audioStreams, videoStreamId or audioStreamId is present (see {@link #isStrictWebRtcTransport}).
+   * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError if webRtcSessionId is null and MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (see {@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}).
    * @throws {StatusResponseError} With status ConstraintError if webRtcSessionId is null and neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
    */
   override async provideOffer(request: WebRtcTransportProvider.ProvideOfferRequest): Promise<WebRtcTransportProvider.ProvideOfferResponse> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     let webRtcSessionId = request.webRtcSessionId;
     if (webRtcSessionId === null) {
-      let { videoStreams, audioStreams } = this.#resolveStreamLists(request);
-      if (!videoStreams?.length && !audioStreams?.length) {
-        ({ videoStreams, audioStreams } = await this.#autoAssignStreams(request.streamUsage ?? StreamUsage.LiveView));
+      let videoStreams: number[] | undefined;
+      let audioStreams: number[] | undefined;
+      if (this.#isStrictWebRtcTransport()) {
+        if (this.#hasNoStreamFields(request)) {
+          throw new StatusResponseError(
+            'MatterbridgeWebRtcTransportProviderServer.provideOffer requires at least one of videoStreams, audioStreams, videoStreamId or audioStreamId to be present',
+            Status.InvalidCommand,
+          );
+        }
+        ({ videoStreams, audioStreams } = this.#resolveStrictStreamLists(request, request.streamUsage ?? StreamUsage.LiveView));
+      } else {
+        ({ videoStreams, audioStreams } = this.#resolveStreamLists(request));
+        if (!videoStreams?.length && !audioStreams?.length) {
+          ({ videoStreams, audioStreams } = await this.#autoAssignStreams(request.streamUsage ?? StreamUsage.LiveView));
+        }
       }
       if (!videoStreams?.length && !audioStreams?.length) {
         throw new StatusResponseError(

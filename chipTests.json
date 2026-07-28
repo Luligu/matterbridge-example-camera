@@ -141,6 +141,181 @@
       "test": "TC_AVSUM_2_9.py",
       "args": ["--endpoint 7"],
       "comment": "Test bug: when DPTZ is unsupported it jumps from step 18 to step 22 without calling skip_step() for steps 19-21, which the framework rejects as an out-of-order step."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.1",
+      "test": "TC_WEBRTCP_2_1.py",
+      "args": ["--endpoint 6"],
+      "comment": "Test bug: is_battery_powered() reads PowerSource on endpoint 0 (root node), which doesn't exist on a Matterbridge bridge; PowerSource lives on the bridged endpoint (6)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.2",
+      "test": "TC_WEBRTCP_2_2.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: deferredOffer is hardcoded true; test expects false (immediate processing) in this scenario. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #7)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.3",
+      "test": "TC_WEBRTCP_2_3.py",
+      "args": ["--endpoint 6"],
+      "comment": "Fixed (Known Issues #8): passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container; fails with the default container, which doesn't set that env var."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.4",
+      "test": "TC_WEBRTCP_2_4.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.5",
+      "test": "TC_WEBRTCP_2_5.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier steps (Known Issues #8, fixed); then fails because StreamUsage is never validated against StreamUsagePriorities (see chipTests.md Known Issues #10)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.6",
+      "test": "TC_WEBRTCP_2_6.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.7",
+      "test": "TC_WEBRTCP_2_7.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: HardPrivacyModeOn never flips when the simulated physical privacy switch is toggled (see chipTests.md Known Issues #2)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.8",
+      "test": "TC_WEBRTCP_2_8.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: writing SoftRecordingPrivacyModeEnabled returns UnsupportedAttribute, Privacy feature not implemented (see chipTests.md Known Issues #3)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.9",
+      "test": "TC_WEBRTCP_2_9.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.10",
+      "test": "TC_WEBRTCP_2_10.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.11",
+      "test": "TC_WEBRTCP_2_11.py",
+      "args": ["--endpoint 6"],
+      "comment": "Test bug: same is_battery_powered() endpoint 0 issue as WebRTC Transport Provider 2.1."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.12",
+      "test": "TC_WEBRTCP_2_12.py",
+      "args": ["--endpoint 6", "--PICS src/app/tests/suites/certification/ci-pics-values"],
+      "comment": "Gap: no enforced max concurrent WebRTC sessions; DUT never sends End(OutOfResources) (see chipTests.md Known Issues #4)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.13",
+      "test": "TC_WEBRTCP_2_13.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: same HardPrivacyModeOn issue as WebRTC Transport Provider 2.7 (see chipTests.md Known Issues #2)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.14",
+      "test": "TC_WEBRTCP_2_14.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: same SoftRecordingPrivacyModeEnabled issue as WebRTC Transport Provider 2.8 (see chipTests.md Known Issues #3)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.15",
+      "test": "TC_WEBRTCP_2_15.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.16",
+      "test": "TC_WEBRTCP_2_16.py",
+      "args": ["--endpoint 6", "--PICS src/app/tests/suites/certification/ci-pics-values"],
+      "comment": "Gap: same session-capacity issue as WebRTC Transport Provider 2.12, but the ProvideOffer variant fails with UnsupportedCluster instead of reaching the limit (see chipTests.md Known Issues #4)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.17",
+      "test": "TC_WEBRTCP_2_17.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.18",
+      "test": "TC_WEBRTCP_2_18.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.19",
+      "test": "TC_WEBRTCP_2_19.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.20",
+      "test": "TC_WEBRTCP_2_20.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.21",
+      "test": "TC_WEBRTCP_2_21.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.22",
+      "test": "TC_WEBRTCP_2_22.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: 'TH establishes a valid WebRTC session with DUT' times out during ICE/DTLS completion; not yet root-caused (see chipTests.md Known Issues #5)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.23",
+      "test": "TC_WEBRTCP_2_23.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: same session-establishment timeout as WebRTC Transport Provider 2.22 (see chipTests.md Known Issues #5)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.24",
+      "test": "TC_WEBRTCP_2_24.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: unsupported cipher suite is accepted instead of rejected with DynamicConstraintError; no cipher-suite validation implemented (see chipTests.md Known Issues #6)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.25",
+      "test": "TC_WEBRTCP_2_25.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: same cipher-suite validation gap as WebRTC Transport Provider 2.24 (see chipTests.md Known Issues #6)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.27",
+      "test": "TC_WEBRTCP_2_27.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.28",
+      "test": "TC_WEBRTCP_2_28.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: same deferredOffer issue as WebRTC Transport Provider 2.2. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #7)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.29",
+      "test": "TC_WEBRTCP_2_29.py",
+      "args": ["--endpoint 6"],
+      "comment": "Fixed (Known Issues #8, ProvideOffer variant): passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container; fails with the default container, which doesn't set that env var."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.30",
+      "test": "TC_WEBRTCP_2_30.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.31",
+      "test": "TC_WEBRTCP_2_31.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier steps (Known Issues #8, fixed); then fails because StreamUsage is never validated against StreamUsagePriorities (see chipTests.md Known Issues #10)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.32",
+      "test": "TC_WEBRTCP_2_32.py",
+      "args": ["--endpoint 6"],
+      "comment": "Gap: deferredOffer is hardcoded true; test expects false (immediate processing) in this scenario (see chipTests.md Known Issues #7)."
     }
   ]
 }
