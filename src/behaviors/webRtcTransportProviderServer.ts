@@ -538,6 +538,11 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
         metadataEnabled: request.metadataEnabled ?? false,
         videoStreams,
         audioStreams,
+        // Deprecated but still optionally-present per Matter 1.6 §11.4.5.5 (fields 4/5 of WebRTCSessionStruct),
+        // distinct from the VideoStreams/AudioStreams lists above; a legacy client reading CurrentSessions
+        // through these fields (rather than the modern lists) should still see the resolved stream.
+        videoStreamId: videoStreams?.[0] ?? null,
+        audioStreamId: audioStreams?.[0] ?? null,
         fabricIndex,
       },
     ];
@@ -618,6 +623,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
           metadataEnabled: request.metadataEnabled ?? false,
           videoStreams,
           audioStreams,
+          // See the equivalent comment in solicitOffer above.
+          videoStreamId: videoStreams?.[0] ?? null,
+          audioStreamId: audioStreams?.[0] ?? null,
           fabricIndex,
         },
       ];

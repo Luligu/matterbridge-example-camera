@@ -216,8 +216,7 @@
     {
       "name": "WebRTC Transport Provider 2.2",
       "test": "TC_WEBRTCP_2_2.py",
-      "args": ["--endpoint 6"],
-      "comment": "Gap: CurrentSessions never populates the deprecated singular VideoStreamID/AudioStreamID fields on the session struct, only the modern VideoStreams/AudioStreams lists; this test solicits via the deprecated null id fields and checks CurrentSessions back through them (see chipTests.md Known Issues #11)."
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.3",

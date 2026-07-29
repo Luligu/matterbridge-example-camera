@@ -1,5 +1,5 @@
-Chip tests run started at 2026-07-29T18:07:36.935Z
+Chip tests run started at 2026-07-29T18:29:00.520Z
 
-✅ WebRTC Transport Provider 2.32 (TC_WEBRTCP_2_32.py)
+✅ WebRTC Transport Provider 2.4 (TC_WEBRTCP_2_4.py)
 
 Summary: 1/1 tests passed.

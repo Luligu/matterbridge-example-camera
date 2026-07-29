@@ -1,6 +1,6 @@
 /**
  * run-chip-tests.mjs
- * Version: 1.2.0
+ * Version: 1.3.0
  *
  * Manage the `luligu/matterbridge:chip-test` docker container for the plugin in the current working
  * directory and run the Matter CHIP test suite defined in chipTests.json, logging full results to
@@ -219,11 +219,15 @@ function stop() {
 }
 
 // Waits for matterbridge to finish re-commissioning its server node after a restart by polling the
-// container logs for readyLogMarker, so the next test doesn't race a not-yet-ready device.
-function waitForContainerReady(timeoutMs = 45000, pollMs = 1000) {
+// container logs (only lines emitted since `sinceIso`) for readyLogMarker, so the next test doesn't race a
+// not-yet-ready device. `docker logs` is cumulative for the container's whole lifetime, so without a
+// `--since` anchor a second/subsequent restart would immediately re-match the marker line left over from
+// an earlier boot still sitting in the tail window, returning a false "ready" before the new boot actually
+// gets there.
+function waitForContainerReady(sinceIso, timeoutMs = 45000, pollMs = 1000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const result = run('docker', ['logs', '--tail', '80', containerName], { capture: true });
+    const result = run('docker', ['logs', '--since', sinceIso, containerName], { capture: true });
     // Matterbridge colorizes its log output with ANSI escapes even without a TTY, splitting the marker
     // text across escape sequences (e.g. "Matterbridge " <esc> "is online"); strip them before matching.
     // eslint-disable-next-line no-control-regex
@@ -249,8 +253,9 @@ function resetContainerState() {
   run('docker', ['exec', containerName, 'sh', '-c', `find ${matterstorageRoot} -type f \\( ${findExpr} \\) -delete`]);
 
   console.log('Restarting matterbridge...');
+  const restartedAt = new Date().toISOString();
   runOrFail('docker', ['restart', containerName]);
-  waitForContainerReady();
+  waitForContainerReady(restartedAt);
 }
 
 // Reads chipTests.json once, populating pluginName/readyLogMarker/pluginConfig/allTests. Must run before
