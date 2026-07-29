@@ -130,7 +130,14 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
     if (this.#isAutoAllocateSkipped()) return;
 
     if (this.features.video && this.state.allocatedVideoStreams.length === 0 && this.state.rateDistortionTradeOffPoints.length > 0 && this.state.streamUsagePriorities.length > 0) {
-      const [{ codec, resolution, minBitRate }] = this.state.rateDistortionTradeOffPoints;
+      const { rateDistortionTradeOffPoints } = this.state;
+      // Pick the highest-resolution trade-off point rather than just the first one, so the default stream
+      // represents the camera's top resolution regardless of how many lower-resolution entries precede it.
+      let largestTradeOffPoint = rateDistortionTradeOffPoints[0];
+      for (const point of rateDistortionTradeOffPoints) {
+        if (point.resolution.width * point.resolution.height > largestTradeOffPoint.resolution.width * largestTradeOffPoint.resolution.height) largestTradeOffPoint = point;
+      }
+      const { codec, resolution, minBitRate } = largestTradeOffPoint;
       this.state.allocatedVideoStreams = [
         {
           videoStreamId: 0,
@@ -141,7 +148,10 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
           minResolution: this.state.minViewportResolution,
           maxResolution: resolution,
           minBitRate,
-          maxBitRate: minBitRate,
+          // RateDistortionTradeOffPointsStruct (Matter 1.6 §11.2.6.9) only carries a floor MinBitRate, no
+          // matching max — MaxBitRate must be synthesized. 4x is a typical H.264 VBR peak-to-floor ratio for
+          // camera streams; MaxBitRate === MinBitRate would leave the stream no room to vary at all.
+          maxBitRate: minBitRate * 4,
           keyFrameInterval: 4000,
           // watermarkEnabled/osdEnabled are conformance-gated by the Watermark/OnScreenDisplay features (Matter 1.6 §11.2.9.1.9/.10)
           // and rejected outright when present but unsupported, so they're only included when actually enabled.

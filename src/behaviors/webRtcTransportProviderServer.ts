@@ -335,7 +335,14 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
 
     let videoStreamId = this.#selectExistingVideoStreamId(streamUsage);
     if (videoStreamId === undefined && state.rateDistortionTradeOffPoints.length > 0) {
-      const [{ codec, resolution, minBitRate }] = state.rateDistortionTradeOffPoints;
+      // Pick the highest-resolution trade-off point rather than just the first one, so an auto-assigned
+      // stream represents the camera's top resolution regardless of how many lower-resolution entries
+      // precede it (see the equivalent default-stream selection in cameraAvStreamManagementServer.ts#initialize).
+      let largestTradeOffPoint = state.rateDistortionTradeOffPoints[0];
+      for (const point of state.rateDistortionTradeOffPoints) {
+        if (point.resolution.width * point.resolution.height > largestTradeOffPoint.resolution.width * largestTradeOffPoint.resolution.height) largestTradeOffPoint = point;
+      }
+      const { codec, resolution, minBitRate } = largestTradeOffPoint;
       ({ videoStreamId } = await this.endpoint.act((agent) =>
         agent.get(MatterbridgeCameraAvStreamManagementServer).videoStreamAllocate({
           streamUsage,
@@ -345,7 +352,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
           minResolution: state.minViewportResolution,
           maxResolution: resolution,
           minBitRate,
-          maxBitRate: minBitRate,
+          // See the equivalent comment in cameraAvStreamManagementServer.ts#initialize: RateDistortionTradeOffPointsStruct
+          // only carries a floor MinBitRate, no matching max, so MaxBitRate is synthesized with typical VBR headroom.
+          maxBitRate: minBitRate * 4,
           keyFrameInterval: 4000,
         }),
       ));

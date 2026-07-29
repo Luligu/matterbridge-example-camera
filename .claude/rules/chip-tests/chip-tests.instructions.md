@@ -1,5 +1,5 @@
 ---
-description: 'How the CHIP conformance test harness works for a Matterbridge plugin v.1.3.0'
+description: 'How the CHIP conformance test harness works for a Matterbridge plugin v.1.4.0'
 paths:
   - 'chipTests.json'
   - 'chipTests.md'
@@ -33,6 +33,17 @@ only author a `chipTests.json` for the new repo.
 - It runs on the `matterbridge` docker network, mapping the frontend to host port `8585`, mounting `./temp`
   to `/tmp/matter_testing/logs` (test artifacts) and the plugin repo to `/root/Matterbridge/<pluginName>`,
   where `<pluginName>` comes from `chipTests.json`'s `config.name`.
+- The image bakes in a fixed set of environment variables (`Config.Env` in the Dockerfile, not something
+  `chipTests.json`/`run-chip-tests.mjs` sets — check with `docker inspect luligu/matterbridge:chip-test`).
+  As of this writing that includes `MATTERBRIDGE_CHIP_TEST=1` (a marker flag), `MATTERBRIDGE_START_CONFIGURE_TIMEOUT`/
+  `MATTERBRIDGE_START_REACHABILITY_TIMEOUT` (shorter Matterbridge-core startup timeouts tuned for a fast,
+  local, single-controller container), and one or more plugin-specific opt-in gates (e.g. a var that skips a
+  camera plugin's default-stream self-allocation, or one that switches a WebRTC command handler into strict
+  spec-validation mode instead of a lenient real-controller-friendly default) — these only do anything if
+  the plugin being tested actually reads them via `process.env` and chooses to change behavior accordingly;
+  the image itself doesn't enforce anything. Don't assume a specific plugin implements any of these gates —
+  check that plugin's own source (`process.env.MATTERBRIDGE_*` reads) rather than assuming parity with
+  another plugin, and re-run `docker inspect` for the current list rather than trusting a stale one here.
 - A curated PICS (Protocol Implementation Conformance Statement) file is baked into the image at
   `/root/matterbridge.pics`, hand-verified against Matterbridge's own default cluster server
   implementations (see `matterbridge/docker/chip-test/matterbridge.pics` in the `matterbridge` repo — the
