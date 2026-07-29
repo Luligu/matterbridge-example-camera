@@ -1,4 +1,18 @@
 {
+  "config": {
+    "name": "matterbridge-example-camera",
+    "type": "DynamicPlatform",
+    "whiteList": [],
+    "blackList": [],
+    "videoGenerator": "none",
+    "videoResolution": "auto",
+    "videoBitrate": 1000,
+    "audioGenerator": "none",
+    "animationInterval": 0,
+    "debug": false,
+    "unregisterOnShutdown": false
+  },
+  "resetClusterGlobs": ["*.cameraAvStreamManagement.*", "*.chime.*"],
   "phytonTest": [
     {
       "name": "Generic device basic composition",

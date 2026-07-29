@@ -1,12 +1,24 @@
 /**
  * run-chip-tests.mjs
- * Version: 1.0.0
+ * Version: 1.1.0
  *
- * Manage the `luligu/matterbridge:chip-test` docker container for this plugin and run the
- * Matter CHIP python test suite defined in chipTests.json, logging full results to chipTests.log
- * and just the pass/fail summary to chipTestsSummary.log.
- * Each chipTests.json entry may set an "input" string, piped to the test's stdin, for tests
- * that prompt for interactive confirmation (for example "y\ny\n").
+ * Manage the `luligu/matterbridge:chip-test` docker container for the plugin in the current working
+ * directory and run the Matter CHIP python test suite defined in chipTests.json, logging full results to
+ * chipTests.log and just the pass/fail summary to chipTestsSummary.log. Not specific to any one plugin:
+ * drop a chipTests.json into any plugin repo and this script picks up its name, config, and tests from it.
+ *
+ * chipTests.json shape:
+ *   "config"              (required) The plugin's config.json content, written into the container as
+ *                          /root/.matterbridge/<config.name>.config.json before the container is restarted
+ *                          in --start. "config.name" is also used as the plugin (npm package) name for the
+ *                          container's volume mount and `matterbridge --add`.
+ *   "resetClusterGlobs"   (optional) Filename globs (matched against files under this plugin's node
+ *                          storage directory for the bridged endpoints) cleared by a "reset": true test
+ *                          entry — see below. Defaults to an empty array; a "reset": true test with nothing
+ *                          configured here fails loudly instead of silently doing nothing.
+ *   "phytonTest"           (required) The list of tests to run — see below.
+ * Each phytonTest entry may set an "input" string, piped to the test's stdin, for tests that prompt for
+ * interactive confirmation (for example "y\ny\n").
  *
  * Usage:
  *   node scripts/run-chip-tests.mjs --start          Create the chip-test container and add/enable the plugin inside it.
@@ -14,10 +26,10 @@
  *   node scripts/run-chip-tests.mjs                  Run the tests listed in chipTests.json inside the running container.
  *   node scripts/run-chip-tests.mjs --test NAME       Run only the tests whose "name" or "test" property includes NAME (case-insensitive).
  *
- * A chipTests.json entry may set "reset": true to clear persisted stateful cluster storage (for example
- * CameraAvStreamManagement allocated streams) and restart the matterbridge process before that test runs,
- * without recreating the container (no docker rm/pull/npm install/build). This is much cheaper than --start
- * and is only needed for tests that depend on starting from a clean, un-allocated device state.
+ * A chipTests.json entry may set "reset": true to clear persisted stateful cluster storage (matched via
+ * "resetClusterGlobs", above) and restart the matterbridge process before that test runs, without
+ * recreating the container (no docker rm/pull/npm install/build). This is much cheaper than --start and is
+ * only needed for tests that depend on starting from a clean, un-allocated device state.
  */
 
 /* eslint-disable no-console */
@@ -29,23 +41,25 @@ import { join, resolve } from 'node:path';
 const root = process.cwd();
 const containerName = 'plugin-chip-test';
 const image = 'luligu/matterbridge:chip-test';
-const pluginName = 'matterbridge-example-camera';
 const testsFile = resolve(root, 'chipTests.json');
 const logFile = resolve(root, 'chipTests.log');
 const summaryLogFile = resolve(root, 'chipTestsSummary.log');
 // Node storage for the bridged endpoints; only stateful cluster attributes that get written during a
 // test create a file here, so these globs only ever remove test-mutated state, never device identity.
 const matterstorageRoot = '/root/.matterbridge/matterstorage/Matterbridge';
-const statefulClusterGlobs = ['*.cameraAvStreamManagement.*', '*.chime.*'];
-// Printed once the plugin has finished (re)configuring its devices after a restart; polled from `docker
-// logs`. The node coming online happens well before this and is not sufficient: on an already-commissioned
-// restart the node skips straight to "online", but the plugin (and its cluster state) isn't ready for
-// another ~30s after that, so waiting on the node-online line alone lets tests race a half-configured plugin.
-const readyLogMarker = `Platform ${pluginName} configured successfully`;
 const isWindows = process.platform === 'win32';
 // On Windows npm is a .cmd shim, not a PE executable: spawnSync can't CreateProcess it directly
 // (ENOENT/EINVAL even when resolved to npm.cmd), so it must be run through the shell.
 const npmCommand = 'npm';
+
+// Populated by loadChipTestsFile(), called first thing in main(): pluginName comes from chipTests.json's
+// "config.name" rather than being hardcoded, so the container's plugin folder, --add, and config file all
+// stay in sync with whatever config.json this repo's chipTests.json declares.
+let pluginName;
+let readyLogMarker;
+let pluginConfig;
+let resetClusterGlobs;
+let allTests;
 
 class ExitError extends Error {
   constructor(message, code = 1) {
@@ -177,6 +191,8 @@ function start() {
   console.log('Adding the plugin to the container...');
   runOrFail('docker', ['exec', containerName, 'matterbridge', '--add', pluginName]);
 
+  writePluginConfig();
+
   console.log('Restarting the container...');
   runOrFail('docker', ['restart', containerName]);
 
@@ -217,8 +233,12 @@ function waitForContainerReady(timeoutMs = 45000, pollMs = 1000) {
 // running container, without recreating it (no docker rm/pull/npm install/build), so tests that need a
 // clean, un-allocated device state can run fast without paying the full --start cost between every test.
 function resetContainerState() {
+  if (resetClusterGlobs.length === 0) {
+    fail(`A test set "reset": true, but ${testsFile} has no (or an empty) "resetClusterGlobs" array to clear.`);
+  }
+
   console.log('Resetting stateful cluster storage...');
-  const findExpr = statefulClusterGlobs.map((glob) => `-name '${glob}'`).join(' -o ');
+  const findExpr = resetClusterGlobs.map((glob) => `-name '${glob}'`).join(' -o ');
   run('docker', ['exec', containerName, 'sh', '-c', `find ${matterstorageRoot} -type f \\( ${findExpr} \\) -delete`]);
 
   console.log('Restarting matterbridge...');
@@ -226,26 +246,59 @@ function resetContainerState() {
   waitForContainerReady();
 }
 
-function loadTests() {
+// Reads chipTests.json once, populating pluginName/readyLogMarker/pluginConfig/allTests. Must run before
+// anything that references those, so it's the first thing main() does.
+function loadChipTestsFile() {
   let raw;
   try {
     raw = readFileSync(testsFile, 'utf8');
   } catch (error) {
     fail(`Unable to read ${testsFile}: ${error.message}`);
-    return [];
+    return;
   }
 
   const parsed = JSON.parse(raw);
-  const tests = parsed.phytonTest;
-  if (!Array.isArray(tests)) {
+
+  pluginConfig = parsed.config;
+  if (!pluginConfig || !pluginConfig.name) {
+    fail(`Expected a "config" object with a "name" property in ${testsFile}`);
+  }
+  pluginName = pluginConfig.name;
+  // Printed once the plugin has finished (re)configuring its devices after a restart; polled from `docker
+  // logs`. The node coming online happens well before this and is not sufficient: on an already-commissioned
+  // restart the node skips straight to "online", but the plugin (and its cluster state) isn't ready for
+  // another ~30s after that, so waiting on the node-online line alone lets tests race a half-configured plugin.
+  readyLogMarker = `Platform ${pluginName} configured successfully`;
+
+  resetClusterGlobs = parsed.resetClusterGlobs ?? [];
+  if (!Array.isArray(resetClusterGlobs)) {
+    fail(`Expected "resetClusterGlobs" to be an array in ${testsFile}`);
+  }
+
+  allTests = parsed.phytonTest;
+  if (!Array.isArray(allTests)) {
     fail(`Expected a "phytonTest" array in ${testsFile}`);
   }
-  for (const test of tests) {
+  for (const test of allTests) {
     if (!test.test) {
       fail(`Missing "test" file name for entry ${JSON.stringify(test)} in ${testsFile}`);
     }
   }
-  return tests;
+}
+
+// Writes chipTests.json's "config" object into the container's Matterbridge storage directory, so the
+// plugin starts with a known configuration instead of whatever defaults `matterbridge --add` would create.
+function writePluginConfig() {
+  console.log('Writing the plugin config into the container...');
+  const result = spawnSync('docker', ['exec', '-i', containerName, 'sh', '-c', `cat > /root/.matterbridge/${pluginName}.config.json`], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+    input: `${JSON.stringify(pluginConfig, null, 2)}\n`,
+  });
+  if (result.status !== 0) {
+    fail(`Failed to write the plugin config into the container (exit ${result.status}): ${result.stderr ?? ''}`);
+  }
 }
 
 function buildArgs(test) {
@@ -270,7 +323,7 @@ function filterTests(tests, nameFilter) {
 }
 
 function runTests(nameFilter) {
-  const tests = filterTests(loadTests(), nameFilter);
+  const tests = filterTests(allTests, nameFilter);
   const startedAt = `Chip tests run started at ${new Date().toISOString()}\n\n`;
   writeFileSync(logFile, startedAt);
 
@@ -324,6 +377,7 @@ function runTests(nameFilter) {
 
 function main() {
   const args = process.argv.slice(2);
+  loadChipTestsFile();
 
   if (args.includes('--start')) {
     start();
