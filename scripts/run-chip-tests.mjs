@@ -39,7 +39,7 @@ import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = process.cwd();
-const containerName = 'plugin-chip-test';
+const containerName = 'chip-test';
 const image = 'luligu/matterbridge:chip-test';
 const testsFile = resolve(root, 'chipTests.json');
 const logFile = resolve(root, 'chipTests.log');
