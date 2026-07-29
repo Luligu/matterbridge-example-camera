@@ -1,8 +1,5 @@
-Chip tests run started at 2026-07-29T13:21:30.471Z
+Chip tests run started at 2026-07-29T18:07:36.935Z
 
-✅ Identify 2.1 (YAML) (Test_TC_I_2_1)
-✅ Identify 2.2 (YAML) (Test_TC_I_2_2)
-✅ Identify 2.3 (YAML) (Test_TC_I_2_3)
-✅ Identify 2.4 (TC_I_2_4.py)
+✅ WebRTC Transport Provider 2.32 (TC_WEBRTCP_2_32.py)
 
-Summary: 4/4 tests passed.
+Summary: 1/1 tests passed.

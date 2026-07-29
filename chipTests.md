@@ -134,10 +134,9 @@ python3 src/python_testing/TC_AVSUM_2_3.py --endpoint 7
 # Test bug: jumps from step 18 to step 22 without calling skip_step() for steps 19-21 when DPTZ is unsupported
 python3 src/python_testing/TC_AVSUM_2_9.py --endpoint 7
 
-# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (13/31 pass; see Known Issues below)
-# Test bug: is_battery_powered() reads PowerSource on endpoint 0 (root node), which doesn't exist on a Matterbridge bridge; PowerSource lives on the bridged endpoint (6)
+# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (17/31 pass; see Known Issues below)
 python3 src/python_testing/TC_WEBRTCP_2_1.py --endpoint 6
-# Gap: deferredOffer is hardcoded true; test expects false (immediate processing) in this scenario (see Known Issues #7)
+# Gap: CurrentSessions never populates the deprecated singular VideoStreamID/AudioStreamID fields on the session struct, only the modern VideoStreams/AudioStreams lists (see Known Issues #11)
 python3 src/python_testing/TC_WEBRTCP_2_2.py --endpoint 6
 # Passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (verified 2026-07-28; Known Issues #8 fixed)
 python3 src/python_testing/TC_WEBRTCP_2_3.py --endpoint 6
@@ -151,7 +150,6 @@ python3 src/python_testing/TC_WEBRTCP_2_7.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_8.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_9.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_10.py --endpoint 6
-# Test bug: same is_battery_powered() endpoint=0 issue as 2.1
 python3 src/python_testing/TC_WEBRTCP_2_11.py --endpoint 6
 # Gap: requires --PICS .../ci-pics-values (PICS_SDK_CI_ONLY) to run non-interactively; then times out because no session-capacity limit is enforced (see Known Issues #4)
 python3 src/python_testing/TC_WEBRTCP_2_12.py --endpoint 6
@@ -177,14 +175,12 @@ python3 src/python_testing/TC_WEBRTCP_2_24.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_25.py --endpoint 6
 # Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND (see Known Issues #9)
 python3 src/python_testing/TC_WEBRTCP_2_27.py --endpoint 6
-# Gap: same deferredOffer issue as 2.2 (see Known Issues #7)
 python3 src/python_testing/TC_WEBRTCP_2_28.py --endpoint 6
 # Passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (verified 2026-07-28; Known Issues #8 fixed, ProvideOffer variant)
 python3 src/python_testing/TC_WEBRTCP_2_29.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_30.py --endpoint 6
 # Gap: gets past the #8 scenario (fixed), then fails on an unsupported StreamUsage not being rejected with DYNAMIC_CONSTRAINT_ERROR (see Known Issues #10)
 python3 src/python_testing/TC_WEBRTCP_2_31.py --endpoint 6
-# Gap: same deferredOffer issue as 2.2 (see Known Issues #7)
 python3 src/python_testing/TC_WEBRTCP_2_32.py --endpoint 6
 ```
 
@@ -200,7 +196,11 @@ python3 src/python_testing/TC_WEBRTCP_2_32.py --endpoint 6
 
 ### WebRTC Transport Provider — Known Issues (investigated 2026-07-27, updated 2026-07-27, base for next refactor)
 
-**`MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1` and `MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT=1` are both baked into the `luligu/matterbridge:chip-test` image itself** — confirmed via `docker inspect luligu/matterbridge:chip-test` showing them in `Config.Env` (alongside `MATTERBRIDGE_START_CONFIGURE_TIMEOUT=5000`/`MATTERBRIDGE_START_REACHABILITY_TIMEOUT=10000`, i.e. these are Dockerfile-level defaults for this test image, not something anyone needs to pass). This means **every** container created from this image has strict WebRTC validation active and default-stream self-allocation skipped, by default. See "Camera AV Stream Management — Default Stream Self-Allocation" below for what the latter env var controls and why the CHIP suite needs it disabled.
+**`MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1` and `MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT=1` are both baked into the `luligu/matterbridge:chip-test` image itself** — confirmed via `docker inspect luligu/matterbridge:chip-test` showing them in `Config.Env` (alongside `MATTERBRIDGE_CHIP_TEST=1` `MATTERBRIDGE_START_CONFIGURE_TIMEOUT=5000` `MATTERBRIDGE_START_REACHABILITY_TIMEOUT=10000`, i.e. these are Dockerfile-level defaults for this test image, not something anyone needs to pass). This means **every** container created from this image has strict WebRTC validation active and default-stream self-allocation skipped, by default. See "Camera AV Stream Management — Default Stream Self-Allocation" below for what the latter env var controls and why the CHIP suite needs it disabled.
+
+**#0 — RESOLVED. `is_battery_powered()` precondition failed with `UnsupportedCluster` on endpoint 0 (2 tests: 2.1, 2.11).**
+`TC_WEBRTCPTestBase.py`'s `is_battery_powered()` reads `PowerSource.FeatureMap` on `endpoint=0` (the node's Root Node) as a precondition before either test's real steps. This is not a test bug: Matter 1.6 Device Library Spec §16.1.5 "Condition Requirements" for the Camera Device Type mandates (`PowerSourceCond`, conformance `M`) that any node containing a Camera device type endpoint expose `PowerSource` on the true Root Node (device type 0x0016) — distinct from the `BridgedPowerSourceInfo`-conformant `PowerSource` a Bridged Node endpoint (e.g. our endpoint 6) already exposes for the bridged device's own power info. Matterbridge's root node previously had no `PowerSource` cluster at all, so the read failed with `UnsupportedCluster (195)` before either test reached its real assertions.
+**Fixed** (2026-07-29) by adding a `PowerSource` cluster (Wired feature, AC) to Matterbridge's own root node (endpoint 0) in the `luligu/matterbridge:chip-test` image — describing the bridge host itself (mains-powered), independent of any bridged device's own battery/power state. `is_battery_powered()` now reads `FeatureMap` successfully and correctly returns `false` (no `Battery` feature bit), so both tests proceed to their real steps and pass. Verified against a freshly-pulled image: `TC_WEBRTCP_2_1.py` and `TC_WEBRTCP_2_11.py` both pass individually.
 
 **#1 — RESOLVED. Automatic stream selection conflicted with strict "no streams" rejection (originally 7 tests: 2.2, 2.3, 2.5, 2.27, 2.28, 2.29, 2.31).**
 `solicitOffer`/`provideOffer` in [webRtcTransportProviderServer.ts](src/behaviors/webRtcTransportProviderServer.ts) call `#autoAssignStreams()` whenever the request has no `videoStreams`/`audioStreams`/deprecated single-id fields at all — a deliberate feature so revision-1 clients (e.g. Home Assistant's Matter camera integration) that never allocate streams explicitly still work. Several CHIP tests instead send a `SolicitOffer`/`ProvideOffer` with **no stream fields whatsoever** and expect `INVALID_COMMAND`.
@@ -221,8 +221,11 @@ Reproducible (retried once, same result both times — not flaky). Times out dur
 **#6 — No cipher-suite validation (2 tests: 2.24, 2.25).**
 Test sends an unsupported ICE/DTLS cipher suite and expects `DynamicConstraintError`; our handlers have no cipher-suite check anywhere and just accept it. Real gap — would need to validate the requested cipher suite against a supported list before proceeding.
 
-**#7 — `deferredOffer` is hardcoded `true` (3 tests: 2.2, 2.28, 2.32).**
-[webRtcTransportProviderServer.ts](src/behaviors/webRtcTransportProviderServer.ts):401 always returns `deferredOffer: true` from `solicitOffer`. These tests' scenario expects `false` (immediate processing) — our implementation never distinguishes the two cases. Needs investigation into what should drive immediate vs. deferred processing (likely whether the WebRtcTransportRequestor peer is already reachable/bound at solicit time, or whether the device is in standby mode — see Matter 1.6 Application Cluster Specification §11.5.6.1.10, "If in standby mode: DeferredOffer=TRUE; Else: DeferredOffer=FALSE").
+**#7 — RESOLVED. `deferredOffer` was hardcoded `true` (originally 3 tests: 2.2, 2.28, 2.32).**
+[webRtcTransportProviderServer.ts](src/behaviors/webRtcTransportProviderServer.ts):565 used to always return `deferredOffer: true` from `solicitOffer`, but this implementation has no standby/low-power state anywhere — stream resolution and SDP offer generation both complete synchronously before the response is built (the only delay is `#invokeDeferred`'s 250ms anti-race buffer before the `Offer` invoke, negligible next to the spec's "up to 30 seconds" standby allowance). `true` was never an accurate value; `DeferredOffer` (Matter 1.6 §11.5.6.2.2) exists specifically for the "Battery Camera in Standby Flow" (§11.4.3.2), which this device doesn't model. **Fixed** (2026-07-29) by changing the hardcoded value to `deferredOffer: false`. Verified: 2.28 and 2.32 now pass cleanly. 2.2 gets past this check too, but exposes a separate, previously-masked gap — see #11.
+
+**#11 — `CurrentSessions` never populates the deprecated singular `VideoStreamID`/`AudioStreamID` fields on the session struct (1 test: 2.2; discovered 2026-07-29 while verifying the #7 fix).**
+`WebRTCSessionStruct` (Matter 1.6 §11.4.5.5, fields 4/5) declares `VideoStreamID`/`AudioStreamID` as optional-but-deprecated fields on each session entry, distinct from the modern `VideoStreams`/`AudioStreams` list fields (field 7+) — both exist simultaneously per spec. `webRtcTransportProviderServer.ts`'s `solicitOffer` only ever stores `videoStreams`/`audioStreams` (lists) on `this.state.currentSessions`, never the singular deprecated fields. `TC_WEBRTCP_2_2` solicits via the deprecated `videoStreamID: null`/`audioStreamID: null` request fields (step 3, correctly accepted and resolved), then reads `CurrentSessions` back (step 4) and asserts the singular `videoStreamID` field is non-null — it decodes as `NullValue` since we never populate it, so the test fails. Not hit by 2.28/2.32 (they use the modern list fields throughout, never touching the deprecated ones). Fix direction: mirror what `#echoDeprecatedStreamIds` already does for the command response — populate the session's own `videoStreamId`/`audioStreamId` from `videoStreams[0]`/`audioStreams[0]` whenever a stream is present, not just in the immediate response.
 
 **#8 — RESOLVED. `videoStreams`/`audioStreams` were never validated against `AllocatedVideoStreams`/`AllocatedAudioStreams` (originally 4 tests: 2.3, 2.5, 2.29, 2.31).**
 Matter 1.6 Application Cluster Specification §11.5.6.1.10 ("Effect on Receipt" for `SolicitOffer`; §11.5.6.3.5 mirrors this for `ProvideOffer`) specifies, after resolving `VideoStreamID`/`AudioStreamID` into a `VideoStreams`/`AudioStreams` list:

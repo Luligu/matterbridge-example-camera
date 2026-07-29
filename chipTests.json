@@ -211,14 +211,13 @@
     {
       "name": "WebRTC Transport Provider 2.1",
       "test": "TC_WEBRTCP_2_1.py",
-      "args": ["--endpoint 6"],
-      "comment": "Test bug: is_battery_powered() reads PowerSource on endpoint 0 (root node), which doesn't exist on a Matterbridge bridge; PowerSource lives on the bridged endpoint (6)."
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.2",
       "test": "TC_WEBRTCP_2_2.py",
       "args": ["--endpoint 6"],
-      "comment": "Gap: deferredOffer is hardcoded true; test expects false (immediate processing) in this scenario. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #7)."
+      "comment": "Gap: CurrentSessions never populates the deprecated singular VideoStreamID/AudioStreamID fields on the session struct, only the modern VideoStreams/AudioStreams lists; this test solicits via the deprecated null id fields and checks CurrentSessions back through them (see chipTests.md Known Issues #11)."
     },
     {
       "name": "WebRTC Transport Provider 2.3",
@@ -267,8 +266,7 @@
     {
       "name": "WebRTC Transport Provider 2.11",
       "test": "TC_WEBRTCP_2_11.py",
-      "args": ["--endpoint 6"],
-      "comment": "Test bug: same is_battery_powered() endpoint 0 issue as WebRTC Transport Provider 2.1."
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.12",
@@ -357,8 +355,7 @@
     {
       "name": "WebRTC Transport Provider 2.28",
       "test": "TC_WEBRTCP_2_28.py",
-      "args": ["--endpoint 6"],
-      "comment": "Gap: same deferredOffer issue as WebRTC Transport Provider 2.2. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #7)."
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.29",
@@ -380,8 +377,7 @@
     {
       "name": "WebRTC Transport Provider 2.32",
       "test": "TC_WEBRTCP_2_32.py",
-      "args": ["--endpoint 6"],
-      "comment": "Gap: deferredOffer is hardcoded true; test expects false (immediate processing) in this scenario (see chipTests.md Known Issues #7)."
+      "args": ["--endpoint 6"]
     }
   ]
 }

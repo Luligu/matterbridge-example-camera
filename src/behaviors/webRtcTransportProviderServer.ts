@@ -496,7 +496,8 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * mechanism to send it later once a binding is established.
    *
    * @param {WebRtcTransportProvider.SolicitOfferRequest} request - SolicitOffer request payload.
-   * @returns {Promise<WebRtcTransportProvider.SolicitOfferResponse>} The newly allocated session identifier, with deferredOffer set to true.
+   * @returns {Promise<WebRtcTransportProvider.SolicitOfferResponse>} The newly allocated session identifier, with deferredOffer set to false: this
+   * implementation has no standby/low-power state, so stream resolution and SDP offer generation both complete before this response is built.
    * @throws {StatusResponseError} With status InvalidCommand if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 and none of videoStreams, audioStreams, videoStreamId or audioStreamId is present (see {@link #isStrictWebRtcTransport}).
    * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (see {@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}).
    * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
@@ -562,7 +563,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       );
     }
 
-    return { webRtcSessionId, deferredOffer: true, ...this.#echoDeprecatedStreamIds(request, videoStreams, audioStreams) };
+    return { webRtcSessionId, deferredOffer: false, ...this.#echoDeprecatedStreamIds(request, videoStreams, audioStreams) };
   }
 
   /**
