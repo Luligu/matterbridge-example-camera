@@ -124,19 +124,6 @@ describe('SnapshotCamera', () => {
         requiresHardwareEncoder: true,
       },
     ];
-    const allocatedSnapshotStreams = [
-      {
-        snapshotStreamId: 7,
-        imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-        frameRate: 5,
-        minResolution: { width: 320, height: 240 },
-        maxResolution: { width: 640, height: 480 },
-        quality: 80,
-        referenceCount: 0,
-        encodedPixels: true,
-        hardwareEncoder: true,
-      },
-    ];
     const device = new SnapshotCamera('Snapshot Camera Custom', 'CAMERA-CUSTOM', {
       maxConcurrentEncoders: 2,
       maxEncodedPixelRate: 20000000,
@@ -144,7 +131,6 @@ describe('SnapshotCamera', () => {
       snapshotCapabilities,
       maxNetworkBandwidth: 20000,
       supportedStreamUsages: [StreamUsage.Recording, StreamUsage.LiveView],
-      allocatedSnapshotStreams,
       streamUsagePriorities: [StreamUsage.LiveView, StreamUsage.Recording],
     });
 
@@ -155,7 +141,6 @@ describe('SnapshotCamera', () => {
     expect(device.getAttribute(CameraAvStreamManagement, 'snapshotCapabilities')).toEqual(snapshotCapabilities);
     expect(device.getAttribute(CameraAvStreamManagement, 'maxNetworkBandwidth')).toBe(20000);
     expect(device.getAttribute(CameraAvStreamManagement, 'supportedStreamUsages')).toEqual([StreamUsage.Recording, StreamUsage.LiveView]);
-    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual(allocatedSnapshotStreams);
     expect(device.getAttribute(CameraAvStreamManagement, 'streamUsagePriorities')).toEqual([StreamUsage.LiveView, StreamUsage.Recording]);
   });
 
@@ -170,7 +155,6 @@ describe('SnapshotCamera', () => {
         snapshotCapabilities: [{ resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false }],
         maxNetworkBandwidth: 10000,
         supportedStreamUsages: [StreamUsage.Recording],
-        allocatedSnapshotStreams: [],
         streamUsagePriorities: [StreamUsage.Recording],
       }),
     ).toBe(device);

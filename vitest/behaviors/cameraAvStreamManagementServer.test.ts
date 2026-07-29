@@ -72,22 +72,20 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     device = new SnapshotCamera('Snapshot Camera Behavior', 'CAMERA-BEHAVIOR', {
       supportedStreamUsages: [StreamUsage.Recording, StreamUsage.LiveView],
       streamUsagePriorities: [StreamUsage.Recording, StreamUsage.LiveView],
-      allocatedSnapshotStreams: [
-        {
-          snapshotStreamId: 2,
-          imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
-          frameRate: 5,
-          minResolution: { width: 320, height: 240 },
-          maxResolution: { width: 640, height: 480 },
-          quality: 75,
-          referenceCount: 0,
-          encodedPixels: false,
-          hardwareEncoder: false,
-        },
-      ],
     });
     expect(device.behaviors.has(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot))).toBeTruthy();
     expect(await addDevice(aggregator, device)).toBeTruthy();
+
+    // allocatedSnapshotStreams is persisted (not a constructor option); replace the self-allocated default stream
+    // (see MatterbridgeCameraAvStreamManagementServer#initialize) with the fixture the tests below build on.
+    await device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 0 });
+    await device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamAllocate', {
+      imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
+      maxFrameRate: 5,
+      minResolution: { width: 320, height: 240 },
+      maxResolution: { width: 640, height: 480 },
+      quality: 75,
+    });
   });
 
   it('should reject setting stream priorities while a snapshot stream is allocated', async () => {
@@ -110,7 +108,7 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     ).resolves.toBeUndefined();
 
     expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toContainEqual({
-      snapshotStreamId: 3,
+      snapshotStreamId: 1,
       imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
       frameRate: 10,
       minResolution: { width: 320, height: 240 },
@@ -120,7 +118,7 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
       encodedPixels: false,
       hardwareEncoder: false,
     });
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Allocated snapshot stream 3'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Allocated snapshot stream 1'));
   });
 
   it('should reject allocating a snapshot stream with a resolution range not present in snapshotCapabilities', async () => {
@@ -136,8 +134,8 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
   });
 
   it('should reuse an existing snapshot stream whose resolution range overlaps a narrower request', async () => {
-    // Overlaps only the stream allocated above (snapshotStreamId 3, range 320x240-1280x720), not the pre-existing
-    // one (snapshotStreamId 2, range 320x240-640x480), and still matches the 1280x720 snapshotCapabilities entry.
+    // Overlaps only the stream allocated above (snapshotStreamId 1, range 320x240-1280x720), not the pre-existing
+    // one (snapshotStreamId 0, range 320x240-640x480), and still matches the 1280x720 snapshotCapabilities entry.
     await expect(
       device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamAllocate', {
         imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg,
@@ -149,16 +147,16 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
     ).resolves.toBeUndefined();
 
     expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toContainEqual(
-      expect.objectContaining({ snapshotStreamId: 3, minResolution: { width: 700, height: 500 }, maxResolution: { width: 1280, height: 720 } }),
+      expect.objectContaining({ snapshotStreamId: 1, minResolution: { width: 700, height: 500 }, maxResolution: { width: 1280, height: 720 } }),
     );
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Reused snapshot stream 3'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Reused snapshot stream 1'));
   });
 
   it('should deallocate an existing snapshot stream', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 3 })).resolves.toBeUndefined();
+    await expect(device.invokeBehaviorCommand(CameraAvStreamManagement, 'snapshotStreamDeallocate', { snapshotStreamId: 1 })).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).not.toContainEqual(expect.objectContaining({ snapshotStreamId: 3 }));
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Deallocated snapshot stream 3'));
+    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).not.toContainEqual(expect.objectContaining({ snapshotStreamId: 1 }));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Deallocated snapshot stream 1'));
   });
 
   it('should reject deallocation when the snapshot stream does not exist', async () => {
@@ -170,13 +168,13 @@ describe('MatterbridgeCameraAvStreamManagementServer', () => {
   it('should capture a snapshot using the requested stream and resolution', async () => {
     await expect(
       device.invokeBehaviorCommand(CameraAvStreamManagement, 'captureSnapshot', {
-        snapshotStreamId: 2,
+        snapshotStreamId: 0,
         requestedResolution: { width: 640, height: 480 },
       }),
     ).resolves.toBeUndefined();
 
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Capturing snapshot 2'));
-    expect(loggerDebugSpy).toHaveBeenCalledWith('MatterbridgeCameraAvStreamManagementServer: captureSnapshot called with snapshotStreamId 2');
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Capturing snapshot 0'));
+    expect(loggerDebugSpy).toHaveBeenCalledWith('MatterbridgeCameraAvStreamManagementServer: captureSnapshot called with snapshotStreamId 0');
   });
 
   it('should capture a snapshot using automatic stream selection', async () => {

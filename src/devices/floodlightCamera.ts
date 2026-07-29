@@ -144,7 +144,6 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
         { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
-      allocatedSnapshotStreams = [],
     } = cameraOptions;
 
     const cameraChild = this.addChildDeviceType('Camera', camera, {});
@@ -166,7 +165,6 @@ export class FloodlightCamera extends MatterbridgeEndpoint {
       viewport,
       microphoneCapabilities,
       snapshotCapabilities,
-      allocatedSnapshotStreams,
     });
     createDefaultWebRtcTransportProviderClusterServer(cameraChild);
     addWebRtcTransportRequestorClient(cameraChild);

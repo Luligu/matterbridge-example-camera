@@ -78,8 +78,6 @@ export interface CameraOptions extends MatterbridgeEndpointOptions {
   microphoneCapabilities?: CameraAvStreamManagement.AudioCapabilities;
   /** Indicates the list of supported snapshot capabilities */
   snapshotCapabilities?: CameraAvStreamManagement.SnapshotCapabilities[];
-  /** Indicates the list of allocated snapshot streams */
-  allocatedSnapshotStreams?: CameraAvStreamManagement.SnapshotStream[];
 
   /** Indicates the minimum value for the mechanical pan, in angular degrees */
   panMin?: number;
@@ -129,7 +127,6 @@ export class Camera extends MatterbridgeEndpoint {
    *  - imageFlipVertical: false
    *  - microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
    *  - snapshotCapabilities: [{ resolution: 640x480 }, { resolution: 1280x720 }, { resolution: 1920x1080 }], each with maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false
-   *  - allocatedSnapshotStreams: []
    *
    *  - ptz: false (the CameraAvSettingsUserLevelManagement cluster will not be created)
    *  - panMin: -170, panMax: 170 (angular degrees)
@@ -162,7 +159,6 @@ export class Camera extends MatterbridgeEndpoint {
         { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
-      allocatedSnapshotStreams = [],
       panMin = -170,
       panMax = 170,
       tiltMin = -20,
@@ -211,7 +207,6 @@ export class Camera extends MatterbridgeEndpoint {
       viewport,
       microphoneCapabilities,
       snapshotCapabilities,
-      allocatedSnapshotStreams,
     });
     if (ptz) createDefaultCameraAvSettingsUserLevelManagementClusterServer(this, { panMin, panMax, tiltMin, tiltMax, zoomMax, mptzPosition });
     createDefaultWebRtcTransportProviderClusterServer(this);
@@ -250,8 +245,6 @@ export interface CameraAvStreamManagementClusterOptions {
   microphoneCapabilities: CameraAvStreamManagement.AudioCapabilities;
   /** Indicates the list of supported snapshot capabilities */
   snapshotCapabilities: CameraAvStreamManagement.SnapshotCapabilities[];
-  /** Indicates the list of allocated snapshot streams */
-  allocatedSnapshotStreams: CameraAvStreamManagement.SnapshotStream[];
 }
 
 /**
@@ -284,6 +277,7 @@ export function createDefaultCameraAvStreamManagementClusterServer(endpoint: Mat
       statusLightBrightness: ThreeLevelAuto.Auto,
       allocatedVideoStreams: [],
       allocatedAudioStreams: [],
+      allocatedSnapshotStreams: [],
       microphoneMuted: false,
       microphoneVolumeLevel: 128,
       microphoneMaxLevel: 254,
