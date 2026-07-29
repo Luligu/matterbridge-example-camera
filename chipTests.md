@@ -34,6 +34,52 @@ python3 src/python_testing/TC_DeviceBasicComposition.py
 python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
 python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
 
+# Basic Information — all TC_BINFO_*.py tests in src/python_testing, endpoint 0 (Matterbridge's own root node, not a bridged device) ✅ (2.1/2.2 pass; see comments for 3.1/3.2)
+# Uses /root/matterbridge.pics (baked into the image, see matterbridge/docker/chip-test/matterbridge.pics), a
+# Matterbridge-specific profile hand-verified against the real BasicInformation cluster server implementation —
+# ManufacturingDate/PartNumber/ProductAppearance/Reachable correctly declared unsupported, everything else supported.
+python3 src/python_testing/TC_BINFO_2_1.py --endpoint 0 --PICS /root/matterbridge.pics
+python3 src/python_testing/TC_BINFO_2_2.py --endpoint 0 --PICS /root/matterbridge.pics
+# Skipped: requires the ProductAppearance attribute, which this example doesn't implement python3 src/python_testing/TC_BINFO_3_1.py --endpoint 0 --PICS /root/matterbridge.pics
+# Not applicable: requires --app-pipe, a debug named-pipe protocol only the reference app implements, not a real device python3 src/python_testing/TC_BINFO_3_2.py --endpoint 0 --PICS /root/matterbridge.pics
+
+# Bridged Device Basic Information — all TC_BRBINFO_*.py tests in src/python_testing ✅ (2.1 passes; see comments for 3.1/3.2/4.1)
+# Uses /root/matterbridge.pics (baked into the image) instead of the generic ci-pics-values: it's a Matterbridge-specific
+# BRBINFO profile, hand-verified against the real BridgedDeviceBasicInformation implementation and Matter Core Spec
+# §9.13.5-7 — ProductId/ManufacturingDate/PartNumber/ProductAppearance declared unsupported (not implemented),
+# DataModelRevision/Location/LocalConfigDisabled/CapabilityMinima/SpecificationVersion/MaxPathsPerInvoke declared
+# unsupported (Conformance=X, excluded from this derived cluster entirely), and ConfigurationVersion/Reachable/Leave/
+# ReachableChanged declared supported (all genuinely implemented) — rather than the generic file's near-blanket default.
+python3 src/python_testing/TC_BRBINFO_2_1.py --endpoint 6 --PICS /root/matterbridge.pics
+# Skipped: requires the ProductAppearance attribute, which this example doesn't implement python3 src/python_testing/TC_BRBINFO_3_1.py --endpoint 6 --PICS /root/matterbridge.pics
+# Not applicable: requires --app-pipe, a debug named-pipe protocol only the reference bridge-app implements, not a real bridge python3 src/python_testing/TC_BRBINFO_3_2.py --endpoint 6 --PICS /root/matterbridge.pics
+# Not applicable: requires the fabric-sync-app/fabric-admin/fabric-bridge test harness, a different topology entirely (not something you point --endpoint at) python3 src/python_testing/TC_BRBINFO_4_1.py
+
+# Identify — 2.1-2.3 are YAML-only certification tests, run through chip-tool's websocket test runner
+# (chiptool.py spawns a short-lived "chip-tool interactive server" for each test and tears it down again,
+# reusing chip-tool's own persisted fabric pairing baked into the image, so no separate commissioning step
+# is needed); only TC_I_2_4.py exists as a Python test. Uses /root/matterbridge.pics: the previous
+# generic-PICS default was wrongly declaring IdentifyTime/IdentifyType unsupported (I.S.A0000/A0001=0),
+# skipping those steps entirely; matterbridge.pics now correctly declares them (and the mandatory Identify
+# command, I.S.C00.Rsp) supported, while correctly leaving TriggerEffect (I.S.C40) undeclared since
+# createDefaultIdentifyClusterServer doesn't request the Effects feature ✅ (all pass, full step coverage)
+# Identify is created on every top-level bridged device endpoint except the plain Camera (endpoint 6, no Identify) and the
+# two FixedLabel-only helper endpoints (8/12); endpoint 7 (PTZ Camera) is used here since it carries Identify + PowerSource
+python3 scripts/tests/chipyaml/chiptool.py tests Test_TC_I_2_1 --endpoint 7 --PICS /root/matterbridge.pics
+python3 scripts/tests/chipyaml/chiptool.py tests Test_TC_I_2_2 --endpoint 7 --PICS /root/matterbridge.pics
+python3 scripts/tests/chipyaml/chiptool.py tests Test_TC_I_2_3 --endpoint 7 --PICS /root/matterbridge.pics
+python3 src/python_testing/TC_I_2_4.py --endpoint 7
+
+# Power Source — 2.1/2.2 are YAML-only certification tests, run the same way as the Identify YAML tests
+# above, also using /root/matterbridge.pics; only TC_PS_2_3.py exists as a Python test ✅ (all pass)
+# Run on endpoint 6 (the bridged Camera endpoint). Neither pics_TC_PS_2_3 (PWRTL.S) nor the Battery/Battery
+# Rechargeable attributes referenced by the YAML tests are declared in matterbridge.pics (we don't implement Power
+# Topology or Battery features), so those steps correctly skip — matching the coverage already verified against
+# the generic PICS default (5/33 steps run for 2.1, 0/0 for 2.2's fully-gated event-reporting steps).
+python3 scripts/tests/chipyaml/chiptool.py tests Test_TC_PS_2_1 --endpoint 6 --PICS /root/matterbridge.pics
+python3 scripts/tests/chipyaml/chiptool.py tests Test_TC_PS_2_2 --endpoint 6 --PICS /root/matterbridge.pics
+python3 src/python_testing/TC_PS_2_3.py --endpoint 6
+
 # Chime cluster ✅ (all pass)
 python3 src/python_testing/TC_CHIME_2_1.py --endpoint 2
 python3 src/python_testing/TC_CHIME_2_2.py --endpoint 2
@@ -55,7 +101,7 @@ python3 src/python_testing/TC_AVSM_2_2.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_4.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_5.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_6.py --endpoint 6
-# Test wrong assumption: step 27 escalates MaxFrameRate to at least minFrameRate+35 to force RESOURCE_EXHAUSTED, which always exceeds our declared VideoSensorParams.MaxFps (30) and is correctly rejected as DYNAMIC_CONSTRAINT_ERROR first; no --int-arg minFrameRate value avoids this since the offset is fixed by the test
+# Test wrong assumption: step 27 escalates MaxFrameRate by +20 per maxConcurrentEncoders iteration to force RESOURCE_EXHAUSTED; with maxConcurrentEncoders=1 the final attempt requests 65fps, exceeding our declared VideoSensorParams.MaxFps (60) — correctly rejected as DYNAMIC_CONSTRAINT_ERROR first per Matter 1.6/1.5.1 §11.2.8.4.12's Effect on Receipt order (unsupported-field checks precede the resource check); no --int-arg minFrameRate value avoids this since the offset is fixed by the test and any finite MaxFps eventually hits the same issue
 python3 src/python_testing/TC_AVSM_2_7.py --endpoint 6
 # Requires Watermark or Osd Features python3 src/python_testing/TC_AVSM_2_8.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_9.py --endpoint 6
@@ -151,10 +197,6 @@ python3 src/python_testing/TC_WEBRTCP_2_32.py --endpoint 6
 `MatterbridgeCameraAvStreamManagementServer#initialize()` ([cameraAvStreamManagementServer.ts](src/behaviors/cameraAvStreamManagementServer.ts)) self-allocates a default video/audio/snapshot stream for any feature the endpoint supports that has none allocated yet, on every endpoint construction. This applies automatically to every device using this shared behavior: `Camera`, `SnapshotCamera`, `AudioDoorbell`, `Intercom`, and the composite `FloodlightCamera`/`VideoDoorbell`.
 
 **Why:** Matter 1.6/1.5.1 §11.2.1.1 "Stream Lifecycle" recommends Commissioners allocate streams once, at commissioning time, with "very long lifetimes" thereafter. `AllocatedVideoStreams`/`AllocatedAudioStreams`/`AllocatedSnapshotStreams` are also `N`-quality (Matter-mandated non-volatile, §11.2.7) — a compliant device must persist them across restarts. In practice, real clients don't reliably do their part: SmartThings (see "Real-World Client Traces" below) never calls `VideoStreamAllocate`/`AudioStreamAllocate` at all, and matter.js legitimately discards all persisted state for a cluster when its `FeatureMap` changes between restarts (`Datasource.ts`'s `"Ignoring persisted values for ... because features changed"` — something this project's own ImageControl feature-flag changes trigger). Self-allocation is a defensive fallback so a passive/forgetful client still finds something usable.
-
-**Conflict discovered and resolved:** the CHIP certification suite models allocation as purely commissioner-driven and asserts the opposite — `TC_AVSM_2_2`/`TC_AVSM_2_5` step 2 explicitly assert `AllocatedSnapshotStreams`/`AllocatedAudioStreams` are **empty** immediately after commissioning. Verified 2026-07-28: with self-allocation unconditionally active, `TC_AVSM_2_2` and `TC_AVSM_2_5` — previously always-passing — failed with `"1 != 0 The number of allocated snapshot/audio streams in the list is not 0"`. Resolved by adding the `MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT` environment variable (`#isAutoAllocateSkipped()`): when set to `1`, `initialize()` skips self-allocation entirely. The `luligu/matterbridge:chip-test` image now sets this by default (alongside `MATTERBRIDGE_STRICT_WEBRTCTRANSPORT`), so the CHIP suite sees genuinely-empty lists like it expects, while real deployments (unset, the default) keep the self-allocation safety net. Re-verified 2026-07-28 with the updated image: `TC_AVSM_2_2`/`2_5` pass again, `TC_AVSM` overall back to 14/15 (only the pre-existing `2.7` test-wrong-assumption failure remains), and `TC_WEBRTCP_2_3`/`2_29` (Known Issues #8) still pass with both env vars active simultaneously — confirmed no interaction between the two flags.
-
-**Snapshot resolution range fix (2026-07-28):** the self-allocated default snapshot stream originally set `minResolution`/`maxResolution` to a single fixed point — `snapshotCapabilities[0]`'s resolution (the array's first entry, which happens to be the smallest for every device in this repo, e.g. `Camera`'s 640×480) — instead of spanning a real range like the video default stream does (`minViewportResolution` to the top `rateDistortionTradeOffPoints` resolution). This meant a real client requesting any _other_ supported `snapshotCapabilities` resolution (e.g. the device's own top-listed 1920×1080 capability, as the Matter Server dashboard trace below does) could never dedup-match the default stream in `snapshotStreamAllocate` (§11.2.8.8.8's "existing stream that matches this request" check), spawning an unwanted duplicate allocation that then sits around forever if the client never deallocates it (as SmartThings' traces below show). Fixed: `initialize()` now computes `minResolution`/`maxResolution` across the full `snapshotCapabilities` list (smallest width/height to the largest-area entry's resolution), and takes `imageCodec`/`frameRate` from that largest entry. The dashboard trace recorded below predates this fix — with it applied, that same request now dedup-matches stream `0` and returns it directly instead of allocating stream `1`.
 
 ### WebRTC Transport Provider — Known Issues (investigated 2026-07-27, updated 2026-07-27, base for next refactor)
 

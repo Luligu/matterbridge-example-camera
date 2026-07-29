@@ -1,9 +1,9 @@
 /**
  * run-chip-tests.mjs
- * Version: 1.1.0
+ * Version: 1.2.0
  *
  * Manage the `luligu/matterbridge:chip-test` docker container for the plugin in the current working
- * directory and run the Matter CHIP python test suite defined in chipTests.json, logging full results to
+ * directory and run the Matter CHIP test suite defined in chipTests.json, logging full results to
  * chipTests.log and just the pass/fail summary to chipTestsSummary.log. Not specific to any one plugin:
  * drop a chipTests.json into any plugin repo and this script picks up its name, config, and tests from it.
  *
@@ -16,9 +16,16 @@
  *                          storage directory for the bridged endpoints) cleared by a "reset": true test
  *                          entry — see below. Defaults to an empty array; a "reset": true test with nothing
  *                          configured here fails loudly instead of silently doing nothing.
- *   "phytonTest"           (required) The list of tests to run — see below.
- * Each phytonTest entry may set an "input" string, piped to the test's stdin, for tests that prompt for
- * interactive confirmation (for example "y\ny\n").
+ *   "yamlTests"            (optional) The list of YAML certification tests (run through chip-tool's
+ *                          websocket test runner, scripts/tests/chipyaml/chiptool.py) to run — see below.
+ *                          chip-tool's own persistent storage inside the image already holds a fabric paired
+ *                          with the matterbridge instance, so each invocation just spawns a short-lived
+ *                          `chip-tool interactive server`, runs the one test, and tears it down again — no
+ *                          separate commissioning step needed. Defaults to an empty array.
+ *   "phytonTests"          (optional) The list of Python (src/python_testing/*.py) tests to run — see
+ *                          below. Defaults to an empty array.
+ * Each yamlTests/phytonTests entry may set an "input" string, piped to the test's stdin, for tests that
+ * prompt for interactive confirmation (for example "y\ny\n").
  *
  * Usage:
  *   node scripts/run-chip-tests.mjs --start          Create the chip-test container and add/enable the plugin inside it.
@@ -275,13 +282,19 @@ function loadChipTestsFile() {
     fail(`Expected "resetClusterGlobs" to be an array in ${testsFile}`);
   }
 
-  allTests = parsed.phytonTest;
-  if (!Array.isArray(allTests)) {
-    fail(`Expected a "phytonTest" array in ${testsFile}`);
+  const yamlTests = parsed.yamlTests ?? [];
+  if (!Array.isArray(yamlTests)) {
+    fail(`Expected "yamlTests" to be an array in ${testsFile}`);
   }
+  const phytonTests = parsed.phytonTests ?? [];
+  if (!Array.isArray(phytonTests)) {
+    fail(`Expected "phytonTests" to be an array in ${testsFile}`);
+  }
+
+  allTests = [...yamlTests.map((test) => ({ ...test, kind: 'yaml' })), ...phytonTests.map((test) => ({ ...test, kind: 'python' }))];
   for (const test of allTests) {
     if (!test.test) {
-      fail(`Missing "test" file name for entry ${JSON.stringify(test)} in ${testsFile}`);
+      fail(`Missing "test" name for entry ${JSON.stringify(test)} in ${testsFile}`);
     }
   }
 }
@@ -309,6 +322,19 @@ function buildArgs(test) {
   return scriptArgs;
 }
 
+// Builds the argv (after "docker exec -i containerName") for a single test, dispatching on test.kind:
+//   - "python": python3 src/python_testing/<test.test> <args...>
+//   - "yaml":   python3 scripts/tests/chipyaml/chiptool.py tests <test.test> <args...>
+//               Spawns a short-lived "chip-tool interactive server" for the duration of this one test,
+//               reusing chip-tool's own persisted fabric pairing baked into the image.
+function buildExecArgs(test) {
+  const args = buildArgs(test);
+  if (test.kind === 'yaml') {
+    return ['python3', 'scripts/tests/chipyaml/chiptool.py', 'tests', test.test, ...args];
+  }
+  return ['python3', `src/python_testing/${test.test}`, ...args];
+}
+
 function filterTests(tests, nameFilter) {
   if (!nameFilter) {
     return tests;
@@ -329,9 +355,8 @@ function runTests(nameFilter) {
 
   const results = [];
   for (const test of tests) {
-    const scriptPath = `src/python_testing/${test.test}`;
-    const args = buildArgs(test);
-    const commandLine = ['python3', scriptPath, ...args].join(' ');
+    const execArgs = buildExecArgs(test);
+    const commandLine = execArgs.join(' ');
     const label = `${test.name} (${test.test})`;
 
     if (test.reset) {
@@ -342,7 +367,7 @@ function runTests(nameFilter) {
     console.log(`Running: ${label}`);
     appendFileSync(logFile, `=== ${label} ===\n${commandLine}\n`);
 
-    const result = spawnSync('docker', ['exec', '-i', containerName, 'python3', scriptPath, ...args], {
+    const result = spawnSync('docker', ['exec', '-i', containerName, ...execArgs], {
       cwd: root,
       encoding: 'utf8',
       windowsHide: true,

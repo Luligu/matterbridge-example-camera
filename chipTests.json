@@ -13,7 +13,34 @@
     "unregisterOnShutdown": false
   },
   "resetClusterGlobs": ["*.cameraAvStreamManagement.*", "*.chime.*"],
-  "phytonTest": [
+  "yamlTests": [
+    {
+      "name": "Identify 2.1 (YAML)",
+      "test": "Test_TC_I_2_1",
+      "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Identify 2.2 (YAML)",
+      "test": "Test_TC_I_2_2",
+      "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Identify 2.3 (YAML)",
+      "test": "Test_TC_I_2_3",
+      "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Power Source 2.1 (YAML)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+    }
+  ],
+  "phytonTests": [
     {
       "name": "Generic device basic composition",
       "test": "TC_DeviceBasicComposition.py"
@@ -27,6 +54,31 @@
       "name": "Generic device default warnings",
       "test": "TC_DefaultWarnings.py",
       "args": ["--bool-arg pixit_allow_default_vendor_id:true"]
+    },
+    {
+      "name": "Basic Information 2.1",
+      "test": "TC_BINFO_2_1.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Basic Information 2.2",
+      "test": "TC_BINFO_2_2.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Bridged Device Basic Information 2.1",
+      "test": "TC_BRBINFO_2_1.py",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Identify 2.4",
+      "test": "TC_I_2_4.py",
+      "args": ["--endpoint 7"]
+    },
+    {
+      "name": "Power Source 2.3",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 6"]
     },
     {
       "name": "Chime cluster 2.1",
@@ -88,7 +140,7 @@
       "name": "Camera AV Stream Management 2.7",
       "test": "TC_AVSM_2_7.py",
       "args": ["--endpoint 6"],
-      "comment": "Test wrong assumption: step 27 escalates MaxFrameRate to at least minFrameRate+35 to force RESOURCE_EXHAUSTED, which always exceeds our declared VideoSensorParams.MaxFps (30) and is correctly rejected as DYNAMIC_CONSTRAINT_ERROR first."
+      "comment": "Test wrong assumption: step 27 escalates MaxFrameRate by +20 per maxConcurrentEncoders iteration (starting at minFrameRate+15) then again for the final exhaustion attempt, to force RESOURCE_EXHAUSTED; with maxConcurrentEncoders=1 that final attempt requests 65fps, which exceeds our declared VideoSensorParams.MaxFps (60) and is correctly rejected as DYNAMIC_CONSTRAINT_ERROR first, per Matter 1.6/1.5.1 §11.2.8.4.12's own Effect on Receipt order (unsupported-field checks precede the resource check). Any device with a finite MaxFps hits this same issue eventually — it's not specific to our declared value."
     },
     {
       "name": "Camera AV Stream Management 2.9",
