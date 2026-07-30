@@ -244,33 +244,34 @@
       "name": "Camera AV Stream Management 2.18",
       "test": "TC_AVSM_2_18.py",
       "args": ["--endpoint 6"],
-      "reset": true,
+      "resetBefore": true,
       "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
     },
     {
       "name": "Camera AV Stream Management 2.19",
       "test": "TC_AVSM_2_19.py",
       "args": ["--endpoint 6"],
-      "reset": true,
+      "resetBefore": true,
       "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
     },
     {
       "name": "Camera AV Stream Management 2.20",
       "test": "TC_AVSM_2_20.py",
       "args": ["--endpoint 6"],
-      "reset": true,
+      "resetBefore": true,
       "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
     },
     {
       "name": "Camera AV Stream Management 2.21",
       "test": "TC_AVSM_2_21.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "resetAfter": true,
+      "comment": "Step 5 sends a random StreamUsagePriorities mutation via SetStreamPriorities and never restores it, which can leak into whichever test runs next (e.g. excluding kLiveView)."
     },
     {
       "name": "Camera AV Stream Management stream reuse range params",
       "test": "TC_AVSM_StreamReuseRangeParams.py",
-      "args": ["--endpoint 6"],
-      "reset": true
+      "args": ["--endpoint 6"]
     },
     {
       "name": "Camera AV Stream Management VideoStreamsPersistence",
@@ -347,19 +348,19 @@
       "name": "WebRTC Transport Provider 2.3",
       "test": "TC_WEBRTCP_2_3.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     },
     {
       "name": "WebRTC Transport Provider 2.4",
       "test": "TC_WEBRTCP_2_4.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     },
     {
       "name": "WebRTC Transport Provider 2.5",
       "test": "TC_WEBRTCP_2_5.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     },
     {
       "name": "WebRTC Transport Provider 2.6",
@@ -398,7 +399,9 @@
     {
       "name": "WebRTC Transport Provider 2.12",
       "test": "TC_WEBRTCP_2_12.py",
-      "args": ["--endpoint 6", "--PICS src/app/tests/suites/certification/ci-pics-values"]
+      "args": ["--endpoint 6", "--PICS src/app/tests/suites/certification/ci-pics-values"],
+      "resetAfter": true,
+      "comment": "Deliberately fills CurrentSessions to MAX_CONCURRENT_SESSIONS and never closes any of them, which would otherwise leak into whichever test runs next."
     },
     {
       "name": "WebRTC Transport Provider 2.13",
@@ -417,8 +420,7 @@
     {
       "name": "WebRTC Transport Provider 2.15",
       "test": "TC_WEBRTCP_2_15.py",
-      "args": ["--endpoint 6"],
-      "reset": true
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.16",
@@ -491,31 +493,31 @@
       "name": "WebRTC Transport Provider 2.28",
       "test": "TC_WEBRTCP_2_28.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     },
     {
       "name": "WebRTC Transport Provider 2.29",
       "test": "TC_WEBRTCP_2_29.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     },
     {
       "name": "WebRTC Transport Provider 2.30",
       "test": "TC_WEBRTCP_2_30.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     },
     {
       "name": "WebRTC Transport Provider 2.31",
       "test": "TC_WEBRTCP_2_31.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     },
     {
       "name": "WebRTC Transport Provider 2.32",
       "test": "TC_WEBRTCP_2_32.py",
       "args": ["--endpoint 6"],
-      "reset": true
+      "resetBefore": true
     }
   ]
 }

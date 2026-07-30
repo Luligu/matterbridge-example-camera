@@ -1,6 +1,6 @@
 /**
  * run-chip-tests.mjs
- * Version: 1.4.0
+ * Version: 1.5.0
  *
  * Manage the `luligu/matterbridge:chip-test` docker container for the plugin in the current working
  * directory and run the Matter CHIP test suite defined in chipTests.json, logging full results to
@@ -13,9 +13,10 @@
  *                          in --start. "config.name" is also used as the plugin (npm package) name for the
  *                          container's volume mount and `matterbridge --add`.
  *   "resetClusterGlobs"   (optional) Filename globs (matched against files under this plugin's node
- *                          storage directory for the bridged endpoints) cleared by a "reset": true test
- *                          entry — see below. Defaults to an empty array; a "reset": true test with nothing
- *                          configured here fails loudly instead of silently doing nothing.
+ *                          storage directory for the bridged endpoints) cleared by a "resetBefore": true or
+ *                          "resetAfter": true test entry — see below. Defaults to an empty array; a test
+ *                          entry using either flag with nothing configured here fails loudly instead of
+ *                          silently doing nothing.
  *   "yamlTests"            (optional) The list of YAML certification tests (run through chip-tool's
  *                          websocket test runner, scripts/tests/chipyaml/chiptool.py) to run — see below.
  *                          chip-tool's own persistent storage inside the image already holds a fabric paired
@@ -33,10 +34,14 @@
  *   node scripts/run-chip-tests.mjs                  Run the tests listed in chipTests.json inside the running container.
  *   node scripts/run-chip-tests.mjs --test NAME       Run only the tests whose "name" or "test" property includes NAME (case-insensitive).
  *
- * A chipTests.json entry may set "reset": true to clear persisted stateful cluster storage (matched via
- * "resetClusterGlobs", above) and restart the matterbridge process before that test runs, without
- * recreating the container (no docker rm/pull/npm install/build). This is much cheaper than --start and is
- * only needed for tests that depend on starting from a clean, un-allocated device state.
+ * A chipTests.json entry may set "resetBefore": true to clear persisted stateful cluster storage (matched
+ * via "resetClusterGlobs", above) and restart the matterbridge process before that test runs, and/or
+ * "resetAfter": true to do the same after that test runs (before the next one starts) — without recreating
+ * the container (no docker rm/pull/npm install/build). This is much cheaper than --start.
+ * "resetBefore" is for tests that depend on starting from a clean, un-allocated device state; "resetAfter"
+ * is for tests that leave dirty residue (e.g. an unclosed session, a mutated attribute) that would otherwise
+ * leak into whichever test runs next — put it on the test that causes the residue, not the one affected by
+ * it, so the fix travels with the test that needs it even if the surrounding list is reordered.
  * Each yamlTests/phytonTests entry may also set a "comment" string, printed under a failing/skipped result
  * in the summary log, and a "skip": true flag to leave the test listed (documenting that it exists and why
  * it doesn't run) without ever invoking it — for tests that can never pass against this image (e.g. ones
@@ -237,7 +242,7 @@ function waitForContainerReady(sinceIso, timeoutMs = 45000, pollMs = 1000) {
 // clean, un-allocated device state can run fast without paying the full --start cost between every test.
 function resetContainerState() {
   if (resetClusterGlobs.length === 0) {
-    fail(`A test set "reset": true, but ${testsFile} has no (or an empty) "resetClusterGlobs" array to clear.`);
+    fail(`A test set "resetBefore": true or "resetAfter": true, but ${testsFile} has no (or an empty) "resetClusterGlobs" array to clear.`);
   }
 
   console.log('Resetting stateful cluster storage...');
@@ -364,7 +369,7 @@ function runTests(nameFilter) {
     const execArgs = buildExecArgs(test);
     const commandLine = execArgs.join(' ');
 
-    if (test.reset) {
+    if (test.resetBefore) {
       appendFileSync(logFile, `--- reset stateful cluster storage before ${label} ---\n`);
       resetContainerState();
     }
@@ -386,6 +391,11 @@ function runTests(nameFilter) {
     console.log(passed ? `PASS: ${label}` : `FAIL: ${label} (exit ${result.status})`);
 
     results.push({ label, passed, comment: test.comment });
+
+    if (test.resetAfter) {
+      appendFileSync(logFile, `--- reset stateful cluster storage after ${label} ---\n`);
+      resetContainerState();
+    }
   }
 
   const executedResults = results.filter((result) => !result.skipped);
