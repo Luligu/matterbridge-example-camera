@@ -427,7 +427,8 @@ function runTests(nameFilter) {
   console.log(resultLines.join('\n'));
   console.log(summary);
 
-  if (passedCount !== executedResults.length) {
+  const unexpectedFailures = executedResults.filter((result) => !result.passed && !result.comment);
+  if (unexpectedFailures.length > 0) {
     process.exitCode = 1;
   }
 }

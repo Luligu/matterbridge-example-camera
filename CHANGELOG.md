@@ -28,6 +28,17 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.2.0] - Dev branch
+
+### Added
+
+- [chip]: Non-skipped CHIP test failures that carry a documented `comment` in `chipTests.json` (known, explained issues) no longer fail the `chip-tests.yml` workflow; only undocumented failures do.
+
+### Changed
+
+- [plugin]: Require Matterbridge `3.10.3` or later.
+- [ci]: Temporarily pin the `build.yml`, `codecov.yml`, and `publish.yml` (release job) workflows to always clone matterbridge's `dev` branch, working around a matter.js `CameraAvStreamManagement.state` conformance bug still present on matterbridge's `main`.
+
 ## [0.1.0] - Dev branch
 
 ### Added
