@@ -1,5 +1,19 @@
-Chip tests run started at 2026-07-30T08:22:59.765Z
+Chip tests run started at 2026-07-30T09:08:46.248Z
 
-✅ WebRTC Transport Provider 2.12 (TC_WEBRTCP_2_12.py)
+✅ WebRTC Transport Provider 2.2 (TC_WEBRTCP_2_2.py)
+✅ WebRTC Transport Provider 2.20 (TC_WEBRTCP_2_20.py)
+✅ WebRTC Transport Provider 2.21 (TC_WEBRTCP_2_21.py)
+❌ WebRTC Transport Provider 2.22 (TC_WEBRTCP_2_22.py)
+   ↳ Gap: 'TH establishes a valid WebRTC session with DUT' times out during ICE/DTLS completion; not yet root-caused (see chipTests.md Known Issues #5).
+❌ WebRTC Transport Provider 2.23 (TC_WEBRTCP_2_23.py)
+   ↳ Gap: same session-establishment timeout as WebRTC Transport Provider 2.22 (see chipTests.md Known Issues #5).
+❌ WebRTC Transport Provider 2.24 (TC_WEBRTCP_2_24.py)
+   ↳ Gap: unsupported cipher suite is accepted instead of rejected with DynamicConstraintError; no cipher-suite validation implemented (see chipTests.md Known Issues #6).
+❌ WebRTC Transport Provider 2.25 (TC_WEBRTCP_2_25.py)
+   ↳ Gap: same cipher-suite validation gap as WebRTC Transport Provider 2.24 (see chipTests.md Known Issues #6).
+❌ WebRTC Transport Provider 2.27 (TC_WEBRTCP_2_27.py)
+   ↳ Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9).
+✅ WebRTC Transport Provider 2.28 (TC_WEBRTCP_2_28.py)
+✅ WebRTC Transport Provider 2.29 (TC_WEBRTCP_2_29.py)
 
-Summary: 1/1 tests passed.
+Summary: 5/10 tests passed.
