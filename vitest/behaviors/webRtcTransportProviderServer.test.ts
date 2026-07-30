@@ -816,6 +816,30 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     }
   });
 
+  it('should reject solicitOffer with an explicit null audioStreamId when nothing is allocated for audio (MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1)', async () => {
+    const originalStrict = process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
+    process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = '1';
+    try {
+      const endpoint = new Camera('WebRtc Strict Solicit Audio Null Empty', 'WEBRTC-STRICT-SOLICIT-AUDIO-NULL-EMPTY');
+      expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+      // Only deallocate audio, leaving the self-allocated video stream in place, so the request below omits
+      // any video fields entirely and only the audio branch of #resolveStrictStreamLists is exercised.
+      await endpoint.invokeBehaviorCommand(CameraAvStreamManagement, 'audioStreamDeallocate', { audioStreamId: 0 });
+
+      await expect(
+        endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
+          streamUsage: StreamUsage.LiveView,
+          originatingEndpointId: EndpointNumber(1),
+          audioStreamId: null,
+        }),
+      ).rejects.toThrow('no audio stream is allocated (AllocatedAudioStreams is empty)');
+    } finally {
+      if (originalStrict === undefined) delete process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
+      else process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = originalStrict;
+    }
+  });
+
   it('should select an existing allocated video stream for solicitOffer with an explicit null videoStreamId (MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1)', async () => {
     const originalStrict = process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
     process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = '1';
@@ -1030,13 +1054,15 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       endpoint.addRequiredClusterServers();
       expect(await addDevice(aggregator, endpoint)).toBeTruthy();
 
+      // With no CameraAvStreamManagement cluster bound, streamUsagePriorities defaults to empty, so the
+      // #validateStreamUsage check (which runs before stream-id resolution/validation) rejects first.
       await expect(
         endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
           streamUsage: StreamUsage.LiveView,
           originatingEndpointId: EndpointNumber(1),
           videoStreamId: null,
         }),
-      ).rejects.toThrow('no video stream is allocated (AllocatedVideoStreams is empty)');
+      ).rejects.toThrow('is not present in streamUsagePriorities');
     } finally {
       if (originalStrict === undefined) delete process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
       else process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = originalStrict;
@@ -1052,13 +1078,49 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
       endpoint.addRequiredClusterServers();
       expect(await addDevice(aggregator, endpoint)).toBeTruthy();
 
+      // See the equivalent comment in the videoStreamId variant above.
       await expect(
         endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
           streamUsage: StreamUsage.LiveView,
           originatingEndpointId: EndpointNumber(1),
           audioStreamId: null,
         }),
-      ).rejects.toThrow('no audio stream is allocated (AllocatedAudioStreams is empty)');
+      ).rejects.toThrow('is not present in streamUsagePriorities');
+    } finally {
+      if (originalStrict === undefined) delete process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
+      else process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = originalStrict;
+    }
+  });
+
+  it('should reject solicitOffer with an unsupported streamUsage when nothing is allocated (MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1)', async () => {
+    const originalStrict = process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
+    process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = '1';
+    try {
+      await expect(
+        device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
+          streamUsage: StreamUsage.Analysis,
+          originatingEndpointId: EndpointNumber(1),
+          videoStreams: [0],
+        }),
+      ).rejects.toThrow('stream usage 2 is not present in streamUsagePriorities');
+    } finally {
+      if (originalStrict === undefined) delete process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
+      else process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = originalStrict;
+    }
+  });
+
+  it('should accept solicitOffer with a supported non-default streamUsage (MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1)', async () => {
+    const originalStrict = process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
+    process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = '1';
+    try {
+      await expect(
+        device.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
+          streamUsage: StreamUsage.Recording,
+          originatingEndpointId: EndpointNumber(1),
+          videoStreams: [0],
+        }),
+      ).resolves.toBeUndefined();
+      clearExpectedWarnings('No injectable video codec available on negotiated transceivers');
     } finally {
       if (originalStrict === undefined) delete process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT;
       else process.env.MATTERBRIDGE_STRICT_WEBRTCTRANSPORT = originalStrict;

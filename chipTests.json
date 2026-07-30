@@ -221,17 +221,20 @@
     {
       "name": "WebRTC Transport Provider 2.3",
       "test": "TC_WEBRTCP_2_3.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "reset": true
     },
     {
       "name": "WebRTC Transport Provider 2.4",
       "test": "TC_WEBRTCP_2_4.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "reset": true
     },
     {
       "name": "WebRTC Transport Provider 2.5",
       "test": "TC_WEBRTCP_2_5.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "reset": true
     },
     {
       "name": "WebRTC Transport Provider 2.6",

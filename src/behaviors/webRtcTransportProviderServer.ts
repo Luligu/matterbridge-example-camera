@@ -286,12 +286,14 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * `AllocatedVideoStreams` entry when a request's `VideoStreamID` is present and `null` (Matter 1.6/1.5.1
    * Application Cluster Specification §11.5.6.1.10: "Automatically select an existing video stream").
    *
+   * Both call sites already guarantee a CameraAvStreamManagement cluster is bound before calling this:
+   * {@link #autoAssignStreams} has its own early-return when unbound, and {@link #resolveStrictStreamLists} is
+   * only reached after {@link #validateStreamUsage} has already confirmed the cluster is present.
+   *
    * @param {StreamUsage} streamUsage - The requested stream usage.
-   * @returns {number | undefined} The selected video stream id, or undefined if the endpoint has no
-   * CameraAvStreamManagement cluster or no video stream is allocated at all.
+   * @returns {number | undefined} The selected video stream id, or undefined if no video stream is allocated at all.
    */
   #selectExistingVideoStreamId(streamUsage: StreamUsage): number | undefined {
-    if (!this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)) return undefined;
     // Spread into a plain array first: state's list attributes throw on out-of-bounds index access (e.g. `[0]` on
     // an empty list) instead of returning undefined like a normal JS array.
     const allocatedVideoStreams = [...this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer).allocatedVideoStreams];
@@ -301,14 +303,12 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   /**
    * Selects an already allocated audio stream id matching the request's stream usage, falling back to the
    * endpoint's first allocated audio stream, without allocating a new one. See {@link #selectExistingVideoStreamId},
-   * the audio counterpart.
+   * the audio counterpart (including the call-site invariant that the cluster is already known to be bound).
    *
    * @param {StreamUsage} streamUsage - The requested stream usage.
-   * @returns {number | undefined} The selected audio stream id, or undefined if the endpoint has no
-   * CameraAvStreamManagement cluster or no audio stream is allocated at all.
+   * @returns {number | undefined} The selected audio stream id, or undefined if no audio stream is allocated at all.
    */
   #selectExistingAudioStreamId(streamUsage: StreamUsage): number | undefined {
-    if (!this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)) return undefined;
     const allocatedAudioStreams = [...this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer).allocatedAudioStreams];
     return (allocatedAudioStreams.find((stream) => stream.streamUsage === streamUsage) ?? allocatedAudioStreams[0])?.audioStreamId;
   }
@@ -398,6 +398,10 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * looser compatibility extension instead, since real clients observed in production (e.g. SmartThings) send
    * stream ids without ever calling `VideoStreamAllocate`/`AudioStreamAllocate` at all.
    *
+   * Only ever called (via {@link #resolveStrictStreamLists}) after {@link #validateStreamUsage} has already
+   * confirmed a CameraAvStreamManagement cluster is bound to this endpoint — an unbound endpoint has no
+   * StreamUsagePriorities to match against and is rejected there first, so this can assume the cluster is present.
+   *
    * @param {'video' | 'audio'} kind - Which stream type is being validated.
    * @param {number[]} ids - The resolved videoStreams/audioStreams id list to validate.
    * @throws {StatusResponseError} With status InvalidInState if no stream of this kind is allocated at all.
@@ -405,10 +409,9 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @throws {StatusResponseError} With status DynamicConstraintError if an id in `ids` is not present in the allocated list.
    */
   #validateAllocatedStreamIds(kind: 'video' | 'audio', ids: number[]): void {
-    const state = this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer) ? this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer) : undefined;
+    const state = this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer);
     const attributeName = kind === 'video' ? 'AllocatedVideoStreams' : 'AllocatedAudioStreams';
-    const allocatedIds =
-      kind === 'video' ? (state?.allocatedVideoStreams.map((stream) => stream.videoStreamId) ?? []) : (state?.allocatedAudioStreams.map((stream) => stream.audioStreamId) ?? []);
+    const allocatedIds = kind === 'video' ? state.allocatedVideoStreams.map((stream) => stream.videoStreamId) : state.allocatedAudioStreams.map((stream) => stream.audioStreamId);
     if (allocatedIds.length === 0) {
       throw new StatusResponseError(`MatterbridgeWebRtcTransportProviderServer: no ${kind} stream is allocated (${attributeName} is empty)`, Status.InvalidInState);
     }
@@ -419,6 +422,30 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
       if (!allocatedIds.includes(id)) {
         throw new StatusResponseError(`MatterbridgeWebRtcTransportProviderServer: ${kind} stream ${id} is not present in ${attributeName}`, Status.DynamicConstraintError);
       }
+    }
+  }
+
+  /**
+   * Validates a SolicitOffer/ProvideOffer request's StreamUsage against the bound CameraAvStreamManagement
+   * cluster's StreamUsagePriorities, per §11.5.6.1.10/§11.5.6.3.5 ("If StreamUsage is not found in the
+   * StreamUsagePriorities: Fail the command with the status code DYNAMIC_CONSTRAINT_ERROR"). This check runs
+   * before stream-id resolution/validation ({@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}),
+   * matching the Effect-on-Receipt ordering in the spec. Only enforced when {@link #isStrictWebRtcTransport} is
+   * true — no real client observed in production (see chipTests.md's "Real-World Client Traces") has ever sent a
+   * StreamUsage outside StreamUsagePriorities, so the lenient default is left unchanged.
+   *
+   * @param {StreamUsage} streamUsage - The requested stream usage.
+   * @throws {StatusResponseError} With status DynamicConstraintError if streamUsage is not present in StreamUsagePriorities.
+   */
+  #validateStreamUsage(streamUsage: StreamUsage): void {
+    const streamUsagePriorities = this.endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)
+      ? this.endpoint.stateOf(MatterbridgeCameraAvStreamManagementServer).streamUsagePriorities
+      : [];
+    if (!streamUsagePriorities.includes(streamUsage)) {
+      throw new StatusResponseError(
+        `MatterbridgeWebRtcTransportProviderServer: stream usage ${streamUsage} is not present in streamUsagePriorities`,
+        Status.DynamicConstraintError,
+      );
     }
   }
 
@@ -499,6 +526,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @returns {Promise<WebRtcTransportProvider.SolicitOfferResponse>} The newly allocated session identifier, with deferredOffer set to false: this
    * implementation has no standby/low-power state, so stream resolution and SDP offer generation both complete before this response is built.
    * @throws {StatusResponseError} With status InvalidCommand if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 and none of videoStreams, audioStreams, videoStreamId or audioStreamId is present (see {@link #isStrictWebRtcTransport}).
+   * @throws {StatusResponseError} With status DynamicConstraintError if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 and streamUsage is not present in streamUsagePriorities (see {@link #validateStreamUsage}).
    * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (see {@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}).
    * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
    */
@@ -512,6 +540,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
           Status.InvalidCommand,
         );
       }
+      this.#validateStreamUsage(request.streamUsage);
       ({ videoStreams, audioStreams } = this.#resolveStrictStreamLists(request, request.streamUsage));
     } else {
       ({ videoStreams, audioStreams } = this.#resolveStreamLists(request));
@@ -582,6 +611,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @returns {Promise<WebRtcTransportProvider.ProvideOfferResponse>} The session identifier the offer was recorded against.
    * @throws {StatusResponseError} With status NotFound if a non-null webRtcSessionId is not present in currentSessions.
    * @throws {StatusResponseError} With status InvalidCommand if webRtcSessionId is null, MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1, and none of videoStreams, audioStreams, videoStreamId or audioStreamId is present (see {@link #isStrictWebRtcTransport}).
+   * @throws {StatusResponseError} With status DynamicConstraintError if webRtcSessionId is null, MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1, and streamUsage is not present in streamUsagePriorities (see {@link #validateStreamUsage}).
    * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError if webRtcSessionId is null and MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (see {@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}).
    * @throws {StatusResponseError} With status ConstraintError if webRtcSessionId is null and neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
    */
@@ -598,6 +628,7 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
             Status.InvalidCommand,
           );
         }
+        this.#validateStreamUsage(request.streamUsage ?? StreamUsage.LiveView);
         ({ videoStreams, audioStreams } = this.#resolveStrictStreamLists(request, request.streamUsage ?? StreamUsage.LiveView));
       } else {
         ({ videoStreams, audioStreams } = this.#resolveStreamLists(request));
