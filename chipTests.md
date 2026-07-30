@@ -154,7 +154,7 @@ python3 src/python_testing/TC_AVSUM_2_8.py --endpoint 7 # same has_feature() `an
 # Test bug: jumps from step 18 to step 22 without calling skip_step() for steps 19-21 when DPTZ is unsupported
 python3 src/python_testing/TC_AVSUM_2_9.py --endpoint 7
 
-# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (21/31 pass, 7 skipped (app-pipe/Privacy feature/test bug/CHIP client crash); see Known Issues below)
+# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (21/22 pass, 9 skipped (app-pipe/Privacy feature/test bug/CHIP client crash/unimplemented SFrame feature); see Known Issues below)
 python3 src/python_testing/TC_WEBRTCP_2_1.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_2.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_3.py --endpoint 6
@@ -186,9 +186,10 @@ python3 src/python_testing/TC_WEBRTCP_2_21.py --endpoint 6
 # CHIP reference client's native WebRTC stack in other test scenarios; reverted (see Known Issues #5)
 python3 src/python_testing/TC_WEBRTCP_2_22.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_23.py --endpoint 6
-# Gap: unsupported cipher suite is accepted instead of rejected with DynamicConstraintError (see Known Issues #6)
+# Skipped ("skip": true in chipTests.json): SFrame E2E Encryption feature isn't implemented by matter.js at all
+# (no SFrameConfig field, no feature bit) — see Known Issues #6
 python3 src/python_testing/TC_WEBRTCP_2_24.py --endpoint 6
-# Gap: same cipher-suite validation gap as 2.24 (see Known Issues #6)
+# Skipped: same missing SFrame support as 2.24 (see Known Issues #6)
 python3 src/python_testing/TC_WEBRTCP_2_25.py --endpoint 6
 # Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND (see Known Issues #9)
 python3 src/python_testing/TC_WEBRTCP_2_27.py --endpoint 6
@@ -259,8 +260,8 @@ Root-caused (2026-07-30): [weriftSession.ts](src/webrtc/weriftSession.ts)'s `onI
 
 Both tests are now `"skip": true` in `chipTests.json` rather than left to fail (or crash) on every run.
 
-**#6 — No cipher-suite validation (2 tests: 2.24, 2.25).**
-Test sends an unsupported ICE/DTLS cipher suite and expects `DynamicConstraintError`; our handlers have no cipher-suite check anywhere and just accept it. Real gap — would need to validate the requested cipher suite against a supported list before proceeding.
+**#6 — matter.js doesn't implement the SFrame E2E Encryption feature at all, now `"skip": true` (2 tests: 2.24, 2.25).**
+Originally logged as "no cipher-suite validation"; root-caused further (2026-07-30). Both tests send a `SFrameConfig` struct on `SolicitOffer` and expect `DynamicConstraintError` for an unsupported cipher suite / wrong key length. Checked `@matter/model`'s generated `web-rtc-transport-provider.element.ts` (the source of truth for the TLV schema matterbridge's cluster server is built from): `SolicitOffer`'s field list only goes up to `AudioStreams` (id `0x9`) — there is no `SFrameConfig` field anywhere, and `FeatureMap` only declares `METADATA`, no `SFRAME` bit. So the CHIP test's `SFrameConfig` is an unrecognized TLV field that gets silently dropped before the command ever reaches our handler — the DUT responds as if no encryption config were requested at all, hence "command succeeded" instead of `DynamicConstraintError`. This isn't a validation gap our handler code can close; it requires matter.js itself to add SFrame support to the cluster model first. Marked `"skip": true` in `chipTests.json` rather than left to fail every run.
 
 **#7 — RESOLVED. `deferredOffer` was hardcoded `true` (originally 3 tests: 2.2, 2.28, 2.32).**
 [webRtcTransportProviderServer.ts](src/behaviors/webRtcTransportProviderServer.ts):565 used to always return `deferredOffer: true` from `solicitOffer`, but this implementation has no standby/low-power state anywhere — stream resolution and SDP offer generation both complete synchronously before the response is built (the only delay is `#invokeDeferred`'s 250ms anti-race buffer before the `Offer` invoke, negligible next to the spec's "up to 30 seconds" standby allowance). `true` was never an accurate value; `DeferredOffer` (Matter 1.6 §11.5.6.2.2) exists specifically for the "Battery Camera in Standby Flow" (§11.4.3.2), which this device doesn't model. **Fixed** (2026-07-29) by changing the hardcoded value to `deferredOffer: false`. Verified: 2.28 and 2.32 now pass cleanly. 2.2 gets past this check too, but exposes a separate, previously-masked gap — see #11.

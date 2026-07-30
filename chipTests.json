@@ -470,13 +470,15 @@
       "name": "WebRTC Transport Provider 2.24",
       "test": "TC_WEBRTCP_2_24.py",
       "args": ["--endpoint 6"],
-      "comment": "Gap: unsupported cipher suite is accepted instead of rejected with DynamicConstraintError; no cipher-suite validation implemented (see chipTests.md Known Issues #6)."
+      "skip": true,
+      "comment": "Requires the SFrame E2E Encryption feature, which matter.js doesn't implement at all (no SFrameConfig field, no feature bit) — see chipTests.md Known Issues #6."
     },
     {
       "name": "WebRTC Transport Provider 2.25",
       "test": "TC_WEBRTCP_2_25.py",
       "args": ["--endpoint 6"],
-      "comment": "Gap: same cipher-suite validation gap as WebRTC Transport Provider 2.24 (see chipTests.md Known Issues #6)."
+      "skip": true,
+      "comment": "Requires the SFrame E2E Encryption feature, which matter.js doesn't implement at all (no SFrameConfig field, no feature bit) — see chipTests.md Known Issues #6."
     },
     {
       "name": "WebRTC Transport Provider 2.27",

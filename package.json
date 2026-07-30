@@ -126,6 +126,7 @@
     "chip:test:chime": "node scripts/run-chip-tests.mjs --test TC_CHIME",
     "chip:test:avsm": "node scripts/run-chip-tests.mjs --test TC_AVSM",
     "chip:test:avsum": "node scripts/run-chip-tests.mjs --test TC_AVSUM",
+    "chip:test:webrtcp": "node scripts/run-chip-tests.mjs --test TC_WEBRTCP",
     "chip:stop": "node scripts/run-chip-tests.mjs --stop",
     "reset": "npm run deepClean && npm run softReset",
     "softReset": "npm install --no-fund --no-audit && npm prune --no-fund --no-audit && npm link --no-fund --no-audit matterbridge && npm run build && npm run typecheck",
