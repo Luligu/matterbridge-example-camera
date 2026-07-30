@@ -37,6 +37,8 @@
  * "resetClusterGlobs", above) and restart the matterbridge process before that test runs, without
  * recreating the container (no docker rm/pull/npm install/build). This is much cheaper than --start and is
  * only needed for tests that depend on starting from a clean, un-allocated device state.
+ * Each yamlTests/phytonTests entry may also set a "comment" string, printed under a failing/skipped result
+ * in the summary log.
  */
 
 /* eslint-disable no-console */

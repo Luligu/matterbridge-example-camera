@@ -98,10 +98,16 @@ do not trust local lint/format/typecheck output.
     // declares (e.g. "endpoint") become CLI flags, so "args": ["--endpoint 6"] overrides the file's own
     // default. Pass "--PICS /root/matterbridge.pics" in args when a hand-verified section exists for the
     // cluster under test (see §1) — the tool's own default is the generic ci-pics-values file.
+    // "input"/"reset"/"comment" (documented on the phytonTests entry below) apply here identically —
+    // run-chip-tests.mjs's runTests() reads them off every entry in yamlTests/phytonTests the same way,
+    // regardless of kind.
     {
       "name": "Human-readable label, matched by --test",
       "test": "Test_TC_SOMETHING_1_2",
       "args": ["--endpoint 6"],
+      "input": "y\ny\n", // optional, piped to stdin for tests that prompt for interactive confirmation
+      "reset": true, // optional: clear resetClusterGlobs + restart matterbridge before this test
+      "comment": "optional free text, printed under a failing/skipped result in the summary log",
     },
   ],
   "phytonTests": [

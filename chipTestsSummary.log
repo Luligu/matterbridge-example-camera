@@ -1,4 +1,4 @@
-Chip tests run started at 2026-07-30T05:50:14.191Z
+Chip tests run started at 2026-07-30T06:03:06.611Z
 
 ✅ WebRTC Transport Provider 2.1 (TC_WEBRTCP_2_1.py)
 ✅ WebRTC Transport Provider 2.2 (TC_WEBRTCP_2_2.py)
@@ -37,11 +37,10 @@ Chip tests run started at 2026-07-30T05:50:14.191Z
    ↳ Gap: same cipher-suite validation gap as WebRTC Transport Provider 2.24 (see chipTests.md Known Issues #6).
 ❌ WebRTC Transport Provider 2.27 (TC_WEBRTCP_2_27.py)
    ↳ Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9).
-❌ WebRTC Transport Provider 2.28 (TC_WEBRTCP_2_28.py)
-❌ WebRTC Transport Provider 2.29 (TC_WEBRTCP_2_29.py)
-   ↳ Fixed (Known Issues #8, ProvideOffer variant): passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container; fails with the default container, which doesn't set that env var.
-❌ WebRTC Transport Provider 2.30 (TC_WEBRTCP_2_30.py)
-❌ WebRTC Transport Provider 2.31 (TC_WEBRTCP_2_31.py)
-❌ WebRTC Transport Provider 2.32 (TC_WEBRTCP_2_32.py)
+✅ WebRTC Transport Provider 2.28 (TC_WEBRTCP_2_28.py)
+✅ WebRTC Transport Provider 2.29 (TC_WEBRTCP_2_29.py)
+✅ WebRTC Transport Provider 2.30 (TC_WEBRTCP_2_30.py)
+✅ WebRTC Transport Provider 2.31 (TC_WEBRTCP_2_31.py)
+✅ WebRTC Transport Provider 2.32 (TC_WEBRTCP_2_32.py)
 
-Summary: 15/31 tests passed.
+Summary: 20/31 tests passed.

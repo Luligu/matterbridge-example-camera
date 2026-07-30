@@ -350,33 +350,39 @@
       "name": "WebRTC Transport Provider 2.27",
       "test": "TC_WEBRTCP_2_27.py",
       "args": ["--endpoint 6"],
+      "reset": true,
       "comment": "Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9)."
     },
     {
       "name": "WebRTC Transport Provider 2.28",
       "test": "TC_WEBRTCP_2_28.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "reset": true
     },
     {
       "name": "WebRTC Transport Provider 2.29",
       "test": "TC_WEBRTCP_2_29.py",
       "args": ["--endpoint 6"],
+      "reset": true,
       "comment": "Fixed (Known Issues #8, ProvideOffer variant): passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container; fails with the default container, which doesn't set that env var."
     },
     {
       "name": "WebRTC Transport Provider 2.30",
       "test": "TC_WEBRTCP_2_30.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "reset": true
     },
     {
       "name": "WebRTC Transport Provider 2.31",
       "test": "TC_WEBRTCP_2_31.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "reset": true
     },
     {
       "name": "WebRTC Transport Provider 2.32",
       "test": "TC_WEBRTCP_2_32.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "reset": true
     }
   ]
 }
