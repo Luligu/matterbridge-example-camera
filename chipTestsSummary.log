@@ -1,6 +1,113 @@
-Chip tests run started at 2026-07-30T07:24:20.865Z
+Chip tests run started at 2026-07-30T07:44:54.306Z
 
-❌ Camera AV Settings User Level Management 2.8 (TC_AVSUM_2_8.py)
-   ↳ Test bug: same has_feature() `and`-precedence gating bug as Camera AV Settings User Level Management 2.7 — see its comment.
+✅ Bridged Device Basic Information 2.2 (YAML) (Test_TC_BRBINFO_2_2)
+✅ Identify 2.1 (YAML) (Test_TC_I_2_1)
+✅ Identify 2.2 (YAML) (Test_TC_I_2_2)
+✅ Identify 2.3 (YAML) (Test_TC_I_2_3)
+✅ Power Source 2.1 (YAML) (Test_TC_PS_2_1)
+✅ Power Source 2.2 (YAML) (Test_TC_PS_2_2)
+✅ Generic device basic composition (TC_DeviceBasicComposition.py)
+✅ Generic device conformance (TC_DeviceConformance.py)
+✅ Generic device default warnings (TC_DefaultWarnings.py)
+✅ Basic Information 2.1 (TC_BINFO_2_1.py)
+✅ Basic Information 2.2 (TC_BINFO_2_2.py)
+✅ Basic Information 3.1 (TC_BINFO_3_1.py)
+⏭️ Basic Information 3.2 (TC_BINFO_3_2.py)
+   ↳ Requires the CSA reference app's --app-pipe debug hook.
+✅ Bridged Device Basic Information 2.1 (TC_BRBINFO_2_1.py)
+✅ Bridged Device Basic Information 3.1 (TC_BRBINFO_3_1.py)
+⏭️ Bridged Device Basic Information 3.2 (TC_BRBINFO_3_2.py)
+   ↳ Requires the CSA reference app's --app-pipe debug hook.
+⏭️ Bridged Device Basic Information 4.1 (TC_BRBINFO_4_1.py)
+   ↳ Requires the fabric-sync-app/fabric-admin/fabric-bridge test harness, a different topology entirely (not something --endpoint against a single bridge can satisfy).
+✅ Identify 2.4 (TC_I_2_4.py)
+✅ Power Source 2.3 (TC_PS_2_3.py)
+✅ Chime cluster 2.1 (TC_CHIME_2_1.py)
+✅ Chime cluster 2.2 (TC_CHIME_2_2.py)
+✅ Chime cluster 2.3 (TC_CHIME_2_3.py)
+✅ Chime cluster 2.4 (TC_CHIME_2_4.py)
+✅ Chime cluster 2.5 (TC_CHIME_2_5.py)
+✅ Chime cluster 2.6 (TC_CHIME_2_6.py)
+✅ Camera AV Stream Management 2.1 (TC_AVSM_2_1.py)
+✅ Camera AV Stream Management 2.2 (TC_AVSM_2_2.py)
+✅ Camera AV Stream Management 2.3 (TC_AVSM_2_3.py)
+✅ Camera AV Stream Management 2.4 (TC_AVSM_2_4.py)
+✅ Camera AV Stream Management 2.5 (TC_AVSM_2_5.py)
+✅ Camera AV Stream Management 2.6 (TC_AVSM_2_6.py)
+❌ Camera AV Stream Management 2.7 (TC_AVSM_2_7.py)
+   ↳ Test wrong assumption: step 27 escalates MaxFrameRate by +20 per maxConcurrentEncoders iteration (starting at minFrameRate+15) then again for the final exhaustion attempt, to force RESOURCE_EXHAUSTED; with maxConcurrentEncoders=1 that final attempt requests 65fps, which exceeds our declared VideoSensorParams.MaxFps (60) and is correctly rejected as DYNAMIC_CONSTRAINT_ERROR first, per Matter 1.6/1.5.1 §11.2.8.4.12's own Effect on Receipt order (unsupported-field checks precede the resource check). Any device with a finite MaxFps hits this same issue eventually — it's not specific to our declared value.
+✅ Camera AV Stream Management 2.8 (TC_AVSM_2_8.py)
+✅ Camera AV Stream Management 2.9 (TC_AVSM_2_9.py)
+✅ Camera AV Stream Management 2.10 (TC_AVSM_2_10.py)
+✅ Camera AV Stream Management 2.11 (TC_AVSM_2_11.py)
+✅ Camera AV Stream Management 2.12 (TC_AVSM_2_12.py)
+✅ Camera AV Stream Management 2.13 (TC_AVSM_2_13.py)
+✅ Camera AV Stream Management 2.14 (TC_AVSM_2_14.py)
+✅ Camera AV Stream Management 2.15 (TC_AVSM_2_15.py)
+⏭️ Camera AV Stream Management 2.16 (TC_AVSM_2_16.py)
+   ↳ Requires the CSA reference app's --app-pipe debug hook.
+⏭️ Camera AV Stream Management 2.17 (TC_AVSM_2_17.py)
+   ↳ Requires the CSA reference app's --app-pipe debug hook.
+✅ Camera AV Stream Management 2.18 (TC_AVSM_2_18.py)
+✅ Camera AV Stream Management 2.19 (TC_AVSM_2_19.py)
+✅ Camera AV Stream Management 2.20 (TC_AVSM_2_20.py)
+✅ Camera AV Stream Management 2.21 (TC_AVSM_2_21.py)
+✅ Camera AV Stream Management stream reuse range params (TC_AVSM_StreamReuseRangeParams.py)
+⏭️ Camera AV Stream Management VideoStreamsPersistence (TC_AVSM_VideoStreamsPersistence.py)
+   ↳ Requires the manufacturer-specific FaultInjection cluster (0xFFF1_FC06) on endpoint 0 to inject kFault_ClearInMemoryAllocatedVideoStreams/kFault_LoadPersistentCameraAVSMAttributes — a CI-only debug cluster the CSA reference apps implement, not something a real device (including Matterbridge) exposes.
+✅ Camera AV Settings User Level Management 2.1 (TC_AVSUM_2_1.py)
+✅ Camera AV Settings User Level Management 2.2 (TC_AVSUM_2_2.py)
+✅ Camera AV Settings User Level Management 2.3 (TC_AVSUM_2_3.py)
+✅ Camera AV Settings User Level Management 2.4 (TC_AVSUM_2_4.py)
+✅ Camera AV Settings User Level Management 2.5 (TC_AVSUM_2_5.py)
+✅ Camera AV Settings User Level Management 2.6 (TC_AVSUM_2_6.py)
+⏭️ Camera AV Settings User Level Management 2.7 (TC_AVSUM_2_7.py)
+   ↳ Requires the optional DigitalPTZ feature.
+⏭️ Camera AV Settings User Level Management 2.8 (TC_AVSUM_2_8.py)
+   ↳ Requires the optional DigitalPTZ feature.
+⏭️ Camera AV Settings User Level Management 2.9 (TC_AVSUM_2_9.py)
+   ↳ Requires the optional DigitalPTZ feature.
+✅ WebRTC Transport Provider 2.1 (TC_WEBRTCP_2_1.py)
+✅ WebRTC Transport Provider 2.2 (TC_WEBRTCP_2_2.py)
+✅ WebRTC Transport Provider 2.3 (TC_WEBRTCP_2_3.py)
+✅ WebRTC Transport Provider 2.4 (TC_WEBRTCP_2_4.py)
+✅ WebRTC Transport Provider 2.5 (TC_WEBRTCP_2_5.py)
+✅ WebRTC Transport Provider 2.6 (TC_WEBRTCP_2_6.py)
+⏭️ WebRTC Transport Provider 2.7 (TC_WEBRTCP_2_7.py)
+   ↳ Requires the CSA reference app's --app-pipe debug hook.
+⏭️ WebRTC Transport Provider 2.8 (TC_WEBRTCP_2_8.py)
+   ↳ Requires the optional Privacy feature.
+✅ WebRTC Transport Provider 2.9 (TC_WEBRTCP_2_9.py)
+✅ WebRTC Transport Provider 2.10 (TC_WEBRTCP_2_10.py)
+✅ WebRTC Transport Provider 2.11 (TC_WEBRTCP_2_11.py)
+❌ WebRTC Transport Provider 2.12 (TC_WEBRTCP_2_12.py)
+   ↳ Gap: no enforced max concurrent WebRTC sessions; DUT never sends End(OutOfResources) (see chipTests.md Known Issues #4).
+⏭️ WebRTC Transport Provider 2.13 (TC_WEBRTCP_2_13.py)
+   ↳ Requires the CSA reference app's --app-pipe debug hook.
+⏭️ WebRTC Transport Provider 2.14 (TC_WEBRTCP_2_14.py)
+   ↳ Requires the optional Privacy feature.
+✅ WebRTC Transport Provider 2.15 (TC_WEBRTCP_2_15.py)
+❌ WebRTC Transport Provider 2.16 (TC_WEBRTCP_2_16.py)
+   ↳ Gap: same session-capacity issue as WebRTC Transport Provider 2.12, but the ProvideOffer variant fails with UnsupportedCluster instead of reaching the limit (see chipTests.md Known Issues #4).
+✅ WebRTC Transport Provider 2.17 (TC_WEBRTCP_2_17.py)
+✅ WebRTC Transport Provider 2.18 (TC_WEBRTCP_2_18.py)
+✅ WebRTC Transport Provider 2.19 (TC_WEBRTCP_2_19.py)
+✅ WebRTC Transport Provider 2.20 (TC_WEBRTCP_2_20.py)
+✅ WebRTC Transport Provider 2.21 (TC_WEBRTCP_2_21.py)
+❌ WebRTC Transport Provider 2.22 (TC_WEBRTCP_2_22.py)
+   ↳ Gap: 'TH establishes a valid WebRTC session with DUT' times out during ICE/DTLS completion; not yet root-caused (see chipTests.md Known Issues #5).
+❌ WebRTC Transport Provider 2.23 (TC_WEBRTCP_2_23.py)
+   ↳ Gap: same session-establishment timeout as WebRTC Transport Provider 2.22 (see chipTests.md Known Issues #5).
+❌ WebRTC Transport Provider 2.24 (TC_WEBRTCP_2_24.py)
+   ↳ Gap: unsupported cipher suite is accepted instead of rejected with DynamicConstraintError; no cipher-suite validation implemented (see chipTests.md Known Issues #6).
+❌ WebRTC Transport Provider 2.25 (TC_WEBRTCP_2_25.py)
+   ↳ Gap: same cipher-suite validation gap as WebRTC Transport Provider 2.24 (see chipTests.md Known Issues #6).
+❌ WebRTC Transport Provider 2.27 (TC_WEBRTCP_2_27.py)
+   ↳ Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9).
+✅ WebRTC Transport Provider 2.28 (TC_WEBRTCP_2_28.py)
+✅ WebRTC Transport Provider 2.29 (TC_WEBRTCP_2_29.py)
+✅ WebRTC Transport Provider 2.30 (TC_WEBRTCP_2_30.py)
+✅ WebRTC Transport Provider 2.31 (TC_WEBRTCP_2_31.py)
+✅ WebRTC Transport Provider 2.32 (TC_WEBRTCP_2_32.py)
 
-Summary: 0/1 tests passed.
+Summary: 67/75 tests passed (13 skipped).

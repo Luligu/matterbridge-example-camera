@@ -315,19 +315,22 @@
       "name": "Camera AV Settings User Level Management 2.7",
       "test": "TC_AVSUM_2_7.py",
       "args": ["--endpoint 7"],
-      "comment": "Test bug: gated by \"has_feature(..., kDigitalPTZ) and has_feature(..., kVideo)\" — has_feature() returns a functools.partial (always truthy, no __bool__), so Python's `and` just returns the second operand and the kDigitalPTZ check is silently discarded at decorator-eval time. Only kVideo actually gates the test at runtime, so it wrongly runs against our device (Video supported, DigitalPTZ never declared anywhere in src/), sends DPTZSetViewport, and expects NotFound where UnsupportedCommand is the spec-correct response for a command that doesn't exist without the DigitalPTZ feature."
+      "skip": true,
+      "comment": "Requires the optional DigitalPTZ feature."
     },
     {
       "name": "Camera AV Settings User Level Management 2.8",
       "test": "TC_AVSUM_2_8.py",
       "args": ["--endpoint 7"],
-      "comment": "Test bug: same has_feature() `and`-precedence gating bug as Camera AV Settings User Level Management 2.7 — see its comment."
+      "skip": true,
+      "comment": "Requires the optional DigitalPTZ feature."
     },
     {
       "name": "Camera AV Settings User Level Management 2.9",
       "test": "TC_AVSUM_2_9.py",
       "args": ["--endpoint 7"],
-      "comment": "Test bug: when DPTZ is unsupported it jumps from step 18 to step 22 without calling skip_step() for steps 19-21, which the framework rejects as an out-of-order step."
+      "skip": true,
+      "comment": "Requires the optional DigitalPTZ feature."
     },
     {
       "name": "WebRTC Transport Provider 2.1",
@@ -373,7 +376,8 @@
       "name": "WebRTC Transport Provider 2.8",
       "test": "TC_WEBRTCP_2_8.py",
       "args": ["--endpoint 6"],
-      "comment": "Gap: writing SoftRecordingPrivacyModeEnabled returns UnsupportedAttribute, Privacy feature not implemented (see chipTests.md Known Issues #3)."
+      "skip": true,
+      "comment": "Requires the optional Privacy feature."
     },
     {
       "name": "WebRTC Transport Provider 2.9",
@@ -407,7 +411,8 @@
       "name": "WebRTC Transport Provider 2.14",
       "test": "TC_WEBRTCP_2_14.py",
       "args": ["--endpoint 6"],
-      "comment": "Gap: same SoftRecordingPrivacyModeEnabled issue as WebRTC Transport Provider 2.8 (see chipTests.md Known Issues #3)."
+      "skip": true,
+      "comment": "Requires the optional Privacy feature."
     },
     {
       "name": "WebRTC Transport Provider 2.15",

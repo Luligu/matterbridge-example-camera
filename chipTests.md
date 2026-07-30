@@ -163,7 +163,7 @@ python3 src/python_testing/TC_WEBRTCP_2_5.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_6.py --endpoint 6
 # Gap: HardPrivacyModeOn never flips when the simulated physical privacy switch is toggled (see Known Issues #2)
 python3 src/python_testing/TC_WEBRTCP_2_7.py --endpoint 6
-# Gap: writing SoftRecordingPrivacyModeEnabled returns UnsupportedAttribute, Privacy feature not implemented (see Known Issues #3)
+# Test bug: no live gate for the optional Privacy feature (Conformance=O); our UnsupportedAttribute response is spec-correct (see Known Issues #3)
 python3 src/python_testing/TC_WEBRTCP_2_8.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_9.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_10.py --endpoint 6
@@ -172,7 +172,7 @@ python3 src/python_testing/TC_WEBRTCP_2_11.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_12.py --endpoint 6
 # Gap: same HardPrivacyModeOn issue as 2.7 (see Known Issues #2)
 python3 src/python_testing/TC_WEBRTCP_2_13.py --endpoint 6
-# Gap: same SoftRecordingPrivacyModeEnabled issue as 2.8 (see Known Issues #3)
+# Test bug: same missing Privacy-feature live gate as 2.8 (see Known Issues #3)
 python3 src/python_testing/TC_WEBRTCP_2_14.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_15.py --endpoint 6
 # Gap: requires --PICS .../ci-pics-values, then fails with UnsupportedCluster instead of reaching session-capacity limit (see Known Issues #4)
@@ -225,8 +225,23 @@ Fixed by testing the `MATTERBRIDGE_STRICT_WEBRTCTRANSPORT` environment variable 
 **#2 — `HardPrivacyModeOn` never toggles (2 tests: 2.7, 2.13).**
 [camera.ts](src/devices/camera.ts):282, [audioDoorbell.ts](src/devices/audioDoorbell.ts):176, and [intercom.ts](src/devices/intercom.ts):200 all hardcode `hardPrivacyModeOn: false` with no logic to ever change it. These tests simulate toggling a physical privacy switch and expect the attribute to flip to `true`. Not implemented at all — would need a way to simulate/wire a hardware privacy switch.
 
-**#3 — `SoftRecordingPrivacyModeEnabled` (and the whole Privacy feature) isn't implemented (2 tests: 2.8, 2.14).**
-The `CameraAvStreamManagement.Feature.Privacy` feature (which brings `SoftLivestreamPrivacyModeEnabled`/`SoftRecordingPrivacyModeEnabled`) isn't in our enabled feature list ([cameraAvStreamManagementServer.ts](src/behaviors/cameraAvStreamManagementServer.ts):90-95 declares Video/Audio/Snapshot/ImageControl only), so writing the attribute returns `UnsupportedAttribute`. This is also the same feature referenced by `TC_AVSM_2_17` (already excluded above as "Requires Privacy Feature"). A real feature gap, not a bug.
+**#3 — RECLASSIFIED as a test bug (was: "gap"), not an implementation gap (2 tests: 2.8, 2.14).**
+`CameraAvStreamManagement.Feature.Privacy` (Matter 1.6 Application Cluster Spec §11.2, feature bit `PRIV`, listed
+**Conformance = O — optional**, confirmed directly in `Matter-1.6-Application-Cluster-Specification.html`'s
+feature table) isn't in our enabled feature list
+([cameraAvStreamManagementServer.ts](src/behaviors/cameraAvStreamManagementServer.ts):91-94 declares
+Video/Audio/Snapshot/ImageControl only), so writing `SoftRecordingPrivacyModeEnabled` correctly returns
+`UnsupportedAttribute` — the attribute genuinely doesn't exist on a cluster instance that doesn't request the
+optional feature it belongs to. `TC_WEBRTCP_2_8.py`/`2_14.py` unconditionally write it and assert `Success`, with
+no `@run_if_endpoint_matches(has_feature(...))` live gate for the Privacy feature — unlike properly-written
+sibling tests for other optional features (`TC_AVSM_2_3`/`2_8` gate on Watermark/Osd this way, `TC_AVSUM_2_4`-`2_6`
+gate on MechanicalPresets this way). The only nod to conditionality is `pics_TC_WEBRTCP_2_8()` declaring
+`AVSM.S.A0013` in its static PICS list — but that mechanism only affects test-suite-level selection, not a direct
+`python3 TC_WEBRTCP_2_8.py` invocation; confirmed empirically that the test still fails identically with
+`--PICS /root/matterbridge.pics` passed (which, further, has no `AVSM` section at all — the whole cluster isn't
+in that hand-verified file yet). `TC_AVSM_2_17` references the same optional feature and correctly self-skips via
+a live `has_feature` gate, which is the behavior 2.8/2.14 should have had. Our response is spec-correct; no
+production code change is warranted here.
 
 **#4 — No enforced max concurrent WebRTC sessions (2 tests: 2.12, 2.16).**
 Both tests need `--PICS src/app/tests/suites/certification/ci-pics-values` (sets `PICS_SDK_CI_ONLY`) to run non-interactively — otherwise they crash with `'NoneType' object has no attribute 'strip'` trying to prompt for a number interactively. With that flag: 2.12 times out waiting for the DUT to send `End(reason=OutOfResources)` after 5 solicited sessions — `solicitOffer`/`provideOffer` never check any session-count limit before accepting. 2.16 (the `ProvideOffer` variant) instead fails with `InteractionModelError: UnsupportedCluster` partway through — needs separate investigation, may be a different underlying issue in the `ProvideOffer` capacity-exhaustion path. Fix direction: add a configurable max-concurrent-sessions check to `solicitOffer`/`provideOffer` that rejects with `End(OutOfResources)` once reached.
