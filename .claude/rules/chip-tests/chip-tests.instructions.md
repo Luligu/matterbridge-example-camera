@@ -98,7 +98,7 @@ do not trust local lint/format/typecheck output.
     // declares (e.g. "endpoint") become CLI flags, so "args": ["--endpoint 6"] overrides the file's own
     // default. Pass "--PICS /root/matterbridge.pics" in args when a hand-verified section exists for the
     // cluster under test (see §1) — the tool's own default is the generic ci-pics-values file.
-    // "input"/"reset"/"comment" (documented on the phytonTests entry below) apply here identically —
+    // "input"/"reset"/"skip"/"comment" (documented on the phytonTests entry below) apply here identically —
     // run-chip-tests.mjs's runTests() reads them off every entry in yamlTests/phytonTests the same way,
     // regardless of kind.
     {
@@ -107,6 +107,7 @@ do not trust local lint/format/typecheck output.
       "args": ["--endpoint 6"],
       "input": "y\ny\n", // optional, piped to stdin for tests that prompt for interactive confirmation
       "reset": true, // optional: clear resetClusterGlobs + restart matterbridge before this test
+      "skip": true, // optional: list the test (name, comment) but never invoke it — see below
       "comment": "optional free text, printed under a failing/skipped result in the summary log",
     },
   ],
@@ -118,6 +119,7 @@ do not trust local lint/format/typecheck output.
       "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"], // optional, split on whitespace per entry
       "input": "y\ny\n", // optional, piped to stdin for tests that prompt for interactive confirmation
       "reset": true, // optional: clear resetClusterGlobs + restart matterbridge before this test
+      "skip": true, // optional: list the test (name, comment) but never invoke it — see below
       "comment": "optional free text, printed under a failing/skipped result in the summary log",
     },
   ],
@@ -218,6 +220,13 @@ something other than a PICS flag:
 
 Check a test's actual gating (`grep -n 'run_if_endpoint_matches\|has_attribute\|app_pipe\|app-pipe' src/python_testing/TC_X.py`
 inside the container) before concluding a PICS change would unlock it.
+
+For a test that's permanently inapplicable for one of the reasons above, set `"skip": true` on its
+`chipTests.json` entry (§3) instead of leaving it to fail on every run. This keeps the entry (name, args,
+`comment` explaining why) in the file for documentation/discoverability, but `runTests()` never invokes it —
+reported as `⏭️` in the summary, excluded from the pass/fail ratio. Don't use `"skip": true` for a real,
+fixable gap (e.g. Known Issues #4/#5/#6 in `chipTests.md`) — only for tests gated on something this harness
+can never provide.
 
 ## 7. Windows/Git Bash quoting
 

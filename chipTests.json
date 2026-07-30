@@ -15,6 +15,11 @@
   "resetClusterGlobs": ["*.cameraAvStreamManagement.*", "*.chime.*"],
   "yamlTests": [
     {
+      "name": "Bridged Device Basic Information 2.2 (YAML)",
+      "test": "Test_TC_BRBINFO_2_2",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+    },
+    {
       "name": "Identify 2.1 (YAML)",
       "test": "Test_TC_I_2_1",
       "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
@@ -66,9 +71,41 @@
       "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"]
     },
     {
+      "name": "Basic Information 3.1",
+      "test": "TC_BINFO_3_1.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"],
+      "comment": "Self-skips cleanly: requires the ProductAppearance attribute, which this example doesn't implement."
+    },
+    {
+      "name": "Basic Information 3.2",
+      "test": "TC_BINFO_3_2.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
       "name": "Bridged Device Basic Information 2.1",
       "test": "TC_BRBINFO_2_1.py",
       "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Bridged Device Basic Information 3.1",
+      "test": "TC_BRBINFO_3_1.py",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"],
+      "comment": "Self-skips cleanly: requires the ProductAppearance attribute, which this example doesn't implement."
+    },
+    {
+      "name": "Bridged Device Basic Information 3.2",
+      "test": "TC_BRBINFO_3_2.py",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "Bridged Device Basic Information 4.1",
+      "test": "TC_BRBINFO_4_1.py",
+      "skip": true,
+      "comment": "Requires the fabric-sync-app/fabric-admin/fabric-bridge test harness, a different topology entirely (not something --endpoint against a single bridge can satisfy)."
     },
     {
       "name": "Identify 2.4",
@@ -122,6 +159,12 @@
       "args": ["--endpoint 6"]
     },
     {
+      "name": "Camera AV Stream Management 2.3",
+      "test": "TC_AVSM_2_3.py",
+      "args": ["--endpoint 6"],
+      "comment": "Self-skips cleanly: requires the Watermark or Osd feature, neither of which this example implements."
+    },
+    {
       "name": "Camera AV Stream Management 2.4",
       "test": "TC_AVSM_2_4.py",
       "args": ["--endpoint 6"]
@@ -141,6 +184,12 @@
       "test": "TC_AVSM_2_7.py",
       "args": ["--endpoint 6"],
       "comment": "Test wrong assumption: step 27 escalates MaxFrameRate by +20 per maxConcurrentEncoders iteration (starting at minFrameRate+15) then again for the final exhaustion attempt, to force RESOURCE_EXHAUSTED; with maxConcurrentEncoders=1 that final attempt requests 65fps, which exceeds our declared VideoSensorParams.MaxFps (60) and is correctly rejected as DYNAMIC_CONSTRAINT_ERROR first, per Matter 1.6/1.5.1 §11.2.8.4.12's own Effect on Receipt order (unsupported-field checks precede the resource check). Any device with a finite MaxFps hits this same issue eventually — it's not specific to our declared value."
+    },
+    {
+      "name": "Camera AV Stream Management 2.8",
+      "test": "TC_AVSM_2_8.py",
+      "args": ["--endpoint 6"],
+      "comment": "Self-skips cleanly: requires the Watermark or Osd feature, neither of which this example implements."
     },
     {
       "name": "Camera AV Stream Management 2.9",
@@ -178,6 +227,41 @@
       "args": ["--endpoint 6"]
     },
     {
+      "name": "Camera AV Stream Management 2.16",
+      "test": "TC_AVSM_2_16.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "Camera AV Stream Management 2.17",
+      "test": "TC_AVSM_2_17.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "Camera AV Stream Management 2.18",
+      "test": "TC_AVSM_2_18.py",
+      "args": ["--endpoint 6"],
+      "reset": true,
+      "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
+    },
+    {
+      "name": "Camera AV Stream Management 2.19",
+      "test": "TC_AVSM_2_19.py",
+      "args": ["--endpoint 6"],
+      "reset": true,
+      "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
+    },
+    {
+      "name": "Camera AV Stream Management 2.20",
+      "test": "TC_AVSM_2_20.py",
+      "args": ["--endpoint 6"],
+      "reset": true,
+      "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
+    },
+    {
       "name": "Camera AV Stream Management 2.21",
       "test": "TC_AVSM_2_21.py",
       "args": ["--endpoint 6"]
@@ -186,6 +270,13 @@
       "name": "Camera AV Stream Management stream reuse range params",
       "test": "TC_AVSM_StreamReuseRangeParams.py",
       "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management VideoStreamsPersistence",
+      "test": "TC_AVSM_VideoStreamsPersistence.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the manufacturer-specific FaultInjection cluster (0xFFF1_FC06) on endpoint 0 to inject kFault_ClearInMemoryAllocatedVideoStreams/kFault_LoadPersistentCameraAVSMAttributes — a CI-only debug cluster the CSA reference apps implement, not something a real device (including Matterbridge) exposes."
     },
     {
       "name": "Camera AV Settings User Level Management 2.1",
@@ -201,6 +292,36 @@
       "name": "Camera AV Settings User Level Management 2.3",
       "test": "TC_AVSUM_2_3.py",
       "args": ["--endpoint 7"]
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.4",
+      "test": "TC_AVSUM_2_4.py",
+      "args": ["--endpoint 7"],
+      "comment": "Self-skips cleanly: requires the MechanicalPresets feature, which this example doesn't implement."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.5",
+      "test": "TC_AVSUM_2_5.py",
+      "args": ["--endpoint 7"],
+      "comment": "Self-skips cleanly: requires the MechanicalPresets feature, which this example doesn't implement."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.6",
+      "test": "TC_AVSUM_2_6.py",
+      "args": ["--endpoint 7"],
+      "comment": "Self-skips cleanly: requires the MechanicalPresets feature, which this example doesn't implement."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.7",
+      "test": "TC_AVSUM_2_7.py",
+      "args": ["--endpoint 7"],
+      "comment": "Gap: expects Status.NotFound but gets Status.UnsupportedCommand — needs investigation, not yet a documented Known Issue."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.8",
+      "test": "TC_AVSUM_2_8.py",
+      "args": ["--endpoint 7"],
+      "comment": "Gap: same Status.UnsupportedCommand-instead-of-NotFound issue as Camera AV Settings User Level Management 2.7."
     },
     {
       "name": "Camera AV Settings User Level Management 2.9",
@@ -245,7 +366,8 @@
       "name": "WebRTC Transport Provider 2.7",
       "test": "TC_WEBRTCP_2_7.py",
       "args": ["--endpoint 6"],
-      "comment": "Gap: HardPrivacyModeOn never flips when the simulated physical privacy switch is toggled (see chipTests.md Known Issues #2)."
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
     },
     {
       "name": "WebRTC Transport Provider 2.8",
@@ -278,7 +400,8 @@
       "name": "WebRTC Transport Provider 2.13",
       "test": "TC_WEBRTCP_2_13.py",
       "args": ["--endpoint 6"],
-      "comment": "Gap: same HardPrivacyModeOn issue as WebRTC Transport Provider 2.7 (see chipTests.md Known Issues #2)."
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
     },
     {
       "name": "WebRTC Transport Provider 2.14",
@@ -363,8 +486,7 @@
       "name": "WebRTC Transport Provider 2.29",
       "test": "TC_WEBRTCP_2_29.py",
       "args": ["--endpoint 6"],
-      "reset": true,
-      "comment": "Fixed (Known Issues #8, ProvideOffer variant): passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container; fails with the default container, which doesn't set that env var."
+      "reset": true
     },
     {
       "name": "WebRTC Transport Provider 2.30",

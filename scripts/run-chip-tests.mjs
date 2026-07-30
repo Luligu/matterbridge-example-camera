@@ -38,7 +38,9 @@
  * recreating the container (no docker rm/pull/npm install/build). This is much cheaper than --start and is
  * only needed for tests that depend on starting from a clean, un-allocated device state.
  * Each yamlTests/phytonTests entry may also set a "comment" string, printed under a failing/skipped result
- * in the summary log.
+ * in the summary log, and a "skip": true flag to leave the test listed (documenting that it exists and why
+ * it doesn't run) without ever invoking it — for tests that can never pass against this image (e.g. ones
+ * requiring the CSA reference app's --app-pipe debug hook, which Matterbridge doesn't implement).
  */
 
 /* eslint-disable no-console */
@@ -350,9 +352,17 @@ function runTests(nameFilter) {
 
   const results = [];
   for (const test of tests) {
+    const label = `${test.name} (${test.test})`;
+
+    if (test.skip) {
+      console.log(`SKIP: ${label}`);
+      appendFileSync(logFile, `=== ${label} ===\nSkipped ("skip": true set in ${testsFile})\n\n`);
+      results.push({ label, passed: false, skipped: true, comment: test.comment });
+      continue;
+    }
+
     const execArgs = buildExecArgs(test);
     const commandLine = execArgs.join(' ');
-    const label = `${test.name} (${test.test})`;
 
     if (test.reset) {
       appendFileSync(logFile, `--- reset stateful cluster storage before ${label} ---\n`);
@@ -378,19 +388,22 @@ function runTests(nameFilter) {
     results.push({ label, passed, comment: test.comment });
   }
 
-  const passedCount = results.filter((result) => result.passed).length;
+  const executedResults = results.filter((result) => !result.skipped);
+  const skippedCount = results.length - executedResults.length;
+  const passedCount = executedResults.filter((result) => result.passed).length;
   const resultLines = results.flatMap((result) => {
-    const line = `${result.passed ? '✅' : '❌'} ${result.label}`;
-    return result.passed || !result.comment ? [line] : [line, `   ↳ ${result.comment}`];
+    const icon = result.skipped ? '⏭️' : result.passed ? '✅' : '❌';
+    const line = `${icon} ${result.label}`;
+    return (result.skipped || !result.passed) && result.comment ? [line, `   ↳ ${result.comment}`] : [line];
   });
-  const summary = `Summary: ${passedCount}/${results.length} tests passed.`;
+  const summary = `Summary: ${passedCount}/${executedResults.length} tests passed${skippedCount ? ` (${skippedCount} skipped)` : ''}.`;
 
   appendFileSync(logFile, `${resultLines.join('\n')}\n\n${summary}\n`);
   writeFileSync(summaryLogFile, `${startedAt}${resultLines.join('\n')}\n\n${summary}\n`);
   console.log(resultLines.join('\n'));
   console.log(summary);
 
-  if (passedCount !== results.length) {
+  if (passedCount !== executedResults.length) {
     process.exitCode = 1;
   }
 }
