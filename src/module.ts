@@ -153,7 +153,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     const exampleDoorbell = new Doorbell('Doorbell', 'DOORBELL-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
-      powerSourceType: 'Replaceable',
+      powerSourceType: 'Rechargeable',
     });
     await this.addDevice(exampleDoorbell);
 
@@ -183,7 +183,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     await this.addDevice(examplePtzCamera);
 
     const exampleFloodlightCamera = new FloodlightCamera('Floodlight Camera', 'FLOODLIGHTCAMERA-001', {
-      powerSourceType: 'Wired',
+      powerSourceType: 'Battery',
       cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
       lightOptions: { name: 'Floodlight' },
     });

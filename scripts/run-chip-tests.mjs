@@ -155,6 +155,13 @@ function start() {
   console.log(`Pulling ${image}...`);
   runOrFail('docker', ['pull', image]);
 
+  // The container needs an IPv6 link-local address (e.g. chip-tool's own traffic to fe80::.../UDP:5540), so
+  // a plain IPv4-only network breaks it — create it with --ipv6 if a fresh host doesn't already have it.
+  if (run('docker', ['network', 'inspect', 'matterbridge'], { capture: true }).status !== 0) {
+    console.log('Creating the matterbridge docker network...');
+    runOrFail('docker', ['network', 'create', '--ipv6', 'matterbridge']);
+  }
+
   console.log('Starting the chip-test container...');
   runOrFail('docker', [
     'run',

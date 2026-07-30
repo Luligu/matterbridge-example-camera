@@ -35,14 +35,44 @@
       "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
     },
     {
-      "name": "Power Source 2.1 (YAML)",
+      "name": "Power Source 2.1 (YAML) (Wired)",
       "test": "Test_TC_PS_2_1",
-      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+      "args": ["--endpoint 6", "--PICS /root/power-source.wired.pics"]
     },
     {
-      "name": "Power Source 2.2 (YAML)",
+      "name": "Power Source 2.1 (YAML) (Replaceable)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 2", "--PICS /root/power-source.replaceable.pics"]
+    },
+    {
+      "name": "Power Source 2.1 (YAML) (Rechargeable)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 3", "--PICS /root/power-source.rechargeable.pics"]
+    },
+    {
+      "name": "Power Source 2.1 (YAML) (Battery)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 8", "--PICS /root/power-source.battery.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Wired)",
       "test": "Test_TC_PS_2_2",
-      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+      "args": ["--endpoint 6", "--PICS /root/power-source.wired.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Replaceable)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 2", "--PICS /root/power-source.replaceable.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Rechargeable)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 3", "--PICS /root/power-source.rechargeable.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Battery)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 8", "--PICS /root/power-source.battery.pics"]
     }
   ],
   "phytonTests": [
@@ -113,9 +143,24 @@
       "args": ["--endpoint 7"]
     },
     {
-      "name": "Power Source 2.3",
+      "name": "Power Source 2.3 (Wired)",
       "test": "TC_PS_2_3.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6", "--PICS /root/power-source.wired.pics"]
+    },
+    {
+      "name": "Power Source 2.3 (Replaceable)",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 2", "--PICS /root/power-source.replaceable.pics"]
+    },
+    {
+      "name": "Power Source 2.3 (Rechargeable)",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 3", "--PICS /root/power-source.rechargeable.pics"]
+    },
+    {
+      "name": "Power Source 2.3 (Battery)",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 8", "--PICS /root/power-source.battery.pics"]
     },
     {
       "name": "Chime cluster 2.1",
