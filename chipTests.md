@@ -154,7 +154,7 @@ python3 src/python_testing/TC_AVSUM_2_8.py --endpoint 7 # same has_feature() `an
 # Test bug: jumps from step 18 to step 22 without calling skip_step() for steps 19-21 when DPTZ is unsupported
 python3 src/python_testing/TC_AVSUM_2_9.py --endpoint 7
 
-# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (20/31 pass; see Known Issues below)
+# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (21/31 pass, 4 skipped (app-pipe/Privacy feature); see Known Issues below)
 python3 src/python_testing/TC_WEBRTCP_2_1.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_2.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_3.py --endpoint 6
@@ -168,8 +168,8 @@ python3 src/python_testing/TC_WEBRTCP_2_8.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_9.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_10.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_11.py --endpoint 6
-# Gap: requires --PICS .../ci-pics-values (PICS_SDK_CI_ONLY) to run non-interactively; then times out because no session-capacity limit is enforced (see Known Issues #4)
-python3 src/python_testing/TC_WEBRTCP_2_12.py --endpoint 6
+# Requires --PICS .../ci-pics-values (PICS_SDK_CI_ONLY) to run non-interactively (see Known Issues #4)
+python3 src/python_testing/TC_WEBRTCP_2_12.py --endpoint 6 --PICS src/app/tests/suites/certification/ci-pics-values
 # Gap: same HardPrivacyModeOn issue as 2.7 (see Known Issues #2)
 python3 src/python_testing/TC_WEBRTCP_2_13.py --endpoint 6
 # Test bug: same missing Privacy-feature live gate as 2.8 (see Known Issues #3)
@@ -243,8 +243,12 @@ in that hand-verified file yet). `TC_AVSM_2_17` references the same optional fea
 a live `has_feature` gate, which is the behavior 2.8/2.14 should have had. Our response is spec-correct; no
 production code change is warranted here.
 
-**#4 — No enforced max concurrent WebRTC sessions (2 tests: 2.12, 2.16).**
-Both tests need `--PICS src/app/tests/suites/certification/ci-pics-values` (sets `PICS_SDK_CI_ONLY`) to run non-interactively — otherwise they crash with `'NoneType' object has no attribute 'strip'` trying to prompt for a number interactively. With that flag: 2.12 times out waiting for the DUT to send `End(reason=OutOfResources)` after 5 solicited sessions — `solicitOffer`/`provideOffer` never check any session-count limit before accepting. 2.16 (the `ProvideOffer` variant) instead fails with `InteractionModelError: UnsupportedCluster` partway through — needs separate investigation, may be a different underlying issue in the `ProvideOffer` capacity-exhaustion path. Fix direction: add a configurable max-concurrent-sessions check to `solicitOffer`/`provideOffer` that rejects with `End(OutOfResources)` once reached.
+**#4 — PARTIALLY RESOLVED. No enforced max concurrent WebRTC sessions (originally 2 tests: 2.12, 2.16).**
+Both tests need `--PICS src/app/tests/suites/certification/ci-pics-values` (sets `PICS_SDK_CI_ONLY`) to run non-interactively — otherwise they crash with `'NoneType' object has no attribute 'strip'` trying to prompt for a number interactively. With that flag: 2.12 used to time out waiting for the DUT to send `End(reason=OutOfResources)` after 5 solicited sessions, because `solicitOffer`/`provideOffer` never checked any session-count limit before accepting.
+
+**Fixed** (2026-07-30) by adding `MAX_CONCURRENT_SESSIONS = 5` (hardcoded; Matter 1.6 §11.4.5.2's `WebRTCEndReasonEnum.OutOfResources` exists precisely for a provider that can accept a session request but can't actually sustain it) and a new `#evictIfOverCapacity()` in [webRtcTransportProviderServer.ts](src/behaviors/webRtcTransportProviderServer.ts), called from both `solicitOffer` and `provideOffer` right after a new session is added to `currentSessions`. The session is still accepted normally (a real response with a valid session id — matching what `TC_WEBRTCP_2_12.py` explicitly expects, per its own comment "the resource exhaustion happens internally in the DUT, but it still creates a session"), but if it pushed the count past the cap it's evicted immediately: removed from `currentSessions`, no SDP offer/answer or peer connection is ever created for it, and the peer's `WebRtcTransportRequestor` instead receives a deferred `End` invoke with reason `OutOfResources`, reusing the same `#invokeDeferred`/`WebRtcTransportRequestorClient` plumbing already used for `Offer`/`Answer`. Verified: `TC_WEBRTCP_2_12.py` passes cleanly; 59 tests (2 new) in `vitest/behaviors/webRtcTransportProviderServer.test.ts`, 100% statement/branch/function/line coverage maintained for the file.
+
+2.16 (the `ProvideOffer` variant) still fails, but with a **different, unrelated error** (`InteractionModelError: UnsupportedCluster` partway through, not a timeout) — not fixed by the above, needs its own separate investigation.
 
 **#5 — "TH establishes a valid WebRTC session with DUT" times out (2 tests: 2.22, 2.23).**
 Reproducible (retried once, same result both times — not flaky). Times out during session establishment itself (ICE/DTLS completion), unrelated to the stream-selection or capacity issues above. Needs a dedicated investigation with full packet/ICE-state logging; not yet root-caused.

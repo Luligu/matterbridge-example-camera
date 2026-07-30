@@ -13,7 +13,7 @@ import { camera, internalFor, MatterbridgeEndpoint } from 'matterbridge';
 import { Node } from 'matterbridge/matter';
 import { CameraAvStreamManagement, WebRtcTransportDefinitions, WebRtcTransportProvider } from 'matterbridge/matter/clusters';
 import { EndpointNumber, FabricIndex, NodeId, StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
-import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
+import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerNoticeSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -638,6 +638,56 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     // provideOffer with a video stream creates a real WeriftWebRtcSession backed by a real ffmpeg process; end it so
     // the test doesn't leak that process.
     await endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'endSession', { webRtcSessionId: 0, reason: WebRtcTransportDefinitions.WebRtcEndReason.UserHangup });
+  });
+
+  it('should evict the newest session with OutOfResources when solicitOffer exceeds MAX_CONCURRENT_SESSIONS', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcCapacitySolicit' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), audioStreams: [0] }),
+      ).resolves.toBeUndefined();
+    }
+    expect(endpoint.getAttribute(WebRtcTransportProvider, 'currentSessions')).toHaveLength(5);
+
+    // The 6th session is accepted normally (a real session id is allocated) but immediately evicted since it pushes
+    // the count past MAX_CONCURRENT_SESSIONS=5; currentSessions stays capped at 5, no Offer is ever sent for it.
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', { streamUsage: StreamUsage.LiveView, originatingEndpointId: EndpointNumber(1), audioStreams: [0] }),
+    ).resolves.toBeUndefined();
+
+    expect(endpoint.getAttribute(WebRtcTransportProvider, 'currentSessions')).toHaveLength(5);
+    expect(loggerNoticeSpy).toHaveBeenCalledWith(
+      expect.stringContaining('session 5 exceeds MAX_CONCURRENT_SESSIONS (5); evicting with WebRtcEndReason.OutOfResources'),
+    );
+  });
+
+  it('should evict the newest session with OutOfResources when provideOffer exceeds MAX_CONCURRENT_SESSIONS', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcCapacityProvide' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', audioStreams: [0] }),
+      ).resolves.toBeUndefined();
+    }
+    expect(endpoint.getAttribute(WebRtcTransportProvider, 'currentSessions')).toHaveLength(5);
+
+    // The 6th session is accepted normally (a real session id is allocated) but immediately evicted since it pushes
+    // the count past MAX_CONCURRENT_SESSIONS=5; currentSessions stays capped at 5, no Answer is ever sent for it.
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer', audioStreams: [0] }),
+    ).resolves.toBeUndefined();
+
+    expect(endpoint.getAttribute(WebRtcTransportProvider, 'currentSessions')).toHaveLength(5);
+    expect(loggerNoticeSpy).toHaveBeenCalledWith(
+      expect.stringContaining('session 5 exceeds MAX_CONCURRENT_SESSIONS (5); evicting with WebRtcEndReason.OutOfResources'),
+    );
   });
 
   it('should reject solicitOffer without videoStreams or audioStreams when the endpoint has no CameraAvStreamManagement cluster', async () => {

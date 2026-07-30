@@ -34,6 +34,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [camera]: Bump MatterbridgeWebRtcTransportProviderServer v.2.0.0.
 - [camera]: Bump MatterbridgeCameraAvStreamManagementServer v.2.0.0.
+- [chip]: Add chip test toolchain.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
