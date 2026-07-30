@@ -4,7 +4,7 @@
  * @author Luca Liguori
  * @contributor Ludovic BOUÉ
  * @created 2026-07-13
- * @version 1.0.0
+ * @version 2.0.0
  * @license Apache-2.0
  *
  * Copyright 2026, 2027, 2028 Luca Liguori.
@@ -27,7 +27,7 @@ import { readFileSync } from 'node:fs';
 import { MatterbridgeServer } from 'matterbridge/behaviors';
 import { CameraAvStreamManagementServer } from 'matterbridge/matter/behaviors';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
-import { Status, StatusResponseError } from 'matterbridge/matter/types';
+import { Status, StatusResponseError, StreamUsage } from 'matterbridge/matter/types';
 
 /**
  * A static JPEG television calibration card available to serve from `CaptureSnapshot`, at a given resolution.
@@ -40,6 +40,29 @@ export interface CameraColorTestJpeg {
 }
 
 const DEFAULT_CAMERA_COLOR_TEST_RESOLUTION = '640x480';
+
+/**
+ * Valid AudioStreamAllocate BitDepth values per Matter 1.6 Application Cluster spec §11.2.8.1 ("8, 16, 24, 32").
+ * This is a discrete set rather than a simple min/max range, so matter.js does not enforce it automatically.
+ */
+const AUDIO_STREAM_BIT_DEPTHS = [8, 16, 24, 32];
+
+/**
+ * Returns the numeric member values of a matter.js numeric enum object, ignoring the reverse string mappings
+ * TypeScript generates alongside them.
+ *
+ * @param {Record<string, number | string>} enumObject - The enum object to read member values from.
+ * @returns {number[]} The enum's numeric member values.
+ */
+function numericEnumValues(enumObject: Record<string, number | string>): number[] {
+  return Object.values(enumObject).filter((value): value is number => typeof value === 'number');
+}
+
+/** Valid AudioCodecEnum member values; unlike ImageCodec, matter.js does not reject unknown AudioCodec values before the command handler runs. */
+const AUDIO_CODECS = numericEnumValues(CameraAvStreamManagement.AudioCodec);
+
+/** Valid VideoCodecEnum member values; unlike ImageCodec, matter.js does not reject unknown VideoCodec values before the command handler runs. */
+const VIDEO_CODECS = numericEnumValues(CameraAvStreamManagement.VideoCodec);
 
 const cameraColorTestJpegs: Record<string, CameraColorTestJpeg> = {
   '640x480': { data: readFileSync(new URL('../../assets/camera-color-test-640-480.jpeg', import.meta.url)), resolution: { width: 640, height: 480 } },
@@ -71,6 +94,129 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
   CameraAvStreamManagement.Feature.ImageControl,
 ) {
   /**
+   * Whether {@link initialize}'s default stream self-allocation is skipped entirely. Set via the
+   * `MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT` environment variable (`1` to skip), for the CHIP
+   * WebRTC/AVSM conformance test suite: `TC_AVSM_2_2`/`TC_AVSM_2_5` assert `AllocatedSnapshotStreams`/
+   * `AllocatedAudioStreams` are empty immediately after commissioning, which self-allocation would otherwise violate
+   * — the certification suite models allocation as purely commissioner-driven and never anticipates a device
+   * pre-allocating on its own. Left unset (the default), self-allocation runs normally.
+   *
+   * @returns {boolean} True if self-allocation should be skipped.
+   */
+  #isAutoAllocateSkipped(): boolean {
+    return process.env.MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT === '1';
+  }
+
+  /**
+   * Self-allocates a default video/audio/snapshot stream for any feature this endpoint supports that has none
+   * allocated yet, so `AllocatedVideoStreams`/`AllocatedAudioStreams`/`AllocatedSnapshotStreams` are never
+   * unexpectedly empty for a client that assumes the Matter 1.6/1.5.1 §11.2.1.1 "Stream Lifecycle" recommendation
+   * holds (a Commissioner allocates once at commissioning time, and the resulting streams then have very long
+   * lifetimes) but never actually calls `VideoStreamAllocate`/`AudioStreamAllocate`/`SnapshotStreamAllocate` itself
+   * (e.g. SmartThings, observed in production only ever sending `ProvideOffer` with a guessed stream id and no prior
+   * allocation — see `chipTests.md`'s "Real-World Client Traces"). Also a safety net against
+   * `AllocatedVideoStreams`/`AllocatedAudioStreams`/`AllocatedSnapshotStreams` (`N`-quality, i.e. Matter-mandated
+   * non-volatile per §11.2.7) being legitimately reset by matter.js when this cluster's `FeatureMap` changes between
+   * restarts, since a passive client has no reason to notice or reallocate after that.
+   *
+   * Runs once per endpoint construction, after persisted state (if any) has already been loaded — so this only ever
+   * populates streams that are genuinely absent, never overwrites a real allocation (including one restored from
+   * storage). Bypasses the `videoStreamAllocate`/`audioStreamAllocate`/`snapshotStreamAllocate` command handlers
+   * entirely (calling a command on this same behavior from within its own `initialize()`, before construction
+   * finishes, is not safe) and instead constructs the same struct shape those handlers build, directly. Skipped
+   * entirely when {@link #isAutoAllocateSkipped} is true.
+   */
+  override initialize(): void {
+    if (this.#isAutoAllocateSkipped()) return;
+
+    if (this.features.video && this.state.allocatedVideoStreams.length === 0 && this.state.rateDistortionTradeOffPoints.length > 0 && this.state.streamUsagePriorities.length > 0) {
+      const { rateDistortionTradeOffPoints } = this.state;
+      // Pick the highest-resolution trade-off point rather than just the first one, so the default stream
+      // represents the camera's top resolution regardless of how many lower-resolution entries precede it.
+      let largestTradeOffPoint = rateDistortionTradeOffPoints[0];
+      for (const point of rateDistortionTradeOffPoints) {
+        if (point.resolution.width * point.resolution.height > largestTradeOffPoint.resolution.width * largestTradeOffPoint.resolution.height) largestTradeOffPoint = point;
+      }
+      const { codec, resolution, minBitRate } = largestTradeOffPoint;
+      this.state.allocatedVideoStreams = [
+        {
+          videoStreamId: 0,
+          streamUsage: this.state.streamUsagePriorities[0],
+          videoCodec: codec,
+          minFrameRate: 1,
+          maxFrameRate: this.state.videoSensorParams.maxFps,
+          minResolution: this.state.minViewportResolution,
+          maxResolution: resolution,
+          minBitRate,
+          // RateDistortionTradeOffPointsStruct (Matter 1.6 §11.2.6.9) only carries a floor MinBitRate, no
+          // matching max — MaxBitRate must be synthesized. 4x is a typical H.264 VBR peak-to-floor ratio for
+          // camera streams; MaxBitRate === MinBitRate would leave the stream no room to vary at all.
+          maxBitRate: minBitRate * 4,
+          keyFrameInterval: 4000,
+          // watermarkEnabled/osdEnabled are conformance-gated by the Watermark/OnScreenDisplay features (Matter 1.6 §11.2.9.1.9/.10)
+          // and rejected outright when present but unsupported, so they're only included when actually enabled.
+          ...(this.features.watermark ? { watermarkEnabled: false } : {}),
+          ...(this.features.onScreenDisplay ? { osdEnabled: false } : {}),
+          referenceCount: 0,
+        },
+      ];
+    }
+
+    if (
+      this.features.audio &&
+      this.state.allocatedAudioStreams.length === 0 &&
+      this.state.microphoneCapabilities.supportedCodecs.length > 0 &&
+      this.state.streamUsagePriorities.length > 0
+    ) {
+      const { microphoneCapabilities } = this.state;
+      this.state.allocatedAudioStreams = [
+        {
+          audioStreamId: 0,
+          streamUsage: this.state.streamUsagePriorities[0],
+          audioCodec: microphoneCapabilities.supportedCodecs[0],
+          channelCount: microphoneCapabilities.maxNumberOfChannels,
+          sampleRate: microphoneCapabilities.supportedSampleRates[0],
+          bitRate: 32_000,
+          bitDepth: microphoneCapabilities.supportedBitDepths[0],
+          referenceCount: 0,
+        },
+      ];
+    }
+
+    if (this.features.snapshot && this.state.allocatedSnapshotStreams.length === 0 && this.state.snapshotCapabilities.length > 0) {
+      const { snapshotCapabilities } = this.state;
+      // Span the full supported resolution range (smallest to largest capability) rather than a single fixed point, so
+      // that a real client's request for any of the device's own advertised snapshotCapabilities entries (not just the
+      // smallest one) dedup-matches this default stream in snapshotStreamAllocate (Matter 1.6 §11.2.8.8.8) instead of
+      // spawning an unwanted duplicate allocation. Mirrors how the video default stream spans minViewportResolution to
+      // its top rateDistortionTradeOffPoints resolution, above.
+      let smallestCapability = snapshotCapabilities[0];
+      let largestCapability = snapshotCapabilities[0];
+      for (const capability of snapshotCapabilities) {
+        if (capability.resolution.width * capability.resolution.height < smallestCapability.resolution.width * smallestCapability.resolution.height)
+          smallestCapability = capability;
+        if (capability.resolution.width * capability.resolution.height > largestCapability.resolution.width * largestCapability.resolution.height) largestCapability = capability;
+      }
+      this.state.allocatedSnapshotStreams = [
+        {
+          snapshotStreamId: 0,
+          imageCodec: largestCapability.imageCodec,
+          frameRate: largestCapability.maxFrameRate,
+          minResolution: smallestCapability.resolution,
+          maxResolution: largestCapability.resolution,
+          quality: 90,
+          referenceCount: 0,
+          encodedPixels: false,
+          hardwareEncoder: false,
+          // See the equivalent comment above for allocatedVideoStreams.
+          ...(this.features.watermark ? { watermarkEnabled: false } : {}),
+          ...(this.features.onScreenDisplay ? { osdEnabled: false } : {}),
+        },
+      ];
+    }
+  }
+
+  /**
    * Handles the SetStreamPriorities command.
    * Sets the relative priorities of the various stream usages on the camera.
    *
@@ -100,17 +246,72 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
 
   /**
    * Handles the VideoStreamAllocate command.
-   * Allocates a video stream on the camera and returns the newly allocated video stream identifier.
+   * Allocates a video stream on the camera and returns the newly allocated video stream identifier, reusing an
+   * already allocated stream's identifier when one matches the request.
    *
    * @param {CameraAvStreamManagement.VideoStreamAllocateRequest} request - VideoStreamAllocate request payload.
-   * @returns {CameraAvStreamManagement.VideoStreamAllocateResponse} The newly allocated video stream identifier.
-   * @throws {StatusResponseError} With status ConstraintError if the requested stream usage is not present in supportedStreamUsages.
+   * @returns {CameraAvStreamManagement.VideoStreamAllocateResponse} The newly allocated or reused video stream identifier.
+   * @throws {StatusResponseError} With status ConstraintError if the requested stream usage is Internal, or videoCodec is not a valid VideoCodecEnum value.
+   * @throws {StatusResponseError} With status InvalidInState if the requested stream usage is not present in streamUsagePriorities.
+   * @throws {StatusResponseError} With status DynamicConstraintError if no entry in rateDistortionTradeOffPoints matches the requested videoCodec, minResolution/maxResolution range and maxBitRate, or maxFrameRate exceeds videoSensorParams.
+   * @throws {StatusResponseError} With status ResourceExhausted if allocating a new (non-reused) stream would exceed maxConcurrentEncoders.
    */
   override videoStreamAllocate(request: CameraAvStreamManagement.VideoStreamAllocateRequest): CameraAvStreamManagement.VideoStreamAllocateResponse {
     const device = this.endpoint.stateOf(MatterbridgeServer);
-    if (!this.state.supportedStreamUsages.includes(request.streamUsage)) {
-      throw new StatusResponseError(`Stream usage ${request.streamUsage} is not present in supportedStreamUsages`, Status.ConstraintError);
+    if (request.streamUsage === StreamUsage.Internal) {
+      throw new StatusResponseError('Stream usage Internal is not allowed for VideoStreamAllocate', Status.ConstraintError);
     }
+    if (!this.state.streamUsagePriorities.includes(request.streamUsage)) {
+      throw new StatusResponseError(`Stream usage ${request.streamUsage} is not present in streamUsagePriorities`, Status.InvalidInState);
+    }
+    if (!VIDEO_CODECS.includes(request.videoCodec)) {
+      throw new StatusResponseError(`VideoCodec ${request.videoCodec} is not a valid VideoCodecEnum value`, Status.ConstraintError);
+    }
+    // MinFrameRate's and MinBitRate's spec constraints are "1 to MaxFrameRate"/"1 to MaxBitRate" (Matter 1.6 §11.2.8.4), cross-field bounds matter.js does not auto-enforce.
+    if (request.minFrameRate > request.maxFrameRate) {
+      throw new StatusResponseError(`MinFrameRate ${request.minFrameRate} must not be greater than MaxFrameRate ${request.maxFrameRate}`, Status.ConstraintError);
+    }
+    if (request.minBitRate > request.maxBitRate) {
+      throw new StatusResponseError(`MinBitRate ${request.minBitRate} must not be greater than MaxBitRate ${request.maxBitRate}`, Status.ConstraintError);
+    }
+    const matchesTradeOffPoint = this.state.rateDistortionTradeOffPoints.some(
+      (point) =>
+        point.codec === request.videoCodec &&
+        point.resolution.width >= request.minResolution.width &&
+        point.resolution.width <= request.maxResolution.width &&
+        point.resolution.height >= request.minResolution.height &&
+        point.resolution.height <= request.maxResolution.height &&
+        point.minBitRate <= request.maxBitRate,
+    );
+    if (!matchesTradeOffPoint || request.maxFrameRate > this.state.videoSensorParams.maxFps) {
+      throw new StatusResponseError(
+        'VideoStreamAllocate requested parameters do not match any entry in rateDistortionTradeOffPoints or exceed videoSensorParams',
+        Status.DynamicConstraintError,
+      );
+    }
+
+    const existingStream = this.state.allocatedVideoStreams.find(
+      (stream) =>
+        stream.streamUsage === request.streamUsage &&
+        stream.videoCodec === request.videoCodec &&
+        stream.minFrameRate === request.minFrameRate &&
+        stream.maxFrameRate === request.maxFrameRate &&
+        stream.minResolution.width === request.minResolution.width &&
+        stream.minResolution.height === request.minResolution.height &&
+        stream.maxResolution.width === request.maxResolution.width &&
+        stream.maxResolution.height === request.maxResolution.height &&
+        stream.minBitRate === request.minBitRate &&
+        stream.maxBitRate === request.maxBitRate &&
+        stream.keyFrameInterval === request.keyFrameInterval,
+    );
+    if (existingStream) {
+      device.log.info(`Reused video stream ${existingStream.videoStreamId} for usage ${request.streamUsage} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      return { videoStreamId: existingStream.videoStreamId };
+    }
+    if (this.state.allocatedVideoStreams.length >= this.state.maxConcurrentEncoders) {
+      throw new StatusResponseError(`VideoStreamAllocate would exceed maxConcurrentEncoders (${this.state.maxConcurrentEncoders})`, Status.ResourceExhausted);
+    }
+
     let videoStreamId = 0;
     for (const stream of this.state.allocatedVideoStreams) {
       videoStreamId = Math.max(videoStreamId, stream.videoStreamId + 1);
@@ -155,17 +356,58 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
 
   /**
    * Handles the AudioStreamAllocate command.
-   * Allocates an audio stream on the camera and returns the newly allocated audio stream identifier.
+   * Allocates an audio stream on the camera and returns the newly allocated audio stream identifier, reusing an
+   * already allocated stream's identifier when one matches the request.
    *
    * @param {CameraAvStreamManagement.AudioStreamAllocateRequest} request - AudioStreamAllocate request payload.
-   * @returns {CameraAvStreamManagement.AudioStreamAllocateResponse} The newly allocated audio stream identifier.
-   * @throws {StatusResponseError} With status ConstraintError if the requested stream usage is not present in supportedStreamUsages.
+   * @returns {CameraAvStreamManagement.AudioStreamAllocateResponse} The newly allocated or reused audio stream identifier.
+   * @throws {StatusResponseError} With status ConstraintError if the requested stream usage is Internal.
+   * @throws {StatusResponseError} With status InvalidInState if the requested stream usage is not present in streamUsagePriorities.
+   * @throws {StatusResponseError} With status ConstraintError if the requested audioCodec is not a valid AudioCodecEnum value, or bitDepth is not one of 8, 16, 24, or 32.
+   * @throws {StatusResponseError} With status DynamicConstraintError if the requested audioCodec, channelCount, sampleRate or bitDepth is not supported by microphoneCapabilities.
    */
   override audioStreamAllocate(request: CameraAvStreamManagement.AudioStreamAllocateRequest): CameraAvStreamManagement.AudioStreamAllocateResponse {
     const device = this.endpoint.stateOf(MatterbridgeServer);
-    if (!this.state.supportedStreamUsages.includes(request.streamUsage)) {
-      throw new StatusResponseError(`Stream usage ${request.streamUsage} is not present in supportedStreamUsages`, Status.ConstraintError);
+    if (request.streamUsage === StreamUsage.Internal) {
+      throw new StatusResponseError('Stream usage Internal is not allowed for AudioStreamAllocate', Status.ConstraintError);
     }
+    if (!this.state.streamUsagePriorities.includes(request.streamUsage)) {
+      throw new StatusResponseError(`Stream usage ${request.streamUsage} is not present in streamUsagePriorities`, Status.InvalidInState);
+    }
+    if (!AUDIO_CODECS.includes(request.audioCodec)) {
+      throw new StatusResponseError(`AudioCodec ${request.audioCodec} is not a valid AudioCodecEnum value`, Status.ConstraintError);
+    }
+    if (!AUDIO_STREAM_BIT_DEPTHS.includes(request.bitDepth)) {
+      throw new StatusResponseError(`BitDepth ${request.bitDepth} is not one of ${AUDIO_STREAM_BIT_DEPTHS.join(', ')}`, Status.ConstraintError);
+    }
+    const { microphoneCapabilities } = this.state;
+    if (
+      !microphoneCapabilities.supportedCodecs.includes(request.audioCodec) ||
+      request.channelCount < 1 ||
+      request.channelCount > microphoneCapabilities.maxNumberOfChannels ||
+      !microphoneCapabilities.supportedSampleRates.includes(request.sampleRate) ||
+      !microphoneCapabilities.supportedBitDepths.includes(request.bitDepth)
+    ) {
+      throw new StatusResponseError(
+        'AudioStreamAllocate requested audioCodec, channelCount, sampleRate or bitDepth is not supported by microphoneCapabilities',
+        Status.DynamicConstraintError,
+      );
+    }
+
+    const existingStream = this.state.allocatedAudioStreams.find(
+      (stream) =>
+        stream.streamUsage === request.streamUsage &&
+        stream.audioCodec === request.audioCodec &&
+        stream.channelCount === request.channelCount &&
+        stream.sampleRate === request.sampleRate &&
+        stream.bitRate === request.bitRate &&
+        stream.bitDepth === request.bitDepth,
+    );
+    if (existingStream) {
+      device.log.info(`Reused audio stream ${existingStream.audioStreamId} for usage ${request.streamUsage} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      return { audioStreamId: existingStream.audioStreamId };
+    }
+
     let audioStreamId = 0;
     for (const stream of this.state.allocatedAudioStreams) {
       audioStreamId = Math.max(audioStreamId, stream.audioStreamId + 1);
@@ -209,10 +451,60 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
    *
    * @param {CameraAvStreamManagement.SnapshotStreamAllocateRequest} request - SnapshotStreamAllocate request payload.
    * @returns {Promise<CameraAvStreamManagement.SnapshotStreamAllocateResponse>} The newly allocated snapshot stream identifier.
+   * @throws {StatusResponseError} With status DynamicConstraintError if no entry in snapshotCapabilities has a resolution within the requested minResolution/maxResolution range.
    */
   // oxlint-disable-next-line typescript/require-await
   override async snapshotStreamAllocate(request: CameraAvStreamManagement.SnapshotStreamAllocateRequest): Promise<CameraAvStreamManagement.SnapshotStreamAllocateResponse> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
+    const { minResolution, maxResolution } = request;
+    const matchesCapability = this.state.snapshotCapabilities.some(
+      (capability) =>
+        capability.resolution.width >= minResolution.width &&
+        capability.resolution.width <= maxResolution.width &&
+        capability.resolution.height >= minResolution.height &&
+        capability.resolution.height <= maxResolution.height,
+    );
+    if (!matchesCapability) {
+      throw new StatusResponseError(
+        'SnapshotStreamAllocate requested minResolution/maxResolution range does not match any entry in snapshotCapabilities',
+        Status.DynamicConstraintError,
+      );
+    }
+    // A request "matches" an existing stream (Matter 1.6 §11.2.8.8.8) when its non-resolution parameters are identical and its
+    // requested resolution range overlaps the existing stream's range; the existing entry is narrowed to the new range on reuse.
+    const existingStream = this.state.allocatedSnapshotStreams.find(
+      (stream) =>
+        stream.imageCodec === request.imageCodec &&
+        stream.frameRate === request.maxFrameRate &&
+        stream.quality === request.quality &&
+        stream.watermarkEnabled === request.watermarkEnabled &&
+        stream.osdEnabled === request.osdEnabled &&
+        stream.minResolution.width <= request.maxResolution.width &&
+        stream.maxResolution.width >= request.minResolution.width &&
+        stream.minResolution.height <= request.maxResolution.height &&
+        stream.maxResolution.height >= request.minResolution.height,
+    );
+    if (existingStream) {
+      this.state.allocatedSnapshotStreams = this.state.allocatedSnapshotStreams.map((stream) =>
+        stream.snapshotStreamId === existingStream.snapshotStreamId
+          ? {
+              snapshotStreamId: stream.snapshotStreamId,
+              imageCodec: stream.imageCodec,
+              frameRate: stream.frameRate,
+              minResolution: request.minResolution,
+              maxResolution: request.maxResolution,
+              quality: stream.quality,
+              referenceCount: stream.referenceCount,
+              encodedPixels: stream.encodedPixels,
+              hardwareEncoder: stream.hardwareEncoder,
+              watermarkEnabled: stream.watermarkEnabled,
+              osdEnabled: stream.osdEnabled,
+            }
+          : stream,
+      );
+      device.log.info(`Reused snapshot stream ${existingStream.snapshotStreamId} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+      return { snapshotStreamId: existingStream.snapshotStreamId };
+    }
     let snapshotStreamId = 0;
     for (const stream of this.state.allocatedSnapshotStreams) {
       snapshotStreamId = Math.max(snapshotStreamId, stream.snapshotStreamId + 1);
@@ -261,12 +553,17 @@ export class MatterbridgeCameraAvStreamManagementServer extends CameraAvStreamMa
    * the requested resolution, until a real capture pipeline is wired in.
    *
    * @param {CameraAvStreamManagement.CaptureSnapshotRequest} request - CaptureSnapshot request payload.
-   * @returns {Promise<CameraAvStreamManagement.CaptureSnapshotResponse>} The captured snapshot.
+   * @returns {CameraAvStreamManagement.CaptureSnapshotResponse} The captured snapshot.
+   * @throws {StatusResponseError} NotFound if snapshotStreamId does not match an entry in allocatedSnapshotStreams, or if snapshotStreamId is null (automatic selection) and no snapshot stream is allocated.
    */
-  // oxlint-disable-next-line typescript/require-await
-  override async captureSnapshot(request: CameraAvStreamManagement.CaptureSnapshotRequest): Promise<CameraAvStreamManagement.CaptureSnapshotResponse> {
+  override captureSnapshot(request: CameraAvStreamManagement.CaptureSnapshotRequest): CameraAvStreamManagement.CaptureSnapshotResponse {
     const device = this.endpoint.stateOf(MatterbridgeServer);
-    device.log.info(`Capturing snapshot ${request.snapshotStreamId ?? 'auto'} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
+    const { snapshotStreamId } = request;
+    const stream = this.state.allocatedSnapshotStreams.find((s) => snapshotStreamId === null || s.snapshotStreamId === snapshotStreamId);
+    if (!stream) {
+      throw new StatusResponseError(`Snapshot stream ${snapshotStreamId ?? 'auto'} is not present in allocatedSnapshotStreams`, Status.NotFound);
+    }
+    device.log.info(`Capturing snapshot ${snapshotStreamId ?? 'auto'} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
     // TODO: Replace the static calibration card with a real capture once CameraAvStreamManagement.captureSnapshot is wired into matterbridge
     /*
     await device.commandHandler.executeHandler('CameraAvStreamManagement.captureSnapshot', {

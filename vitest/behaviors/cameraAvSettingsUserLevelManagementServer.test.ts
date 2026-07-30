@@ -79,6 +79,12 @@ describe('MatterbridgeCameraAvSettingsUserLevelManagementServer', () => {
     expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'movementState')).toBe(CameraAvSettingsUserLevelManagement.PhysicalMovement.Idle);
   });
 
+  it('should reject an absolute position request with pan, tilt and zoom all omitted', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', {})).rejects.toThrow(
+      'MPTZSetPosition requires at least one of pan, tilt or zoom to be present',
+    );
+  });
+
   it('should reject setting an absolute pan position outside of the supported range', async () => {
     await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { pan: 200 })).rejects.toThrow(
       'Pan 200 is outside of the supported range [-170, 170]',
@@ -125,15 +131,31 @@ describe('MatterbridgeCameraAvSettingsUserLevelManagementServer', () => {
     expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 170, tilt: 90, zoom: 1 });
   });
 
-  it('should ignore fields not present in a relative move request', async () => {
-    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', {})).resolves.toBeUndefined();
+  it('should move by a relative pan delta only, leaving tilt and zoom unchanged', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { panDelta: -10 })).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 170, tilt: 90, zoom: 1 });
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 160, tilt: 90, zoom: 1 });
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Moved mechanical PTZ position by pan -10°, tilt 0°, zoom 0 to pan 160°, tilt 90°, zoom 1'));
+  });
+
+  it('should move by a relative tilt delta only, leaving pan and zoom unchanged', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', { tiltDelta: -10 })).resolves.toBeUndefined();
+
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 160, tilt: 80, zoom: 1 });
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Moved mechanical PTZ position by pan 0°, tilt -10°, zoom 0 to pan 160°, tilt 80°, zoom 1'));
+  });
+
+  it('should reject a relative move request with panDelta, tiltDelta and zoomDelta all omitted', async () => {
+    await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzRelativeMove', {})).rejects.toThrow(
+      'MPTZRelativeMove requires at least one of panDelta, tiltDelta or zoomDelta to be present',
+    );
+
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: 160, tilt: 80, zoom: 1 });
   });
 
   it('should preserve tilt and zoom when only pan is present in an absolute position request', async () => {
     await expect(device.invokeBehaviorCommand(CameraAvSettingsUserLevelManagement, 'mptzSetPosition', { pan: -170 })).resolves.toBeUndefined();
 
-    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: -170, tilt: 90, zoom: 1 });
+    expect(device.getAttribute(CameraAvSettingsUserLevelManagement, 'mptzPosition')).toEqual({ pan: -170, tilt: 80, zoom: 1 });
   });
 });

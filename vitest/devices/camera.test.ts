@@ -80,9 +80,10 @@ describe('Camera', () => {
     expect(device.getAttribute(CameraAvStreamManagement, 'maxNetworkBandwidth')).toBe(10_000_000);
     expect(device.getAttribute(CameraAvStreamManagement, 'supportedStreamUsages')).toEqual([StreamUsage.LiveView, StreamUsage.Recording]);
     expect(device.getAttribute(CameraAvStreamManagement, 'streamUsagePriorities')).toEqual([StreamUsage.LiveView, StreamUsage.Recording]);
-    expect(device.getAttribute(CameraAvStreamManagement, 'videoSensorParams')).toEqual({ sensorWidth: 1920, sensorHeight: 1080, maxFps: 30 });
+    expect(device.getAttribute(CameraAvStreamManagement, 'videoSensorParams')).toEqual({ sensorWidth: 1920, sensorHeight: 1080, maxFps: 60 });
     expect(device.getAttribute(CameraAvStreamManagement, 'viewport')).toEqual({ x1: 0, y1: 0, x2: 1920, y2: 1080 });
-    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toEqual([]);
+    // A default video stream is self-allocated on construction (see MatterbridgeCameraAvStreamManagementServer#initialize).
+    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedVideoStreams')).toEqual([expect.objectContaining({ videoStreamId: 0, streamUsage: StreamUsage.LiveView })]);
   });
 
   it('should create a camera device with identify enabled', async () => {
@@ -142,7 +143,6 @@ describe('Camera', () => {
         viewport: { x1: 0, y1: 0, x2: 1920, y2: 1080 },
         microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
         snapshotCapabilities: [{ resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false }],
-        allocatedSnapshotStreams: [],
       }),
     ).toBe(device);
   });
@@ -156,7 +156,8 @@ describe('Camera', () => {
       { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
     ]);
-    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([]);
+    // A default snapshot stream is self-allocated on construction (see MatterbridgeCameraAvStreamManagementServer#initialize).
+    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedSnapshotStreams')).toEqual([expect.objectContaining({ snapshotStreamId: 0 })]);
   });
 
   it('should create a camera device with ptz enabled', async () => {

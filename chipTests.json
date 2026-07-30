@@ -1,0 +1,571 @@
+{
+  "config": {
+    "name": "matterbridge-example-camera",
+    "type": "DynamicPlatform",
+    "whiteList": [],
+    "blackList": [],
+    "videoGenerator": "none",
+    "videoResolution": "auto",
+    "videoBitrate": 1000,
+    "audioGenerator": "none",
+    "animationInterval": 0,
+    "debug": false,
+    "unregisterOnShutdown": false
+  },
+  "resetClusterGlobs": ["*.cameraAvStreamManagement.*", "*.chime.*"],
+  "yamlTests": [
+    {
+      "name": "Bridged Device Basic Information 2.2 (YAML)",
+      "test": "Test_TC_BRBINFO_2_2",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Identify 2.1 (YAML)",
+      "test": "Test_TC_I_2_1",
+      "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Identify 2.2 (YAML)",
+      "test": "Test_TC_I_2_2",
+      "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Identify 2.3 (YAML)",
+      "test": "Test_TC_I_2_3",
+      "args": ["--endpoint 7", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Power Source 2.1 (YAML) (Wired)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 6", "--PICS /root/power-source.wired.pics"]
+    },
+    {
+      "name": "Power Source 2.1 (YAML) (Replaceable)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 2", "--PICS /root/power-source.replaceable.pics"]
+    },
+    {
+      "name": "Power Source 2.1 (YAML) (Rechargeable)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 3", "--PICS /root/power-source.rechargeable.pics"]
+    },
+    {
+      "name": "Power Source 2.1 (YAML) (Battery)",
+      "test": "Test_TC_PS_2_1",
+      "args": ["--endpoint 8", "--PICS /root/power-source.battery.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Wired)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 6", "--PICS /root/power-source.wired.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Replaceable)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 2", "--PICS /root/power-source.replaceable.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Rechargeable)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 3", "--PICS /root/power-source.rechargeable.pics"]
+    },
+    {
+      "name": "Power Source 2.2 (YAML) (Battery)",
+      "test": "Test_TC_PS_2_2",
+      "args": ["--endpoint 8", "--PICS /root/power-source.battery.pics"]
+    }
+  ],
+  "phytonTests": [
+    {
+      "name": "Generic device basic composition",
+      "test": "TC_DeviceBasicComposition.py"
+    },
+    {
+      "name": "Generic device conformance",
+      "test": "TC_DeviceConformance.py",
+      "args": ["--bool-arg allow_provisional:true"]
+    },
+    {
+      "name": "Generic device default warnings",
+      "test": "TC_DefaultWarnings.py",
+      "args": ["--bool-arg pixit_allow_default_vendor_id:true"]
+    },
+    {
+      "name": "Basic Information 2.1",
+      "test": "TC_BINFO_2_1.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Basic Information 2.2",
+      "test": "TC_BINFO_2_2.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Basic Information 3.1",
+      "test": "TC_BINFO_3_1.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"],
+      "comment": "Self-skips cleanly: requires the ProductAppearance attribute, which this example doesn't implement."
+    },
+    {
+      "name": "Basic Information 3.2",
+      "test": "TC_BINFO_3_2.py",
+      "args": ["--endpoint 0", "--PICS /root/matterbridge.pics"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "Bridged Device Basic Information 2.1",
+      "test": "TC_BRBINFO_2_1.py",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"]
+    },
+    {
+      "name": "Bridged Device Basic Information 3.1",
+      "test": "TC_BRBINFO_3_1.py",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"],
+      "comment": "Self-skips cleanly: requires the ProductAppearance attribute, which this example doesn't implement."
+    },
+    {
+      "name": "Bridged Device Basic Information 3.2",
+      "test": "TC_BRBINFO_3_2.py",
+      "args": ["--endpoint 6", "--PICS /root/matterbridge.pics"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "Bridged Device Basic Information 4.1",
+      "test": "TC_BRBINFO_4_1.py",
+      "skip": true,
+      "comment": "Requires the fabric-sync-app/fabric-admin/fabric-bridge test harness, a different topology entirely (not something --endpoint against a single bridge can satisfy)."
+    },
+    {
+      "name": "Identify 2.4",
+      "test": "TC_I_2_4.py",
+      "args": ["--endpoint 7"]
+    },
+    {
+      "name": "Power Source 2.3 (Wired)",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 6", "--PICS /root/power-source.wired.pics"]
+    },
+    {
+      "name": "Power Source 2.3 (Replaceable)",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 2", "--PICS /root/power-source.replaceable.pics"]
+    },
+    {
+      "name": "Power Source 2.3 (Rechargeable)",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 3", "--PICS /root/power-source.rechargeable.pics"]
+    },
+    {
+      "name": "Power Source 2.3 (Battery)",
+      "test": "TC_PS_2_3.py",
+      "args": ["--endpoint 8", "--PICS /root/power-source.battery.pics"]
+    },
+    {
+      "name": "Chime cluster 2.1",
+      "test": "TC_CHIME_2_1.py",
+      "args": ["--endpoint 2"]
+    },
+    {
+      "name": "Chime cluster 2.2",
+      "test": "TC_CHIME_2_2.py",
+      "args": ["--endpoint 2"]
+    },
+    {
+      "name": "Chime cluster 2.3",
+      "test": "TC_CHIME_2_3.py",
+      "args": ["--endpoint 2"]
+    },
+    {
+      "name": "Chime cluster 2.4",
+      "test": "TC_CHIME_2_4.py",
+      "args": ["--endpoint 2"]
+    },
+    {
+      "name": "Chime cluster 2.5",
+      "test": "TC_CHIME_2_5.py",
+      "args": ["--endpoint 2"],
+      "input": "y\ny\n"
+    },
+    {
+      "name": "Chime cluster 2.6",
+      "test": "TC_CHIME_2_6.py",
+      "args": ["--endpoint 2"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.1",
+      "test": "TC_AVSM_2_1.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.2",
+      "test": "TC_AVSM_2_2.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.3",
+      "test": "TC_AVSM_2_3.py",
+      "args": ["--endpoint 6"],
+      "comment": "Self-skips cleanly: requires the Watermark or Osd feature, neither of which this example implements."
+    },
+    {
+      "name": "Camera AV Stream Management 2.4",
+      "test": "TC_AVSM_2_4.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.5",
+      "test": "TC_AVSM_2_5.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.6",
+      "test": "TC_AVSM_2_6.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.7",
+      "test": "TC_AVSM_2_7.py",
+      "args": ["--endpoint 6"],
+      "comment": "Test wrong assumption: step 27 escalates MaxFrameRate by +20 per maxConcurrentEncoders iteration (starting at minFrameRate+15) then again for the final exhaustion attempt, to force RESOURCE_EXHAUSTED; with maxConcurrentEncoders=1 that final attempt requests 65fps, which exceeds our declared VideoSensorParams.MaxFps (60) and is correctly rejected as DYNAMIC_CONSTRAINT_ERROR first, per Matter 1.6/1.5.1 §11.2.8.4.12's own Effect on Receipt order (unsupported-field checks precede the resource check). Any device with a finite MaxFps hits this same issue eventually — it's not specific to our declared value."
+    },
+    {
+      "name": "Camera AV Stream Management 2.8",
+      "test": "TC_AVSM_2_8.py",
+      "args": ["--endpoint 6"],
+      "comment": "Self-skips cleanly: requires the Watermark or Osd feature, neither of which this example implements."
+    },
+    {
+      "name": "Camera AV Stream Management 2.9",
+      "test": "TC_AVSM_2_9.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.10",
+      "test": "TC_AVSM_2_10.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.11",
+      "test": "TC_AVSM_2_11.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.12",
+      "test": "TC_AVSM_2_12.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.13",
+      "test": "TC_AVSM_2_13.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.14",
+      "test": "TC_AVSM_2_14.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.15",
+      "test": "TC_AVSM_2_15.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management 2.16",
+      "test": "TC_AVSM_2_16.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "Camera AV Stream Management 2.17",
+      "test": "TC_AVSM_2_17.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "Camera AV Stream Management 2.18",
+      "test": "TC_AVSM_2_18.py",
+      "args": ["--endpoint 6"],
+      "resetBefore": true,
+      "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
+    },
+    {
+      "name": "Camera AV Stream Management 2.19",
+      "test": "TC_AVSM_2_19.py",
+      "args": ["--endpoint 6"],
+      "resetBefore": true,
+      "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
+    },
+    {
+      "name": "Camera AV Stream Management 2.20",
+      "test": "TC_AVSM_2_20.py",
+      "args": ["--endpoint 6"],
+      "resetBefore": true,
+      "comment": "Test calls request_device_reboot(), which has no real restart mechanism against this container (no --restart-flag-file wired up), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin without actually restarting matterbridge. The 'persists after reboot' assertions pass because nothing was ever cleared, not because real restart persistence was exercised."
+    },
+    {
+      "name": "Camera AV Stream Management 2.21",
+      "test": "TC_AVSM_2_21.py",
+      "args": ["--endpoint 6"],
+      "resetAfter": true,
+      "comment": "Step 5 sends a random StreamUsagePriorities mutation via SetStreamPriorities and never restores it, which can leak into whichever test runs next (e.g. excluding kLiveView)."
+    },
+    {
+      "name": "Camera AV Stream Management stream reuse range params",
+      "test": "TC_AVSM_StreamReuseRangeParams.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "Camera AV Stream Management VideoStreamsPersistence",
+      "test": "TC_AVSM_VideoStreamsPersistence.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the manufacturer-specific FaultInjection cluster (0xFFF1_FC06) on endpoint 0 to inject kFault_ClearInMemoryAllocatedVideoStreams/kFault_LoadPersistentCameraAVSMAttributes — a CI-only debug cluster the CSA reference apps implement, not something a real device (including Matterbridge) exposes."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.1",
+      "test": "TC_AVSUM_2_1.py",
+      "args": ["--endpoint 7"]
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.2",
+      "test": "TC_AVSUM_2_2.py",
+      "args": ["--endpoint 7"]
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.3",
+      "test": "TC_AVSUM_2_3.py",
+      "args": ["--endpoint 7"]
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.4",
+      "test": "TC_AVSUM_2_4.py",
+      "args": ["--endpoint 7"],
+      "comment": "Self-skips cleanly: requires the MechanicalPresets feature, which this example doesn't implement."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.5",
+      "test": "TC_AVSUM_2_5.py",
+      "args": ["--endpoint 7"],
+      "comment": "Self-skips cleanly: requires the MechanicalPresets feature, which this example doesn't implement."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.6",
+      "test": "TC_AVSUM_2_6.py",
+      "args": ["--endpoint 7"],
+      "comment": "Self-skips cleanly: requires the MechanicalPresets feature, which this example doesn't implement."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.7",
+      "test": "TC_AVSUM_2_7.py",
+      "args": ["--endpoint 7"],
+      "skip": true,
+      "comment": "Requires the optional DigitalPTZ feature."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.8",
+      "test": "TC_AVSUM_2_8.py",
+      "args": ["--endpoint 7"],
+      "skip": true,
+      "comment": "Requires the optional DigitalPTZ feature."
+    },
+    {
+      "name": "Camera AV Settings User Level Management 2.9",
+      "test": "TC_AVSUM_2_9.py",
+      "args": ["--endpoint 7"],
+      "skip": true,
+      "comment": "Requires the optional DigitalPTZ feature."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.1",
+      "test": "TC_WEBRTCP_2_1.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.2",
+      "test": "TC_WEBRTCP_2_2.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.3",
+      "test": "TC_WEBRTCP_2_3.py",
+      "args": ["--endpoint 6"],
+      "resetBefore": true
+    },
+    {
+      "name": "WebRTC Transport Provider 2.4",
+      "test": "TC_WEBRTCP_2_4.py",
+      "args": ["--endpoint 6"],
+      "resetBefore": true
+    },
+    {
+      "name": "WebRTC Transport Provider 2.5",
+      "test": "TC_WEBRTCP_2_5.py",
+      "args": ["--endpoint 6"],
+      "resetBefore": true
+    },
+    {
+      "name": "WebRTC Transport Provider 2.6",
+      "test": "TC_WEBRTCP_2_6.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.7",
+      "test": "TC_WEBRTCP_2_7.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.8",
+      "test": "TC_WEBRTCP_2_8.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the optional Privacy feature."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.9",
+      "test": "TC_WEBRTCP_2_9.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.10",
+      "test": "TC_WEBRTCP_2_10.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.11",
+      "test": "TC_WEBRTCP_2_11.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.12",
+      "test": "TC_WEBRTCP_2_12.py",
+      "args": ["--endpoint 6", "--PICS src/app/tests/suites/certification/ci-pics-values"],
+      "resetAfter": true,
+      "comment": "Deliberately fills CurrentSessions to MAX_CONCURRENT_SESSIONS and never closes any of them, which would otherwise leak into whichever test runs next."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.13",
+      "test": "TC_WEBRTCP_2_13.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the CSA reference app's --app-pipe debug hook."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.14",
+      "test": "TC_WEBRTCP_2_14.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the optional Privacy feature."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.15",
+      "test": "TC_WEBRTCP_2_15.py",
+      "args": ["--endpoint 6"],
+      "resetAfter": true,
+      "comment": "Never calls EndSession, leaving a session behind that would otherwise leak into whichever test runs next (silently, since none of the tests between here and 2.28 check for an empty CurrentSessions precondition)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.16",
+      "test": "TC_WEBRTCP_2_16.py",
+      "args": ["--endpoint 6", "--PICS src/app/tests/suites/certification/ci-pics-values"],
+      "skip": true,
+      "comment": "Test bug: the loop's ProvideOffer calls hardcode endpoint=1 (TC_WEBRTCP_2_16.py:161)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.17",
+      "test": "TC_WEBRTCP_2_17.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.18",
+      "test": "TC_WEBRTCP_2_18.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.19",
+      "test": "TC_WEBRTCP_2_19.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.20",
+      "test": "TC_WEBRTCP_2_20.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.21",
+      "test": "TC_WEBRTCP_2_21.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.22",
+      "test": "TC_WEBRTCP_2_22.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires sending ICE candidates to the peer, crashing the CHIP reference client's native WebRTC stack."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.23",
+      "test": "TC_WEBRTCP_2_23.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires sending ICE candidates to the peer, crashing the CHIP reference client's native WebRTC stack."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.24",
+      "test": "TC_WEBRTCP_2_24.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the SFrame E2E Encryption feature, which matter.js doesn't implement at all (no SFrameConfig field, no feature bit) — see chipTests.md Known Issues #6."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.25",
+      "test": "TC_WEBRTCP_2_25.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Requires the SFrame E2E Encryption feature, which matter.js doesn't implement at all (no SFrameConfig field, no feature bit) — see chipTests.md Known Issues #6."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.27",
+      "test": "TC_WEBRTCP_2_27.py",
+      "args": ["--endpoint 6"],
+      "skip": true,
+      "comment": "Validates the CSA reference app's own opt-in --camera-deferred-offer standby flow; unconditionally expects deferredOffer=true, which conflicts with the deliberate deferredOffer:false fix for this device (see chipTests.md Known Issues #7/#9)."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.28",
+      "test": "TC_WEBRTCP_2_28.py",
+      "args": ["--endpoint 6"]
+    },
+    {
+      "name": "WebRTC Transport Provider 2.29",
+      "test": "TC_WEBRTCP_2_29.py",
+      "args": ["--endpoint 6"],
+      "resetAfter": true,
+      "comment": "Never calls EndSession, leaving a session behind that would otherwise leak into whichever test runs next."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.30",
+      "test": "TC_WEBRTCP_2_30.py",
+      "args": ["--endpoint 6"],
+      "resetAfter": true,
+      "comment": "Never calls EndSession, leaving a session behind that would otherwise leak into whichever test runs next."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.31",
+      "test": "TC_WEBRTCP_2_31.py",
+      "args": ["--endpoint 6"],
+      "resetAfter": true,
+      "comment": "Step 6 conditionally solicits an extra session that only step 11's EndSession (for the step 8 session) doesn't cover, so a session can be left behind depending on the DUT's supported stream usages."
+    },
+    {
+      "name": "WebRTC Transport Provider 2.32",
+      "test": "TC_WEBRTCP_2_32.py",
+      "args": ["--endpoint 6"]
+    }
+  ]
+}

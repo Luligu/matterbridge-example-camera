@@ -78,8 +78,6 @@ export interface CameraOptions extends MatterbridgeEndpointOptions {
   microphoneCapabilities?: CameraAvStreamManagement.AudioCapabilities;
   /** Indicates the list of supported snapshot capabilities */
   snapshotCapabilities?: CameraAvStreamManagement.SnapshotCapabilities[];
-  /** Indicates the list of allocated snapshot streams */
-  allocatedSnapshotStreams?: CameraAvStreamManagement.SnapshotStream[];
 
   /** Indicates the minimum value for the mechanical pan, in angular degrees */
   panMin?: number;
@@ -103,7 +101,7 @@ export class Camera extends MatterbridgeEndpoint {
    * Creates an instance of the Camera class.
    *
    * A Camera device provides interfaces for controlling and transporting captured media. This example only implements the
-   * CameraAvStreamManagement cluster with the Video, Audio and ImageControl features enabled, and the WebRtcTransportProvider cluster.
+   * CameraAvStreamManagement cluster with the Video, Audio, Snapshot and ImageControl features enabled, and the WebRtcTransportProvider cluster.
    *
    * @param {string} name - The name of the camera.
    * @param {string} serial - The serial number of the camera.
@@ -118,10 +116,10 @@ export class Camera extends MatterbridgeEndpoint {
    *  - supportedStreamUsages: [StreamUsage.LiveView, StreamUsage.Recording]
    *  - streamUsagePriorities: same as supportedStreamUsages
    *  - maxConcurrentEncoders: 1
-   *  - maxEncodedPixelRate: 62208000 (1920x1080 @ 30 fps)
-   *  - videoSensorParams: { sensorWidth: 1920, sensorHeight: 1080, maxFps: 30 }
+   *  - maxEncodedPixelRate: 124416000 (1920x1080 @ 60 fps — must cover videoSensorParams' sensor resolution × maxFps, Matter 1.6/1.5.1 §11.2.7.2; verified by TC_AVSM_2_13)
+   *  - videoSensorParams: { sensorWidth: 1920, sensorHeight: 1080, maxFps: 60 } (the sensor's overall peak frame rate — Matter 1.6/1.5.1 §11.2.6.6.3 — not tied to any one resolution; only achievable at lower resolutions in practice)
    *  - minViewportResolution: { width: 640, height: 360 }
-   *  - rateDistortionTradeOffPoints: [{ codec: VideoCodec.H264, resolution: { width: 1920, height: 1080 }, minBitRate: 1000000 }]
+   *  - rateDistortionTradeOffPoints: [{ resolution: 640x480, minBitRate: 250000 }, { resolution: 1280x720, minBitRate: 500000 }, { resolution: 1920x1080, minBitRate: 1000000 }], each with codec: VideoCodec.H264
    *  - currentFrameRate: 30
    *  - viewport: { x1: 0, y1: 0, x2: sensorWidth, y2: sensorHeight }
    *  - imageRotation: 0
@@ -129,7 +127,6 @@ export class Camera extends MatterbridgeEndpoint {
    *  - imageFlipVertical: false
    *  - microphoneCapabilities: { maxNumberOfChannels: 1, supportedCodecs: [AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] }
    *  - snapshotCapabilities: [{ resolution: 640x480 }, { resolution: 1280x720 }, { resolution: 1920x1080 }], each with maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false
-   *  - allocatedSnapshotStreams: []
    *
    *  - ptz: false (the CameraAvSettingsUserLevelManagement cluster will not be created)
    *  - panMin: -170, panMax: 170 (angular degrees)
@@ -150,10 +147,14 @@ export class Camera extends MatterbridgeEndpoint {
       supportedStreamUsages = [StreamUsage.LiveView, StreamUsage.Recording],
       streamUsagePriorities = supportedStreamUsages,
       maxConcurrentEncoders = 1,
-      maxEncodedPixelRate = 1920 * 1080 * 30,
-      videoSensorParams = { sensorWidth: 1920, sensorHeight: 1080, maxFps: 30 },
+      maxEncodedPixelRate = 1920 * 1080 * 60,
+      videoSensorParams = { sensorWidth: 1920, sensorHeight: 1080, maxFps: 60 },
       minViewportResolution = { width: 640, height: 360 },
-      rateDistortionTradeOffPoints = [{ codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1920, height: 1080 }, minBitRate: 1_000_000 }],
+      rateDistortionTradeOffPoints = [
+        { codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 640, height: 480 }, minBitRate: 250_000 },
+        { codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1280, height: 720 }, minBitRate: 500_000 },
+        { codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1920, height: 1080 }, minBitRate: 1_000_000 },
+      ],
       currentFrameRate = 30,
       viewport = { x1: 0, y1: 0, x2: videoSensorParams.sensorWidth, y2: videoSensorParams.sensorHeight },
       microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
@@ -162,7 +163,6 @@ export class Camera extends MatterbridgeEndpoint {
         { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
-      allocatedSnapshotStreams = [],
       panMin = -170,
       panMax = 170,
       tiltMin = -20,
@@ -211,7 +211,6 @@ export class Camera extends MatterbridgeEndpoint {
       viewport,
       microphoneCapabilities,
       snapshotCapabilities,
-      allocatedSnapshotStreams,
     });
     if (ptz) createDefaultCameraAvSettingsUserLevelManagementClusterServer(this, { panMin, panMax, tiltMin, tiltMax, zoomMax, mptzPosition });
     createDefaultWebRtcTransportProviderClusterServer(this);
@@ -250,13 +249,18 @@ export interface CameraAvStreamManagementClusterOptions {
   microphoneCapabilities: CameraAvStreamManagement.AudioCapabilities;
   /** Indicates the list of supported snapshot capabilities */
   snapshotCapabilities: CameraAvStreamManagement.SnapshotCapabilities[];
-  /** Indicates the list of allocated snapshot streams */
-  allocatedSnapshotStreams: CameraAvStreamManagement.SnapshotStream[];
 }
 
 /**
  * Creates a default CameraAvStreamManagement cluster server, with the Video, Audio, Snapshot and ImageControl features
  * enabled, on the given endpoint.
+ *
+ * The ImageControl feature is required here (even though it doesn't implement any real image-processing logic) so
+ * that this endpoint's registered behavior matches {@link MatterbridgeCameraAvStreamManagementServer}'s own declared
+ * feature set (Video, Audio, Snapshot, ImageControl): `webRtcTransportProviderServer.ts`'s automatic stream
+ * assignment gates on `endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)`, which requires an exact
+ * match against that base class, not just a compatible subset. Removing ImageControl here would make that check
+ * fail and break WebRTC SolicitOffer/ProvideOffer automatic stream selection for this device.
  *
  * @param {MatterbridgeEndpoint} endpoint - The endpoint to create the CameraAvStreamManagement cluster server on.
  * @param {CameraAvStreamManagementClusterOptions} options - The initial state of the CameraAvStreamManagement cluster server.
@@ -277,13 +281,12 @@ export function createDefaultCameraAvStreamManagementClusterServer(endpoint: Mat
       statusLightBrightness: ThreeLevelAuto.Auto,
       allocatedVideoStreams: [],
       allocatedAudioStreams: [],
+      allocatedSnapshotStreams: [],
       microphoneMuted: false,
       microphoneVolumeLevel: 128,
       microphoneMaxLevel: 254,
       microphoneMinLevel: 0,
       microphoneAgcEnabled: false,
-      // TODO: open issue on matter.js cause it treats ICTL mandatory but is not so we add for now
-      // CameraAvStreamManagement.Feature.ImageControl
       imageRotation: 0,
       imageFlipVertical: false,
       imageFlipHorizontal: false,

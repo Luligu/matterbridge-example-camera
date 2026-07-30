@@ -133,10 +133,14 @@ export class VideoDoorbell extends MatterbridgeEndpoint {
       supportedStreamUsages = [StreamUsage.LiveView, StreamUsage.Recording],
       streamUsagePriorities = supportedStreamUsages,
       maxConcurrentEncoders = 1,
-      maxEncodedPixelRate = 1920 * 1080 * 30,
-      videoSensorParams = { sensorWidth: 1920, sensorHeight: 1080, maxFps: 30 },
+      maxEncodedPixelRate = 1920 * 1080 * 60,
+      videoSensorParams = { sensorWidth: 1920, sensorHeight: 1080, maxFps: 60 },
       minViewportResolution = { width: 640, height: 360 },
-      rateDistortionTradeOffPoints = [{ codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1920, height: 1080 }, minBitRate: 1_000_000 }],
+      rateDistortionTradeOffPoints = [
+        { codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 640, height: 480 }, minBitRate: 250_000 },
+        { codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1280, height: 720 }, minBitRate: 500_000 },
+        { codec: CameraAvStreamManagement.VideoCodec.H264, resolution: { width: 1920, height: 1080 }, minBitRate: 1_000_000 },
+      ],
       currentFrameRate = 30,
       viewport = { x1: 0, y1: 0, x2: videoSensorParams.sensorWidth, y2: videoSensorParams.sensorHeight },
       microphoneCapabilities = { maxNumberOfChannels: 1, supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus], supportedSampleRates: [48000], supportedBitDepths: [16] },
@@ -145,7 +149,6 @@ export class VideoDoorbell extends MatterbridgeEndpoint {
         { resolution: { width: 1280, height: 720 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
         { resolution: { width: 1920, height: 1080 }, maxFrameRate: 10, imageCodec: CameraAvStreamManagement.ImageCodec.Jpeg, requiresEncodedPixels: false },
       ],
-      allocatedSnapshotStreams = [],
     } = cameraOptions;
 
     const cameraChild = this.addChildDeviceType('Camera', camera, {});
@@ -167,7 +170,6 @@ export class VideoDoorbell extends MatterbridgeEndpoint {
       viewport,
       microphoneCapabilities,
       snapshotCapabilities,
-      allocatedSnapshotStreams,
     });
     createDefaultWebRtcTransportProviderClusterServer(cameraChild);
     addWebRtcTransportRequestorClient(cameraChild);

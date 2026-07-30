@@ -85,7 +85,8 @@ describe('Intercom', () => {
     expect(device.getAttribute(CameraAvStreamManagement, 'maxNetworkBandwidth')).toBe(128_000);
     expect(device.getAttribute(CameraAvStreamManagement, 'supportedStreamUsages')).toEqual([StreamUsage.LiveView]);
     expect(device.getAttribute(CameraAvStreamManagement, 'streamUsagePriorities')).toEqual([StreamUsage.LiveView]);
-    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams')).toEqual([]);
+    // A default audio stream is self-allocated on construction (see MatterbridgeCameraAvStreamManagementServer#initialize).
+    expect(device.getAttribute(CameraAvStreamManagement, 'allocatedAudioStreams')).toEqual([expect.objectContaining({ audioStreamId: 0, streamUsage: StreamUsage.LiveView })]);
     expect(device.getAttribute(CameraAvStreamManagement, 'microphoneCapabilities')).toEqual({
       maxNumberOfChannels: 1,
       supportedCodecs: [CameraAvStreamManagement.AudioCodec.Opus],

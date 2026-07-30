@@ -53,8 +53,6 @@ export interface SnapshotCameraOptions extends MatterbridgeEndpointOptions {
   maxNetworkBandwidth?: number;
   /** List of stream usages supported by the camera */
   supportedStreamUsages?: StreamUsage[];
-  /** List of allocated snapshot streams */
-  allocatedSnapshotStreams?: CameraAvStreamManagement.SnapshotStream[];
   /** List of stream usages in decreasing order of priority */
   streamUsagePriorities?: StreamUsage[];
 }
@@ -87,7 +85,6 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
    *  - snapshotCapabilities: [{ resolution: 640x480 }, { resolution: 1280x720 }, { resolution: 1920x1080 }], each with maxFrameRate: 10, imageCodec: ImageCodec.Jpeg, requiresEncodedPixels: false
    *  - maxNetworkBandwidth: 10000
    *  - supportedStreamUsages: [StreamUsage.Recording]
-   *  - allocatedSnapshotStreams: []
    *  - streamUsagePriorities: [StreamUsage.Recording]
    *
    * @returns {SnapshotCamera} The SnapshotCamera instance.
@@ -109,7 +106,6 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
       ],
       maxNetworkBandwidth = 10000,
       supportedStreamUsages = [StreamUsage.Recording],
-      allocatedSnapshotStreams = [],
       streamUsagePriorities = [StreamUsage.Recording],
       id,
       number,
@@ -150,7 +146,6 @@ export class SnapshotCamera extends MatterbridgeEndpoint {
       snapshotCapabilities,
       maxNetworkBandwidth,
       supportedStreamUsages,
-      allocatedSnapshotStreams,
       streamUsagePriorities,
     });
     this.addRequiredClusters();
@@ -164,7 +159,6 @@ export interface SnapshotCameraAvStreamManagementClusterOptions {
   snapshotCapabilities: CameraAvStreamManagement.SnapshotCapabilities[];
   maxNetworkBandwidth: number;
   supportedStreamUsages: StreamUsage[];
-  allocatedSnapshotStreams: CameraAvStreamManagement.SnapshotStream[];
   streamUsagePriorities: StreamUsage[];
 }
 
@@ -178,7 +172,7 @@ export function createDefaultSnapshotCameraAvStreamManagementClusterServer(
   endpoint: MatterbridgeEndpoint,
   options: SnapshotCameraAvStreamManagementClusterOptions,
 ): MatterbridgeEndpoint {
-  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot, CameraAvStreamManagement.Feature.ImageControl), {
+  endpoint.behaviors.require(MatterbridgeCameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Snapshot), {
     // mandatory attributes
     maxContentBufferSize: options.maxContentBufferSize, // M
     maxNetworkBandwidth: options.maxNetworkBandwidth, // M
@@ -188,12 +182,7 @@ export function createDefaultSnapshotCameraAvStreamManagementClusterServer(
     maxConcurrentEncoders: options.maxConcurrentEncoders, // VDO | SNP
     maxEncodedPixelRate: options.maxEncodedPixelRate, // VDO | SNP
     snapshotCapabilities: options.snapshotCapabilities, // SNP
-    allocatedSnapshotStreams: options.allocatedSnapshotStreams, // SNP
-    // TODO: open issue on matter.js cause it treats ICTL mandatory but is not so we add for now
-    // CameraAvStreamManagement.Feature.ImageControl
-    imageRotation: 0,
-    imageFlipVertical: false,
-    imageFlipHorizontal: false,
+    allocatedSnapshotStreams: [], // SNP, persisted by matter.js — never seeded from options
   });
   return endpoint;
 }

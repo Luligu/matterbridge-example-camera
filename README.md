@@ -38,28 +38,29 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 
 ## Requirements
 
-Requires [`ffmpeg`](https://ffmpeg.org/) to be installed. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
+Requires [`ffmpeg`](https://ffmpeg.org/) to be installed on the host or in the container. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
 Install it with the platform's package manager:
 
+### Linux (Debian/Ubuntu)
+
+If you run in a container, install it in the same way.
+
 ```bash
-# Linux (Debian/Ubuntu)
 sudo apt update && sudo apt install -y ffmpeg
 ```
 
+### Windows
+
 ```powershell
-# Windows
 winget install --id Gyan.FFmpeg -e
 ```
 
+### macOS
+
 ```bash
-# macOS
 brew install ffmpeg
 ```
-
-## TODO
-
-- Track matter.js PR #4128 (https://github.com/matter-js/matter.js/pull/4128) and, once merged and released in the consumed `@matter/*` version, remove the temporary ImageControl workaround used by Audio Doorbell and Intercom for CameraAvStreamManagement choice conformance.
 
 ## Supported device types
 
@@ -89,7 +90,7 @@ Features:
 
 Features:
 
-- Exposes the Camera AV Stream Management cluster with the Video, Audio and ImageControl features (the Snapshot feature is not implemented in this example; see Snapshot Camera).
+- Exposes the Camera AV Stream Management cluster with the Video, Audio, Snapshot and ImageControl features.
 - Exposes the WebRtcTransportProvider cluster and registers a WebRtcTransportRequestor client, so a bound device can solicit and receive WebRTC offers.
 - Allocates WebRTC session identifiers monotonically from 0 through 65534, wrapping to 0 and skipping identifiers that still belong to active sessions, as required by Matter 1.6.
 - Automatically selects or allocates a video/audio stream when a client's `SolicitOffer`/`ProvideOffer` omits `videoStreams`/`audioStreams` (and their deprecated single-id counterparts), per the Matter specification's automatic stream selection for revision 1 clients. This is required to interoperate with clients that never allocate streams explicitly, such as Home Assistant's Matter camera integration.
@@ -105,11 +106,13 @@ Supported by:
 
 - [Matterserver dashboard](screenshots/matterserver-camera.png)
 
+- [Matterserver dashboard with MPTZ](screenshots/matterserver-ptz-camera.png)
+
 ### Snapshot Camera
 
 Features:
 
-- Exposes the Camera AV Stream Management cluster with the Snapshot and Image Control features.
+- Exposes the Camera AV Stream Management cluster with the Snapshot feature.
 - Supports configurable snapshot capabilities, encoder limits, content buffer size, and network bandwidth.
 - Supports configuring stream usages and their priority order with the SetStreamPriorities command.
 - Allocates and deallocates snapshot streams with generated stream identifiers.
@@ -131,7 +134,6 @@ Features:
 - Adds the required Chime client cluster automatically via `addChimeClient`, so a bound Chime device can be triggered when the doorbell button is pressed.
 - Identify cluster is always created (it is a required server cluster for this device type), with configurable identify time and type.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
-- Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around a matter.js bug where the ImageRotation/ImageFlipHorizontal/ImageFlipVertical "at least one shall be present" choice conformance is enforced unconditionally instead of only when ImageControl is enabled (see the JSDoc in `src/devices/audioDoorbell.ts`).
 
 ### Floodlight Camera
 
@@ -160,44 +162,34 @@ Features:
 - Adds the optional Chime client cluster automatically via `addChimeClient`, so a bound Chime device can be triggered.
 - Optional Identify cluster support, with configurable identify time and type. Set to Identify.IdentifyType.None to omit the cluster entirely.
 - Configurable Power Source cluster type: Rechargeable, Replaceable, Battery, Wired, or None to omit the Power Source cluster entirely.
-- Deviation from the Matter specification: the CameraAvStreamManagement ImageControl feature is also enabled, even though the specification only allows it when Video or Snapshot is present, to work around the same matter.js bug described above for Audio Doorbell.
 
-#### Pairing two Intercoms for two-way calling
+Supported by:
 
-`src/module.ts` registers exactly this pair for testing: `Intercom 1` (bridged, under the Matterbridge aggregator) and `Intercom 2` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
+- [Matterserver dashboard](screenshots/matterserver-intercom.png)
 
-`Intercom 2` has to be `mode: 'server'` rather than a second bridged endpoint: peer resolution (see below) identifies the caller from the `peerNodeId`/`fabricIndex` of the command's CASE session, and a CASE session only exists between two distinct node identities on the fabric. Two bridged endpoints share the bridge's single node identity, so there is no CASE session, Binding, or ACL between them to test — invoking one from the other would just be a local, in-process behavior call. `mode: 'server'` is what gives an endpoint its own independent Matter node, which is what a real second, physical Intercom would be.
+### Pairing the Server Chime and Server Doorbell to let the Doorbell play a chime
+
+`src/module.ts` registers exactly this pair for testing: `Server Chime` (`mode: 'server'`, its own Matter node) and `Server Doorbell` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
+
+1. **Binding on Server Doorbell → Server Chime**, so Server Doorbell knows where to play a chime.
+
+Bind Server Doorbell to Server Chime with ![Matter Server Dashboard](screenshots/binding.png)
+
+### Pairing the two Server Intercoms for two-way calling
+
+`src/module.ts` registers exactly this pair for testing: `Server Intercom 1` (`mode: 'server'`, its own Matter node) and `Server Intercom 2` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
 
 Unlike a Doorbell/Chime pair, where only the Doorbell invokes commands on the Chime, an Intercom both hosts (server) and invokes (client) WebRtcTransportProvider and WebRtcTransportRequestor (see `#resolvePeerRequestorEndpoint` in `src/behaviors/webRtcTransportProviderServer.ts`). Once a peer invokes SolicitOffer/ProvideOffer on an Intercom's WebRtcTransportProvider, that Intercom resolves the caller's WebRtcTransportRequestor endpoint directly from the invoking peer's node id/fabric index carried by the command's CASE session — not via the Binding cluster — so the Offer/Answer "return leg" needs no binding of its own. Only the initiating invoke needs one.
 
-So, to let either Intercom 1 or Intercom 2 start a call, on the fabric they share (commission both onto the same controller/ecosystem first, e.g. via chip-tool, Apple Home, or Google Home):
+So, to let either Server Intercom 1 or Server Intercom 2 start a call, on the fabric they share.
 
-1. **Binding on 1 → 2**, so Intercom 1 knows where to send SolicitOffer/ProvideOffer. Binding on 2 → 1 is the mirror, for the other direction:
+1. **Binding on Server Intercom 1 → Server Intercom 2**, so Server Intercom 1 knows where to send SolicitOffer/ProvideOffer.
 
-   ```bash
-   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_2>, "endpoint": <ENDPOINT_2>, "cluster": 1363}]' <NODE_ID_1> <ENDPOINT_1>
-   chip-tool binding write binding '[{"fabricIndex": 1, "node": <NODE_ID_1>, "endpoint": <ENDPOINT_1>, "cluster": 1363}]' <NODE_ID_2> <ENDPOINT_2>
-   ```
+Bind Server Intercom 1 to Server Intercom 2 with ![Matter Server Dashboard](screenshots/binding-intercom1.png)
 
-   `1363` (`0x553`) is the WebRtcTransportProvider cluster id; `<ENDPOINT_1>`/`<ENDPOINT_2>` are each Intercom's endpoint number (find them from the commissioning output or the Matterbridge frontend).
+2. **Binding on Server Intercom 2 → Server Intercom 1**, so Server Intercom 2 knows where to send SolicitOffer/ProvideOffer.
 
-2. **ACL on 2 granting 1**, and **ACL on 1 granting 2**, Operate access to both WebRtcTransportProvider (`1363`) and WebRtcTransportRequestor (`1364`, `0x554`) — Intercom 1 needs it on 2 for the initiating invoke, and Intercom 2 needs it on 1 for the return invoke, regardless of who starts the call:
-
-   ```bash
-   chip-tool accesscontrol write acl '[
-     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
-     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_1>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
-   ]' <NODE_ID_2> 0
-
-   chip-tool accesscontrol write acl '[
-     {"fabricIndex": 1, "privilege": 5, "authMode": 2, "subjects": [<ADMIN_NODE_ID>], "targets": null},
-     {"fabricIndex": 1, "privilege": 3, "authMode": 2, "subjects": [<NODE_ID_2>], "targets": [{"cluster": 1363, "endpoint": null, "deviceType": null}, {"cluster": 1364, "endpoint": null, "deviceType": null}]}
-   ]' <NODE_ID_1> 0
-   ```
-
-   The ACL attribute is a full replace, not a merge: keep the existing Administer entry for `<ADMIN_NODE_ID>` (your controller/commissioner) in the list, or you lock yourself out of that node.
-
-With both directions in place, either Intercom can call the other; a call initiated the other way only needs its own binding/ACL pair, already covered above since both were set up symmetrically.
+Bind Server Intercom 2 to Server Intercom 1 with ![Matter Server Dashboard](screenshots/binding-intercom2.png)
 
 ## WebRTC video and audio injection
 
@@ -393,153 +385,3 @@ All three calibration cards above are kept well under the Matter message size ce
 A `CaptureSnapshot` response whose `data` field doesn't fit fails to send: the client gets a generic invoke failure instead of an image, since the encoder cannot represent the required plaintext length in the message header. `CameraAvStreamManagement.CaptureSnapshot` returns its image as a single field of a single command response, so it inherits this ceiling directly. Matter has a dedicated mechanism for transferring larger payloads — BDX (Bulk Data Exchange), used for OTA updates and diagnostic logs — which splits big content across a sequence of acknowledged messages instead of one oversized one, but `CaptureSnapshot` doesn't use it.
 
 WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they do not send an MP4, Ogg, or MPEG container directly. The current MP4 transfer deliberately uses the separate data-channel path. A future video-track test should parse the relevant elementary frames, packetize them as RTP, call werift's media track `writeRtp()`, and verify reception through `onTrack` and `onReceiveRtp`.
-
-## Chip tests
-
-### Create the container (Linux, macOS, and Windows)
-
-Run the `luligu/matterbridge:chip-test` docker image:
-
-- frontend on port 8585
-- plugin mapped to .
-- container test logs directory mapped on ./temp directory
-
-```shell
-docker rm plugin-chip-test -f && docker pull luligu/matterbridge:chip-test && docker run -dit --network matterbridge --restart always --stop-timeout 60 --name plugin-chip-test -p 8585:8283 -v "$(pwd)/temp:/tmp/matter_testing/logs" -v "$(pwd):/root/Matterbridge/matterbridge-example-camera" luligu/matterbridge:chip-test
-```
-
-### Add the plugin
-
-Add the plugin and restart the container
-
-```shell
-npm install --no-fund --no-audit --verbose
-npm link matterbridge --no-fund --no-audit --verbose
-npm run build
-npm prune --omit=dev --no-fund --no-audit --verbose
-docker exec -it plugin-chip-test matterbridge --add matterbridge-example-camera
-docker restart plugin-chip-test
-```
-
-### Run the tests inside the container
-
-Open a shell in the container
-
-```shell
-docker exec -it plugin-chip-test bash
-```
-
-In the shell:
-
-```bash
-# Generic device composition and conformance ✅ (one test fails for a known matter.js bug)
-python3 src/python_testing/TC_DeviceBasicComposition.py
-python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
-python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
-
-# Doorbell mandatory Switch server
-python3 src/python_testing/TC_SWTCH.py
-
-# Chime cluster ✅
-python3 src/python_testing/TC_CHIME_2_2.py --endpoint 2
-python3 src/python_testing/TC_CHIME_2_3.py --endpoint 2
-python3 src/python_testing/TC_CHIME_2_5.py --endpoint 2
-python3 src/python_testing/TC_CHIME_2_6.py --endpoint 2
-
-# Camera AV Stream Management
-python3 src/python_testing/TC_AVSM_2_1.py
-python3 src/python_testing/TC_AVSM_2_2.py
-python3 src/python_testing/TC_AVSM_2_3.py
-python3 src/python_testing/TC_AVSM_2_4.py
-python3 src/python_testing/TC_AVSM_2_5.py
-python3 src/python_testing/TC_AVSM_2_6.py
-python3 src/python_testing/TC_AVSM_2_7.py
-python3 src/python_testing/TC_AVSM_2_8.py
-python3 src/python_testing/TC_AVSM_2_9.py
-python3 src/python_testing/TC_AVSM_2_10.py
-python3 src/python_testing/TC_AVSM_2_11.py
-python3 src/python_testing/TC_AVSM_2_12.py
-python3 src/python_testing/TC_AVSM_2_13.py
-python3 src/python_testing/TC_AVSM_2_14.py
-python3 src/python_testing/TC_AVSM_2_15.py
-python3 src/python_testing/TC_AVSM_2_16.py
-python3 src/python_testing/TC_AVSM_2_17.py
-python3 src/python_testing/TC_AVSM_2_18.py
-python3 src/python_testing/TC_AVSM_2_19.py
-python3 src/python_testing/TC_AVSM_2_20.py
-python3 src/python_testing/TC_AVSM_2_21.py
-
-# Additional Camera AV Stream Management tests
-python3 src/python_testing/TC_AVSM_StreamReuseRangeParams.py
-python3 src/python_testing/TC_AVSM_VideoStreamsPersistence.py
-
-# Audio/Video Stream Usage Management
-python3 src/python_testing/TC_AVSUM_2_1.py
-python3 src/python_testing/TC_AVSUM_2_2.py
-python3 src/python_testing/TC_AVSUM_2_3.py
-python3 src/python_testing/TC_AVSUM_2_4.py
-python3 src/python_testing/TC_AVSUM_2_5.py
-python3 src/python_testing/TC_AVSUM_2_6.py
-python3 src/python_testing/TC_AVSUM_2_7.py
-python3 src/python_testing/TC_AVSUM_2_8.py
-python3 src/python_testing/TC_AVSUM_2_9.py
-
-# Push AV Stream Transport
-python3 src/python_testing/TC_PAVST_2_1.py
-python3 src/python_testing/TC_PAVST_2_2.py
-python3 src/python_testing/TC_PAVST_2_3.py
-python3 src/python_testing/TC_PAVST_2_4.py
-python3 src/python_testing/TC_PAVST_2_5.py
-python3 src/python_testing/TC_PAVST_2_6.py
-python3 src/python_testing/TC_PAVST_2_7.py
-python3 src/python_testing/TC_PAVST_2_8.py
-python3 src/python_testing/TC_PAVST_2_9.py
-python3 src/python_testing/TC_PAVST_2_10.py
-python3 src/python_testing/TC_PAVST_2_11.py
-python3 src/python_testing/TC_PAVST_2_12.py
-python3 src/python_testing/TC_PAVST_2_13.py
-
-# WebRTC Transport Provider
-python3 src/python_testing/TC_WEBRTCP_2_1.py
-python3 src/python_testing/TC_WEBRTCP_2_2.py
-python3 src/python_testing/TC_WEBRTCP_2_3.py
-python3 src/python_testing/TC_WEBRTCP_2_4.py
-python3 src/python_testing/TC_WEBRTCP_2_5.py
-python3 src/python_testing/TC_WEBRTCP_2_6.py
-python3 src/python_testing/TC_WEBRTCP_2_7.py
-python3 src/python_testing/TC_WEBRTCP_2_8.py
-python3 src/python_testing/TC_WEBRTCP_2_9.py
-python3 src/python_testing/TC_WEBRTCP_2_10.py
-python3 src/python_testing/TC_WEBRTCP_2_11.py
-python3 src/python_testing/TC_WEBRTCP_2_12.py
-python3 src/python_testing/TC_WEBRTCP_2_13.py
-python3 src/python_testing/TC_WEBRTCP_2_14.py
-python3 src/python_testing/TC_WEBRTCP_2_15.py
-python3 src/python_testing/TC_WEBRTCP_2_16.py
-python3 src/python_testing/TC_WEBRTCP_2_17.py
-python3 src/python_testing/TC_WEBRTCP_2_18.py
-python3 src/python_testing/TC_WEBRTCP_2_19.py
-python3 src/python_testing/TC_WEBRTCP_2_20.py
-python3 src/python_testing/TC_WEBRTCP_2_21.py
-python3 src/python_testing/TC_WEBRTCP_2_22.py
-python3 src/python_testing/TC_WEBRTCP_2_23.py
-python3 src/python_testing/TC_WEBRTCP_2_24.py
-python3 src/python_testing/TC_WEBRTCP_2_25.py
-python3 src/python_testing/TC_WEBRTCP_2_26.py
-python3 src/python_testing/TC_WEBRTCP_2_27.py
-python3 src/python_testing/TC_WEBRTCP_2_28.py
-python3 src/python_testing/TC_WEBRTCP_2_29.py
-python3 src/python_testing/TC_WEBRTCP_2_30.py
-python3 src/python_testing/TC_WEBRTCP_2_31.py
-python3 src/python_testing/TC_WEBRTCP_2_32.py
-
-# Zone Management
-python3 src/python_testing/TC_ZONEMGMT_2_4.py
-```
-
-### Stop the container and link the local matterbridge instance
-
-```shell
-docker stop plugin-chip-test
-npm run link
-```

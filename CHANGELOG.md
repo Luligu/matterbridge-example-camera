@@ -28,6 +28,46 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.1.0] - Dev branch
+
+### Added
+
+- [camera]: Bump MatterbridgeWebRtcTransportProviderServer v.2.0.0.
+- [camera]: Bump MatterbridgeCameraAvStreamManagementServer v.2.0.0.
+- [chip]: Add chip test toolchain.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
+
+## [0.0.9] - Not published
+
+### Added
+
+- [Dev Container]: Update Dev Container v.1.2.0.
+- [scripts]: Add `scripts/run-chip-tests.mjs` to manage the `luligu/matterbridge:chip-test` docker container and run the CHIP python test suite defined in `chipTests.json`. `--start` builds and adds the plugin to a fresh container, `--stop` stops it and restores the local dev environment (reinstall, relink, rebuild), `--test NAME` filters to matching tests, and results are logged to `chipTests.log`.
+- [scripts]: `run-chip-tests.mjs` now supports a per-test `"reset": true` field in `chipTests.json` that clears persisted stateful cluster storage and restarts the plugin (without recreating the container) before a test that needs a clean device state, and a per-test `"comment"` field that documents a known/expected failure, printed under its ❌ line in the run summary. The run summary is also written to `chipTestsSummary.log`, separate from the full `chipTests.log`.
+- [tests]: Add `TC_AVSUM_2_1`, `TC_AVSUM_2_2`, `TC_AVSUM_2_3` and `TC_AVSUM_2_9` (Camera AV Settings User Level Management / Mechanical PTZ) to `chipTests.json` and the README, running against the `PTZCamera` example device (endpoint 7).
+- [camera]: Add a `MATTERBRIDGE_STRICT_WEBRTCTRANSPORT` environment variable for `MatterbridgeWebRtcTransportProviderServer.solicitOffer`/`provideOffer`. When set to `1`: (1) a request with none of `videoStreams`, `audioStreams`, `videoStreamId` or `audioStreamId` present is rejected with `INVALID_COMMAND`, matching the Matter specification's choice conformance for these commands; (2) `videoStreams`/`audioStreams` are resolved and validated against `AllocatedVideoStreams`/`AllocatedAudioStreams` per Matter 1.6/1.5.1 §11.5.6.1.10/§11.5.6.3.5 — `INVALID_IN_STATE` when nothing is allocated, `ALREADY_EXISTS` on duplicate ids, `DYNAMIC_CONSTRAINT_ERROR` when an id isn't allocated — instead of the default lenient auto-allocate-on-demand behavior. Fixes the CHIP WebRTC Transport Provider conformance test suite's expectations (`TC_WEBRTCP_2_2`, `2_3`, `2_5`, `2_27`, `2_28`, `2_29`, `2_31`; `2_3`/`2_29` now fully pass, `2_5`/`2_31` progress past this scenario into an unrelated, still-open `StreamUsage` validation gap). Left unset (the default), behavior is completely unchanged: a completely empty request triggers automatic stream selection, and a present stream id/list is used without validating it against `Allocated*Streams` at all — required for compatibility with real clients observed in production that never call `VideoStreamAllocate`/`AudioStreamAllocate` (e.g. SmartThings, and Home Assistant's Matter camera integration).
+- [tests]: Add coverage for `MATTERBRIDGE_STRICT_WEBRTCTRANSPORT`'s `Allocated*Streams` validation in `vitest/behaviors/webRtcTransportProviderServer.test.ts` (up to 53 tests, 100% statements/branches/functions/lines maintained project-wide).
+- [camera]: `MatterbridgeCameraAvStreamManagementServer` now self-allocates a default video/audio/snapshot stream on construction for any feature the endpoint supports that has none allocated yet (`Camera`, `SnapshotCamera`, `AudioDoorbell`, `Intercom`, and the composite `FloodlightCamera`/`VideoDoorbell`), so `AllocatedVideoStreams`/`AllocatedAudioStreams`/`AllocatedSnapshotStreams` are never unexpectedly empty for a client that never calls `VideoStreamAllocate`/`AudioStreamAllocate`/`SnapshotStreamAllocate` itself (e.g. SmartThings in production) or after matter.js legitimately discards persisted state on a `FeatureMap` change between restarts. Add a `MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT` environment variable to disable this (set to `1`) for the CHIP conformance suite, whose `TC_AVSM_2_2`/`TC_AVSM_2_5` assert the lists are empty immediately after commissioning — see `chipTests.md`'s "Camera AV Stream Management — Default Stream Self-Allocation" for the full rationale and verification. The self-allocated default snapshot stream's `minResolution`/`maxResolution` now span the full range of the endpoint's `snapshotCapabilities` (smallest to largest entry) instead of a single fixed point (the first/smallest entry), so a real client requesting any of the device's own advertised snapshot resolutions dedup-matches this default stream in `snapshotStreamAllocate` (Matter 1.6/1.5.1 §11.2.8.8.8) instead of allocating an unwanted duplicate — confirmed against a real `python-matter-server` dashboard trace that previously allocated a second, orphaned snapshot stream for exactly this reason.
+
+### Changed
+
+- [screenshots]: Update screenshots.
+
+### Fixed
+
+- [chime]: `MatterbridgeChimeServer` now rejects writes to the `SelectedChime` attribute with `NOT_FOUND` when the written chime ID is not present in `InstalledChimeSounds`, per Matter 1.6 Application Cluster spec §11.8.5.2. Previously any value was silently accepted, failing `TC_CHIME_2_3`.
+- [camera]: `CameraAvStreamManagement.captureSnapshot` now rejects with `NOT_FOUND` when the requested `snapshotStreamId` (or automatic selection with no allocated snapshot stream) does not match an entry in `AllocatedSnapshotStreams`, per Matter 1.6 §11.2.8.13. Previously it always returned a snapshot. Fixed `TC_AVSM_2_10`.
+- [camera]: `SnapshotStreamAllocate` now reuses an existing snapshot stream whose resolution range overlaps the request (narrowing its stored resolution to the new range) instead of only matching on exact field equality, per Matter 1.6 §11.2.8.8.8. Fixed `TC_AVSM_2_15` and `TC_AVSM_StreamReuseRangeParams`.
+- [camera]: `VideoStreamAllocate` now enforces `MaxConcurrentEncoders`, rejecting a new (non-reused) allocation with `RESOURCE_EXHAUSTED` once the limit is reached, and validates the `MinFrameRate`/`MaxFrameRate` and `MinBitRate`/`MaxBitRate` cross-field constraints ("1 to Max...", Matter 1.6 §11.2.8.4) with `CONSTRAINT_ERROR`, neither of which matter.js enforces automatically.
+- [camera]: `MPTZSetPosition` and `MPTZRelativeMove` now reject with `INVALID_COMMAND` when all of their fields (pan/tilt/zoom, or panDelta/tiltDelta/zoomDelta) are omitted, per Matter 1.6 §11.3.7. Previously an empty command was silently accepted as a no-op. Fixed `TC_AVSUM_2_2` and `TC_AVSUM_2_3`.
+- [camera]: Remove the temporary `ImageControl` feature workaround from Audio Doorbell and Intercom, now that the underlying matter.js choice-conformance bug (ImageRotation/ImageFlipHorizontal/ImageFlipVertical enforced unconditionally instead of only when `ImageControl` is enabled) is fixed upstream. Both device types now correctly omit `ImageControl` and its attributes, matching the Matter specification for their device type. Also removed the now-obsolete `comment` on `TC_DeviceConformance` in `chipTests.json`.
+- [camera]: Remove the same now-unneeded `ImageControl` attributes from Snapshot Camera (Snapshot feature only). Camera keeps `ImageControl` enabled: unlike the other three device types, its `webRtcTransportProviderServer.ts` automatic stream assignment gates on `endpoint.behaviors.has(MatterbridgeCameraAvStreamManagementServer)`, an exact match against that base class's declared Video/Audio/Snapshot/ImageControl feature set, so dropping `ImageControl` there breaks WebRTC `SolicitOffer`/`ProvideOffer` auto-assignment.
+- [tests]: Add `SelectedChime` write coverage (accepted and rejected chime IDs) in `vitest/behaviors/chimeServer.test.ts`.
+- [tests]: Add coverage for all the `CameraAvStreamManagement` and `CameraAvSettingsUserLevelManagement` fixes above in `vitest/behaviors/cameraAvStreamManagementServer.test.ts` and `vitest/behaviors/cameraAvSettingsUserLevelManagementServer.test.ts` (both files at 100% statements/branches/functions/lines).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
+
 ## [0.0.8] - 2026-07-26
 
 ### Added
