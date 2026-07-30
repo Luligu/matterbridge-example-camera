@@ -221,8 +221,7 @@
     {
       "name": "WebRTC Transport Provider 2.3",
       "test": "TC_WEBRTCP_2_3.py",
-      "args": ["--endpoint 6"],
-      "comment": "Fixed (Known Issues #8): passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container; fails with the default container, which doesn't set that env var."
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.4",
@@ -232,8 +231,7 @@
     {
       "name": "WebRTC Transport Provider 2.5",
       "test": "TC_WEBRTCP_2_5.py",
-      "args": ["--endpoint 6"],
-      "comment": "Gap: requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier steps (Known Issues #8, fixed); then fails because StreamUsage is never validated against StreamUsagePriorities (see chipTests.md Known Issues #10)."
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.6",
@@ -370,8 +368,7 @@
     {
       "name": "WebRTC Transport Provider 2.31",
       "test": "TC_WEBRTCP_2_31.py",
-      "args": ["--endpoint 6"],
-      "comment": "Gap: requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier steps (Known Issues #8, fixed); then fails because StreamUsage is never validated against StreamUsagePriorities (see chipTests.md Known Issues #10)."
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.32",

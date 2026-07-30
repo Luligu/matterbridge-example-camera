@@ -1,6 +1,6 @@
 /**
  * run-chip-tests.mjs
- * Version: 1.3.0
+ * Version: 1.4.0
  *
  * Manage the `luligu/matterbridge:chip-test` docker container for the plugin in the current working
  * directory and run the Matter CHIP test suite defined in chipTests.json, logging full results to
@@ -135,32 +135,6 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-// npm prune renames native addon files (oxlint/oxfmt .node bindings) as it removes them, which
-// briefly races with editors/LSPs that keep those binaries open on Windows (EBUSY/EPERM). Retry
-// a few times, then warn and continue rather than aborting the whole container setup, mirroring
-// the locked-file handling in scripts/clean.mjs and scripts/deep-clean.mjs.
-function pruneDevDependencies() {
-  const args = ['prune', '--omit=dev', '--no-fund', '--no-audit', '--verbose'];
-  const maxAttempts = 3;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const result = runNpm(args);
-    if (result.status === 0) {
-      return;
-    }
-
-    if (attempt === maxAttempts) {
-      console.warn(
-        `npm prune failed after ${maxAttempts} attempts (exit ${result.status}) — likely a devDependency binary locked by an editor process. Continuing without pruning.`,
-      );
-      return;
-    }
-
-    console.warn(`npm prune failed (exit ${result.status}), retrying in 1s...`);
-    sleepSync(1000);
-  }
-}
-
 function start() {
   console.log('Removing any existing chip-test container...');
   run('docker', ['rm', containerName, '-f']);
@@ -186,6 +160,19 @@ function start() {
     `${join(root, 'temp')}:/tmp/matter_testing/logs`,
     '-v',
     `${root}:/root/Matterbridge/${pluginName}`,
+    // Shadows just the node_modules subpath of the bind mount above with a named volume backed by the
+    // container's own native (Linux) filesystem, persisted across container recreations (docker rm doesn't
+    // remove named volumes). Matterbridge core re-links itself into a local plugin's node_modules on every
+    // restart when it isn't already present there (see the comment below); running that npm operation, and
+    // the container's own module resolution generally, against the host's Windows bind mount over Docker
+    // Desktop's cross-OS file sharing is dramatically slower than native disk I/O, and a Windows-created
+    // symlink for node_modules/matterbridge doesn't reliably resolve from inside the Linux container anyway.
+    // With this volume, the container has its own independent node_modules entirely: the first `--start` ever
+    // populates it (a real one-time cost, comparable to a fresh `npm install`), and every one after that finds
+    // node_modules/matterbridge already present and skips straight past the re-link. The host's own
+    // node_modules (used for building dist/, linting, tests, etc.) is never touched by any of this.
+    '-v',
+    `chip-test-node-modules:/root/Matterbridge/${pluginName}/node_modules`,
     image,
   ]);
 
@@ -193,7 +180,7 @@ function start() {
   runNpmOrFail(['install', '--no-fund', '--no-audit', '--verbose']);
   runNpmOrFail(['link', 'matterbridge', '--no-fund', '--no-audit', '--verbose']);
   runNpmOrFail(['run', 'build']);
-  pruneDevDependencies();
+  runNpmOrFail(['unlink', 'matterbridge', '--no-fund', '--no-audit']);
 
   console.log('Adding the plugin to the container...');
   runOrFail('docker', ['exec', containerName, 'matterbridge', '--add', pluginName]);
@@ -201,8 +188,9 @@ function start() {
   writePluginConfig();
 
   console.log('Restarting the container...');
+  const restartedAt = new Date().toISOString();
   runOrFail('docker', ['restart', containerName]);
-
+  waitForContainerReady(restartedAt);
   console.log('Chip-test container ready.');
 }
 

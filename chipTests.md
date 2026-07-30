@@ -134,13 +134,11 @@ python3 src/python_testing/TC_AVSUM_2_3.py --endpoint 7
 # Test bug: jumps from step 18 to step 22 without calling skip_step() for steps 19-21 when DPTZ is unsupported
 python3 src/python_testing/TC_AVSUM_2_9.py --endpoint 7
 
-# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (18/31 pass; see Known Issues below)
+# WebRTC Transport Provider — endpoint 6 (Camera), requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (baked into the luligu/matterbridge:chip-test image by default, see Known Issues #1) ⚠️ (20/31 pass; see Known Issues below)
 python3 src/python_testing/TC_WEBRTCP_2_1.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_2.py --endpoint 6
-# Passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (verified 2026-07-28; Known Issues #8 fixed)
 python3 src/python_testing/TC_WEBRTCP_2_3.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_4.py --endpoint 6
-# Gap: gets past the #8 scenario (fixed), then fails on an unsupported StreamUsage not being rejected with DYNAMIC_CONSTRAINT_ERROR (see Known Issues #10)
 python3 src/python_testing/TC_WEBRTCP_2_5.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_6.py --endpoint 6
 # Gap: HardPrivacyModeOn never flips when the simulated physical privacy switch is toggled (see Known Issues #2)
@@ -178,7 +176,6 @@ python3 src/python_testing/TC_WEBRTCP_2_28.py --endpoint 6
 # Passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (verified 2026-07-28; Known Issues #8 fixed, ProvideOffer variant)
 python3 src/python_testing/TC_WEBRTCP_2_29.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_30.py --endpoint 6
-# Gap: gets past the #8 scenario (fixed), then fails on an unsupported StreamUsage not being rejected with DYNAMIC_CONSTRAINT_ERROR (see Known Issues #10)
 python3 src/python_testing/TC_WEBRTCP_2_31.py --endpoint 6
 python3 src/python_testing/TC_WEBRTCP_2_32.py --endpoint 6
 ```
@@ -251,8 +248,8 @@ All of these are one missing validation step (§11.5.6.1.10/§11.5.6.3.5's `Allo
 **#9 — `videoStreamID`/`videoStreams` (or the audio equivalents) present simultaneously isn't rejected (1 test: 2.27).**
 Matter 1.6 Application Cluster Specification §11.5.6.1.10: "If the `VideoStreams` or `AudioStreams` fields are present, and the `VideoStreamID` or `AudioStreamID` fields are present: Fail the command with `INVALID_COMMAND`." Our `#resolveStreamLists()` doesn't check for this mutual-exclusion conflict — it silently prefers `request.videoStreams`/`request.audioStreams` over the deprecated single-id fields via `??`, so a request with both present just succeeds using the modern field. Fix direction: add an explicit check for "both present" before falling into `#resolveStreamLists()`'s fallback logic, and reject with `INVALID_COMMAND`.
 
-**#10 — `StreamUsage` is never validated against `StreamUsagePriorities` for a SolicitOffer/ProvideOffer that already has valid stream ids (discovered 2026-07-28 while verifying the #8 fix; affects at least 2.5 and 2.31, possibly more once #9 is fixed).**
-Matter 1.6 Application Cluster Specification §11.5.6.1.10: "If `StreamUsage` is not found in the `StreamUsagePriorities`: Fail the command with the status code `DYNAMIC_CONSTRAINT_ERROR`." This check sits early in the Effect-on-Receipt sequence (before the stream-id resolution/validation covered by #8), and neither `solicitOffer` nor `provideOffer` implement it at all — an unsupported `StreamUsage` is accepted outright as long as the video/audio stream ids themselves are valid. Not yet fixed; needs the same treatment as #8 (likely gated behind `MATTERBRIDGE_STRICT_WEBRTCTRANSPORT` too, pending a check for whether any real client sends an unsupported `StreamUsage` — no evidence either way yet from the SmartThings trace below, which only ever sends `LiveView`).
+**#10 — RESOLVED. `StreamUsage` was never validated against `StreamUsagePriorities` for a SolicitOffer/ProvideOffer that already has valid stream ids (originally 2 tests: 2.5, 2.31; discovered 2026-07-28 while verifying the #8 fix).**
+Matter 1.6 Application Cluster Specification §11.5.6.1.10: "If `StreamUsage` is not found in the `StreamUsagePriorities`: Fail the command with the status code `DYNAMIC_CONSTRAINT_ERROR`." This check sits early in the Effect-on-Receipt sequence (before the stream-id resolution/validation covered by #8), and neither `solicitOffer` nor `provideOffer` implemented it at all — an unsupported `StreamUsage` was accepted outright as long as the video/audio stream ids themselves were valid. **Fixed** (2026-07-29) with a new `#validateStreamUsage()`, called before stream-id resolution in both commands, gated behind `MATTERBRIDGE_STRICT_WEBRTCTRANSPORT` (same pattern as #8) — no real client trace has ever sent a `StreamUsage` outside `StreamUsagePriorities` (SmartThings only ever sends `LiveView`), so the lenient default is unaffected. This also made the `state === undefined` ("no CameraAvStreamManagement cluster") fallback branches inside `#validateAllocatedStreamIds`/`#selectExistingVideoStreamId`/`#selectExistingAudioStreamId` genuinely unreachable (since `#validateStreamUsage` now always rejects that case first via an empty `streamUsagePriorities`) — simplified away rather than left as dead code. Verified: 2.5 and 2.31 both pass cleanly; full vitest suite for this file (57 tests, 2 new) stays at 100% statement/branch/function/line coverage.
 
 **Housekeeping:** `TC_WEBRTCP_2_26.py` referenced above doesn't exist in the `luligu/matterbridge:chip-test` image used for this run — confirmed via `ls src/python_testing/TC_WEBRTCP_2_*.py` inside the container. Re-check if the image is ever updated.
 

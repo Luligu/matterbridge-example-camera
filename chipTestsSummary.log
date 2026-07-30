@@ -1,5 +1,47 @@
-Chip tests run started at 2026-07-29T18:29:00.520Z
+Chip tests run started at 2026-07-29T19:58:58.813Z
 
-✅ WebRTC Transport Provider 2.4 (TC_WEBRTCP_2_4.py)
+✅ WebRTC Transport Provider 2.1 (TC_WEBRTCP_2_1.py)
+✅ WebRTC Transport Provider 2.2 (TC_WEBRTCP_2_2.py)
+❌ WebRTC Transport Provider 2.3 (TC_WEBRTCP_2_3.py)
+❌ WebRTC Transport Provider 2.4 (TC_WEBRTCP_2_4.py)
+❌ WebRTC Transport Provider 2.5 (TC_WEBRTCP_2_5.py)
+✅ WebRTC Transport Provider 2.6 (TC_WEBRTCP_2_6.py)
+❌ WebRTC Transport Provider 2.7 (TC_WEBRTCP_2_7.py)
+   ↳ Gap: HardPrivacyModeOn never flips when the simulated physical privacy switch is toggled (see chipTests.md Known Issues #2).
+❌ WebRTC Transport Provider 2.8 (TC_WEBRTCP_2_8.py)
+   ↳ Gap: writing SoftRecordingPrivacyModeEnabled returns UnsupportedAttribute, Privacy feature not implemented (see chipTests.md Known Issues #3).
+✅ WebRTC Transport Provider 2.9 (TC_WEBRTCP_2_9.py)
+✅ WebRTC Transport Provider 2.10 (TC_WEBRTCP_2_10.py)
+✅ WebRTC Transport Provider 2.11 (TC_WEBRTCP_2_11.py)
+❌ WebRTC Transport Provider 2.12 (TC_WEBRTCP_2_12.py)
+   ↳ Gap: no enforced max concurrent WebRTC sessions; DUT never sends End(OutOfResources) (see chipTests.md Known Issues #4).
+❌ WebRTC Transport Provider 2.13 (TC_WEBRTCP_2_13.py)
+   ↳ Gap: same HardPrivacyModeOn issue as WebRTC Transport Provider 2.7 (see chipTests.md Known Issues #2).
+❌ WebRTC Transport Provider 2.14 (TC_WEBRTCP_2_14.py)
+   ↳ Gap: same SoftRecordingPrivacyModeEnabled issue as WebRTC Transport Provider 2.8 (see chipTests.md Known Issues #3).
+✅ WebRTC Transport Provider 2.15 (TC_WEBRTCP_2_15.py)
+❌ WebRTC Transport Provider 2.16 (TC_WEBRTCP_2_16.py)
+   ↳ Gap: same session-capacity issue as WebRTC Transport Provider 2.12, but the ProvideOffer variant fails with UnsupportedCluster instead of reaching the limit (see chipTests.md Known Issues #4).
+✅ WebRTC Transport Provider 2.17 (TC_WEBRTCP_2_17.py)
+✅ WebRTC Transport Provider 2.18 (TC_WEBRTCP_2_18.py)
+✅ WebRTC Transport Provider 2.19 (TC_WEBRTCP_2_19.py)
+✅ WebRTC Transport Provider 2.20 (TC_WEBRTCP_2_20.py)
+✅ WebRTC Transport Provider 2.21 (TC_WEBRTCP_2_21.py)
+❌ WebRTC Transport Provider 2.22 (TC_WEBRTCP_2_22.py)
+   ↳ Gap: 'TH establishes a valid WebRTC session with DUT' times out during ICE/DTLS completion; not yet root-caused (see chipTests.md Known Issues #5).
+❌ WebRTC Transport Provider 2.23 (TC_WEBRTCP_2_23.py)
+   ↳ Gap: same session-establishment timeout as WebRTC Transport Provider 2.22 (see chipTests.md Known Issues #5).
+❌ WebRTC Transport Provider 2.24 (TC_WEBRTCP_2_24.py)
+   ↳ Gap: unsupported cipher suite is accepted instead of rejected with DynamicConstraintError; no cipher-suite validation implemented (see chipTests.md Known Issues #6).
+❌ WebRTC Transport Provider 2.25 (TC_WEBRTCP_2_25.py)
+   ↳ Gap: same cipher-suite validation gap as WebRTC Transport Provider 2.24 (see chipTests.md Known Issues #6).
+❌ WebRTC Transport Provider 2.27 (TC_WEBRTCP_2_27.py)
+   ↳ Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9).
+❌ WebRTC Transport Provider 2.28 (TC_WEBRTCP_2_28.py)
+❌ WebRTC Transport Provider 2.29 (TC_WEBRTCP_2_29.py)
+   ↳ Fixed (Known Issues #8, ProvideOffer variant): passes with MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container; fails with the default container, which doesn't set that env var.
+❌ WebRTC Transport Provider 2.30 (TC_WEBRTCP_2_30.py)
+❌ WebRTC Transport Provider 2.31 (TC_WEBRTCP_2_31.py)
+❌ WebRTC Transport Provider 2.32 (TC_WEBRTCP_2_32.py)
 
-Summary: 1/1 tests passed.
+Summary: 12/31 tests passed.
