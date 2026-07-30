@@ -315,13 +315,13 @@
       "name": "Camera AV Settings User Level Management 2.7",
       "test": "TC_AVSUM_2_7.py",
       "args": ["--endpoint 7"],
-      "comment": "Gap: expects Status.NotFound but gets Status.UnsupportedCommand — needs investigation, not yet a documented Known Issue."
+      "comment": "Test bug: gated by \"has_feature(..., kDigitalPTZ) and has_feature(..., kVideo)\" — has_feature() returns a functools.partial (always truthy, no __bool__), so Python's `and` just returns the second operand and the kDigitalPTZ check is silently discarded at decorator-eval time. Only kVideo actually gates the test at runtime, so it wrongly runs against our device (Video supported, DigitalPTZ never declared anywhere in src/), sends DPTZSetViewport, and expects NotFound where UnsupportedCommand is the spec-correct response for a command that doesn't exist without the DigitalPTZ feature."
     },
     {
       "name": "Camera AV Settings User Level Management 2.8",
       "test": "TC_AVSUM_2_8.py",
       "args": ["--endpoint 7"],
-      "comment": "Gap: same Status.UnsupportedCommand-instead-of-NotFound issue as Camera AV Settings User Level Management 2.7."
+      "comment": "Test bug: same has_feature() `and`-precedence gating bug as Camera AV Settings User Level Management 2.7 — see its comment."
     },
     {
       "name": "Camera AV Settings User Level Management 2.9",

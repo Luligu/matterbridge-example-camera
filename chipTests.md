@@ -34,16 +34,17 @@ python3 src/python_testing/TC_DeviceBasicComposition.py
 python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
 python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
 
-# Basic Information — all TC_BINFO_*.py tests in src/python_testing, endpoint 0 (Matterbridge's own root node, not a bridged device) ✅ (2.1/2.2 pass; see comments for 3.1/3.2)
+# Basic Information — all TC_BINFO_*.py tests in src/python_testing, endpoint 0 (Matterbridge's own root node, not a bridged device) ✅ (2.1/2.2/3.1 pass, 3.1 self-skips cleanly; 3.2 skipped, see below)
 # Uses /root/matterbridge.pics (baked into the image, see matterbridge/docker/chip-test/matterbridge.pics), a
 # Matterbridge-specific profile hand-verified against the real BasicInformation cluster server implementation —
 # ManufacturingDate/PartNumber/ProductAppearance/Reachable correctly declared unsupported, everything else supported.
 python3 src/python_testing/TC_BINFO_2_1.py --endpoint 0 --PICS /root/matterbridge.pics
 python3 src/python_testing/TC_BINFO_2_2.py --endpoint 0 --PICS /root/matterbridge.pics
-# Skipped: requires the ProductAppearance attribute, which this example doesn't implement python3 src/python_testing/TC_BINFO_3_1.py --endpoint 0 --PICS /root/matterbridge.pics
-# Not applicable: requires --app-pipe, a debug named-pipe protocol only the reference app implements, not a real device python3 src/python_testing/TC_BINFO_3_2.py --endpoint 0 --PICS /root/matterbridge.pics
+python3 src/python_testing/TC_BINFO_3_1.py --endpoint 0 --PICS /root/matterbridge.pics # self-skips cleanly: requires the ProductAppearance attribute, which this example doesn't implement
+# Skipped ("skip": true in chipTests.json): requires the CSA reference app's --app-pipe debug hook
+python3 src/python_testing/TC_BINFO_3_2.py --endpoint 0 --PICS /root/matterbridge.pics
 
-# Bridged Device Basic Information — all TC_BRBINFO_*.py tests in src/python_testing ✅ (2.1 passes; see comments for 3.1/3.2/4.1)
+# Bridged Device Basic Information — all TC_BRBINFO_*.py tests in src/python_testing, plus the YAML-only 2.2 ✅ (2.1/2.2/3.1 pass, 3.1 self-skips cleanly; 3.2/4.1 skipped, see below)
 # Uses /root/matterbridge.pics (baked into the image) instead of the generic ci-pics-values: it's a Matterbridge-specific
 # BRBINFO profile, hand-verified against the real BridgedDeviceBasicInformation implementation and Matter Core Spec
 # §9.13.5-7 — ProductId/ManufacturingDate/PartNumber/ProductAppearance declared unsupported (not implemented),
@@ -51,9 +52,13 @@ python3 src/python_testing/TC_BINFO_2_2.py --endpoint 0 --PICS /root/matterbridg
 # unsupported (Conformance=X, excluded from this derived cluster entirely), and ConfigurationVersion/Reachable/Leave/
 # ReachableChanged declared supported (all genuinely implemented) — rather than the generic file's near-blanket default.
 python3 src/python_testing/TC_BRBINFO_2_1.py --endpoint 6 --PICS /root/matterbridge.pics
-# Skipped: requires the ProductAppearance attribute, which this example doesn't implement python3 src/python_testing/TC_BRBINFO_3_1.py --endpoint 6 --PICS /root/matterbridge.pics
-# Not applicable: requires --app-pipe, a debug named-pipe protocol only the reference bridge-app implements, not a real bridge python3 src/python_testing/TC_BRBINFO_3_2.py --endpoint 6 --PICS /root/matterbridge.pics
-# Not applicable: requires the fabric-sync-app/fabric-admin/fabric-bridge test harness, a different topology entirely (not something you point --endpoint at) python3 src/python_testing/TC_BRBINFO_4_1.py
+python3 scripts/tests/chipyaml/chiptool.py tests Test_TC_BRBINFO_2_2 --endpoint 6 --PICS /root/matterbridge.pics
+python3 src/python_testing/TC_BRBINFO_3_1.py --endpoint 6 --PICS /root/matterbridge.pics # self-skips cleanly: requires the ProductAppearance attribute, which this example doesn't implement
+# Skipped ("skip": true in chipTests.json): requires the CSA reference app's --app-pipe debug hook
+python3 src/python_testing/TC_BRBINFO_3_2.py --endpoint 6 --PICS /root/matterbridge.pics
+# Skipped ("skip": true in chipTests.json): requires the fabric-sync-app/fabric-admin/fabric-bridge test harness,
+# a different topology entirely (not something --endpoint against a single bridge can satisfy)
+python3 src/python_testing/TC_BRBINFO_4_1.py
 
 # Identify — 2.1-2.3 are YAML-only certification tests, run through chip-tool's websocket test runner
 # (chiptool.py spawns a short-lived "chip-tool interactive server" for each test and tears it down again,
@@ -91,19 +96,19 @@ python3 src/python_testing/TC_CHIME_2_6.py --endpoint 2
 # Doorbell mandatory Switch server ✅ (all non interactive pass)
 python3 src/python_testing/TC_SWTCH.py --endpoint 3
 
-# Camera AV Stream Management — requires MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT=1 (baked into the luligu/matterbridge:chip-test image by default) ✅ (all pass except 2.7 for test bug)
+# Camera AV Stream Management — requires MATTERBRIDGE_SKIP_AUTO_ALLOCATE_CAMERA_AV_STREAM_MANAGEMENT=1 (baked into the luligu/matterbridge:chip-test image by default) ✅ (all pass except 2.7 for a test-assumption mismatch; 2.16/2.17/VideoStreamsPersistence skipped, see below)
 # Without that env var, 2.2 and 2.5 fail: TC_AVSM_2_2/2_5 step 2 assert AllocatedSnapshotStreams/AllocatedAudioStreams
 # are empty immediately after commissioning, which conflicts with MatterbridgeCameraAvStreamManagementServer#initialize
 # self-allocating default streams (see the "Camera AV Stream Management — Default Stream Self-Allocation" section below).
 python3 src/python_testing/TC_AVSM_2_1.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_2.py --endpoint 6
-# Requires Watermark or Osd Features python3 src/python_testing/TC_AVSM_2_3.py --endpoint 6
+python3 src/python_testing/TC_AVSM_2_3.py --endpoint 6 # self-skips cleanly: requires the Watermark or Osd feature, neither implemented
 python3 src/python_testing/TC_AVSM_2_4.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_5.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_6.py --endpoint 6
 # Test wrong assumption: step 27 escalates MaxFrameRate by +20 per maxConcurrentEncoders iteration to force RESOURCE_EXHAUSTED; with maxConcurrentEncoders=1 the final attempt requests 65fps, exceeding our declared VideoSensorParams.MaxFps (60) — correctly rejected as DYNAMIC_CONSTRAINT_ERROR first per Matter 1.6/1.5.1 §11.2.8.4.12's Effect on Receipt order (unsupported-field checks precede the resource check); no --int-arg minFrameRate value avoids this since the offset is fixed by the test and any finite MaxFps eventually hits the same issue
 python3 src/python_testing/TC_AVSM_2_7.py --endpoint 6
-# Requires Watermark or Osd Features python3 src/python_testing/TC_AVSM_2_8.py --endpoint 6
+python3 src/python_testing/TC_AVSM_2_8.py --endpoint 6 # self-skips cleanly: requires the Watermark or Osd feature, neither implemented
 python3 src/python_testing/TC_AVSM_2_9.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_10.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_11.py --endpoint 6
@@ -111,26 +116,41 @@ python3 src/python_testing/TC_AVSM_2_12.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_13.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_14.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_15.py --endpoint 6
-# Needs WebRTC python3 src/python_testing/TC_AVSM_2_16.py --endpoint 6
-# Requires Privacy Feature python3 src/python_testing/TC_AVSM_2_17.py --endpoint 6
-# Requires reboot python3 src/python_testing/TC_AVSM_2_18.py --endpoint 6
-# Requires reboot python3 src/python_testing/TC_AVSM_2_19.py --endpoint 6
-# Requires reboot python3 src/python_testing/TC_AVSM_2_20.py --endpoint 6
+# Skipped ("skip": true in chipTests.json): requires the CSA reference app's --app-pipe debug hook
+python3 src/python_testing/TC_AVSM_2_16.py --endpoint 6
+python3 src/python_testing/TC_AVSM_2_17.py --endpoint 6
+# Calls request_device_reboot(): no real restart mechanism is wired up against this container (no
+# --restart-flag-file), so it falls through to a manual-reboot prompt that resolves immediately on empty stdin
+# without actually restarting matterbridge. The "persists after reboot" assertions pass trivially because nothing
+# was ever cleared, not because real restart persistence is exercised — verified passing with "reset": true set
+# (clean pre-allocation state) in chipTests.json.
+python3 src/python_testing/TC_AVSM_2_18.py --endpoint 6
+python3 src/python_testing/TC_AVSM_2_19.py --endpoint 6
+python3 src/python_testing/TC_AVSM_2_20.py --endpoint 6
 python3 src/python_testing/TC_AVSM_2_21.py --endpoint 6
 
-# Additional Camera AV Stream Management tests ✅ (all pass)
+# Additional Camera AV Stream Management tests ✅ (all pass except VideoStreamsPersistence, skipped)
 python3 src/python_testing/TC_AVSM_StreamReuseRangeParams.py --endpoint 6
-# Requires fault-injection TestEventTrigger (UnsupportedCluster) python3 src/python_testing/TC_AVSM_VideoStreamsPersistence.py --endpoint 6
+# Skipped ("skip": true in chipTests.json): requires the manufacturer-specific FaultInjection cluster (0xFFF1_FC06)
+# on endpoint 0 to inject kFault_ClearInMemoryAllocatedVideoStreams/kFault_LoadPersistentCameraAVSMAttributes — a
+# CI-only debug cluster the CSA reference apps implement, not something a real device exposes.
+python3 src/python_testing/TC_AVSM_VideoStreamsPersistence.py --endpoint 6
 
-# Camera AV Settings User Level Management (Mechanical/Digital PTZ) — endpoint 7 (PTZCamera) ✅ (all pass except 2.9 for a test bug)
+# Camera AV Settings User Level Management (Mechanical/Digital PTZ) — endpoint 7 (PTZCamera) ✅ (all pass except 2.7/2.8/2.9, all test bugs — see below)
 python3 src/python_testing/TC_AVSUM_2_1.py --endpoint 7
 python3 src/python_testing/TC_AVSUM_2_2.py --endpoint 7
 python3 src/python_testing/TC_AVSUM_2_3.py --endpoint 7
-# Requires MechanicalPresets feature python3 src/python_testing/TC_AVSUM_2_4.py --endpoint 7
-# Requires MechanicalPresets feature python3 src/python_testing/TC_AVSUM_2_5.py --endpoint 7
-# Requires MechanicalPresets feature python3 src/python_testing/TC_AVSUM_2_6.py --endpoint 7
-# Requires DigitalPTZ feature python3 src/python_testing/TC_AVSUM_2_7.py --endpoint 7
-# Requires DigitalPTZ feature python3 src/python_testing/TC_AVSUM_2_8.py --endpoint 7
+python3 src/python_testing/TC_AVSUM_2_4.py --endpoint 7 # self-skips cleanly: requires the MechanicalPresets feature, not implemented
+python3 src/python_testing/TC_AVSUM_2_5.py --endpoint 7 # self-skips cleanly: requires the MechanicalPresets feature, not implemented
+python3 src/python_testing/TC_AVSUM_2_6.py --endpoint 7 # self-skips cleanly: requires the MechanicalPresets feature, not implemented
+# Test bug: gated by "has_feature(..., kDigitalPTZ) and has_feature(..., kVideo)" — has_feature() returns a
+# functools.partial (always truthy, no __bool__), so Python's `and` just returns the second operand and the
+# kDigitalPTZ check is silently discarded at decorator-eval time. Only kVideo actually gates the test at runtime,
+# so it wrongly runs against our device (Video supported, DigitalPTZ never declared anywhere in src/), sends
+# DPTZSetViewport, and expects NotFound where UnsupportedCommand is the spec-correct response for a command that
+# doesn't exist without the DigitalPTZ feature.
+python3 src/python_testing/TC_AVSUM_2_7.py --endpoint 7
+python3 src/python_testing/TC_AVSUM_2_8.py --endpoint 7 # same has_feature() `and`-precedence bug as 2.7
 # Test bug: jumps from step 18 to step 22 without calling skip_step() for steps 19-21 when DPTZ is unsupported
 python3 src/python_testing/TC_AVSUM_2_9.py --endpoint 7
 
