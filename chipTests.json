@@ -420,7 +420,9 @@
     {
       "name": "WebRTC Transport Provider 2.15",
       "test": "TC_WEBRTCP_2_15.py",
-      "args": ["--endpoint 6"]
+      "args": ["--endpoint 6"],
+      "resetAfter": true,
+      "comment": "Never calls EndSession, leaving a session behind that would otherwise leak into whichever test runs next (silently, since none of the tests between here and 2.28 check for an empty CurrentSessions precondition)."
     },
     {
       "name": "WebRTC Transport Provider 2.16",
@@ -492,32 +494,33 @@
     {
       "name": "WebRTC Transport Provider 2.28",
       "test": "TC_WEBRTCP_2_28.py",
-      "args": ["--endpoint 6"],
-      "resetBefore": true
+      "args": ["--endpoint 6"]
     },
     {
       "name": "WebRTC Transport Provider 2.29",
       "test": "TC_WEBRTCP_2_29.py",
       "args": ["--endpoint 6"],
-      "resetBefore": true
+      "resetAfter": true,
+      "comment": "Never calls EndSession, leaving a session behind that would otherwise leak into whichever test runs next."
     },
     {
       "name": "WebRTC Transport Provider 2.30",
       "test": "TC_WEBRTCP_2_30.py",
       "args": ["--endpoint 6"],
-      "resetBefore": true
+      "resetAfter": true,
+      "comment": "Never calls EndSession, leaving a session behind that would otherwise leak into whichever test runs next."
     },
     {
       "name": "WebRTC Transport Provider 2.31",
       "test": "TC_WEBRTCP_2_31.py",
       "args": ["--endpoint 6"],
-      "resetBefore": true
+      "resetAfter": true,
+      "comment": "Step 6 conditionally solicits an extra session that only step 11's EndSession (for the step 8 session) doesn't cover, so a session can be left behind depending on the DUT's supported stream usages."
     },
     {
       "name": "WebRTC Transport Provider 2.32",
       "test": "TC_WEBRTCP_2_32.py",
-      "args": ["--endpoint 6"],
-      "resetBefore": true
+      "args": ["--endpoint 6"]
     }
   ]
 }

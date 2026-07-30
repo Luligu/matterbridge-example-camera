@@ -16,7 +16,11 @@
  *                          storage directory for the bridged endpoints) cleared by a "resetBefore": true or
  *                          "resetAfter": true test entry — see below. Defaults to an empty array; a test
  *                          entry using either flag with nothing configured here fails loudly instead of
- *                          silently doing nothing.
+ *                          silently doing nothing. Only needs entries for cluster state that's actually
+ *                          persisted to disk (e.g. CameraAvStreamManagement's allocated streams, Chime
+ *                          state) — the container restart that "resetBefore"/"resetAfter" also performs
+ *                          already clears any cluster state kept purely in memory (e.g. WebRTC Transport
+ *                          Provider's CurrentSessions), with no glob needed for that.
  *   "yamlTests"            (optional) The list of YAML certification tests (run through chip-tool's
  *                          websocket test runner, scripts/tests/chipyaml/chiptool.py) to run — see below.
  *                          chip-tool's own persistent storage inside the image already holds a fabric paired
@@ -237,9 +241,12 @@ function waitForContainerReady(sinceIso, timeoutMs = 45000, pollMs = 1000) {
   console.warn(`Timed out waiting for "${readyLogMarker}" in container logs; continuing anyway.`);
 }
 
-// Clears persisted stateful cluster storage and restarts the matterbridge process inside the already
-// running container, without recreating it (no docker rm/pull/npm install/build), so tests that need a
-// clean, un-allocated device state can run fast without paying the full --start cost between every test.
+// Clears persisted stateful cluster storage and restarts the container (docker restart, not a full
+// recreate: no docker rm/pull/npm install/build), so tests that need a clean, un-allocated device state can
+// run fast without paying the full --start cost between every test. The container restart alone already
+// clears any cluster state that's kept purely in memory and never written to disk (e.g. WebRTC Transport
+// Provider's CurrentSessions) — resetClusterGlobs only needs entries for state that *is* persisted (e.g.
+// CameraAvStreamManagement's allocated streams, Chime state) and would otherwise survive the restart.
 function resetContainerState() {
   if (resetClusterGlobs.length === 0) {
     fail(`A test set "resetBefore": true or "resetAfter": true, but ${testsFile} has no (or an empty) "resetClusterGlobs" array to clear.`);
