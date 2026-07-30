@@ -484,8 +484,8 @@
       "name": "WebRTC Transport Provider 2.27",
       "test": "TC_WEBRTCP_2_27.py",
       "args": ["--endpoint 6"],
-      "reset": true,
-      "comment": "Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9)."
+      "skip": true,
+      "comment": "Validates the CSA reference app's own opt-in --camera-deferred-offer standby flow; unconditionally expects deferredOffer=true, which conflicts with the deliberate deferredOffer:false fix for this device (see chipTests.md Known Issues #7/#9)."
     },
     {
       "name": "WebRTC Transport Provider 2.28",

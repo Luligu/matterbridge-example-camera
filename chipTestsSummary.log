@@ -1,45 +1,6 @@
-Chip tests run started at 2026-07-30T10:47:37.697Z
+Chip tests run started at 2026-07-30T10:56:49.504Z
 
-✅ WebRTC Transport Provider 2.1 (TC_WEBRTCP_2_1.py)
-✅ WebRTC Transport Provider 2.2 (TC_WEBRTCP_2_2.py)
-✅ WebRTC Transport Provider 2.3 (TC_WEBRTCP_2_3.py)
-✅ WebRTC Transport Provider 2.4 (TC_WEBRTCP_2_4.py)
-✅ WebRTC Transport Provider 2.5 (TC_WEBRTCP_2_5.py)
-✅ WebRTC Transport Provider 2.6 (TC_WEBRTCP_2_6.py)
-⏭️ WebRTC Transport Provider 2.7 (TC_WEBRTCP_2_7.py)
-   ↳ Requires the CSA reference app's --app-pipe debug hook.
-⏭️ WebRTC Transport Provider 2.8 (TC_WEBRTCP_2_8.py)
-   ↳ Requires the optional Privacy feature.
-✅ WebRTC Transport Provider 2.9 (TC_WEBRTCP_2_9.py)
-✅ WebRTC Transport Provider 2.10 (TC_WEBRTCP_2_10.py)
-✅ WebRTC Transport Provider 2.11 (TC_WEBRTCP_2_11.py)
-✅ WebRTC Transport Provider 2.12 (TC_WEBRTCP_2_12.py)
-⏭️ WebRTC Transport Provider 2.13 (TC_WEBRTCP_2_13.py)
-   ↳ Requires the CSA reference app's --app-pipe debug hook.
-⏭️ WebRTC Transport Provider 2.14 (TC_WEBRTCP_2_14.py)
-   ↳ Requires the optional Privacy feature.
-✅ WebRTC Transport Provider 2.15 (TC_WEBRTCP_2_15.py)
-⏭️ WebRTC Transport Provider 2.16 (TC_WEBRTCP_2_16.py)
-   ↳ Test bug: the loop's ProvideOffer calls hardcode endpoint=1 (TC_WEBRTCP_2_16.py:161).
-✅ WebRTC Transport Provider 2.17 (TC_WEBRTCP_2_17.py)
-✅ WebRTC Transport Provider 2.18 (TC_WEBRTCP_2_18.py)
-✅ WebRTC Transport Provider 2.19 (TC_WEBRTCP_2_19.py)
-✅ WebRTC Transport Provider 2.20 (TC_WEBRTCP_2_20.py)
-✅ WebRTC Transport Provider 2.21 (TC_WEBRTCP_2_21.py)
-⏭️ WebRTC Transport Provider 2.22 (TC_WEBRTCP_2_22.py)
-   ↳ Requires sending ICE candidates to the peer, crashing the CHIP reference client's native WebRTC stack.
-⏭️ WebRTC Transport Provider 2.23 (TC_WEBRTCP_2_23.py)
-   ↳ Requires sending ICE candidates to the peer, crashing the CHIP reference client's native WebRTC stack.
-⏭️ WebRTC Transport Provider 2.24 (TC_WEBRTCP_2_24.py)
-   ↳ Requires the SFrame E2E Encryption feature, which matter.js doesn't implement at all (no SFrameConfig field, no feature bit) — see chipTests.md Known Issues #6.
-⏭️ WebRTC Transport Provider 2.25 (TC_WEBRTCP_2_25.py)
-   ↳ Same missing SFrame support as WebRTC Transport Provider 2.24 (see chipTests.md Known Issues #6).
 ❌ WebRTC Transport Provider 2.27 (TC_WEBRTCP_2_27.py)
    ↳ Gap: videoStreamID/videoStreams both present isn't rejected with INVALID_COMMAND. Requires MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 on the container to get past its earlier INVALID_COMMAND step (see chipTests.md Known Issues #9).
-✅ WebRTC Transport Provider 2.28 (TC_WEBRTCP_2_28.py)
-✅ WebRTC Transport Provider 2.29 (TC_WEBRTCP_2_29.py)
-✅ WebRTC Transport Provider 2.30 (TC_WEBRTCP_2_30.py)
-✅ WebRTC Transport Provider 2.31 (TC_WEBRTCP_2_31.py)
-✅ WebRTC Transport Provider 2.32 (TC_WEBRTCP_2_32.py)
 
-Summary: 21/22 tests passed (9 skipped).
+Summary: 0/1 tests passed.

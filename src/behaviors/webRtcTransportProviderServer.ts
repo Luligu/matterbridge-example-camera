@@ -254,6 +254,27 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
   }
 
   /**
+   * Validates that a SolicitOffer/ProvideOffer request does not present both the deprecated `videoStreamId`/
+   * `audioStreamId` fields and their modern `videoStreams`/`audioStreams` list counterparts for the same stream
+   * type, per Matter 1.6/1.5.1 Application Cluster Specification §11.5.6.1.10/§11.5.6.3.5: "If the VideoStreams or
+   * AudioStreams fields are present, and the VideoStreamID or AudioStreamID fields are present: Fail the command
+   * with InvalidCommand." Applied unconditionally (independent of {@link #isStrictWebRtcTransport}): this is a
+   * basic request-shape check, not a semantic behavior change, and no real controller (SmartThings,
+   * python-matter-server; see "Real-World Client Traces" in chipTests.md) ever sends both forms at once.
+   *
+   * @param {{ videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null }} request - The relevant fields of the SolicitOffer/ProvideOffer request.
+   * @throws {StatusResponseError} With status InvalidCommand if both the deprecated and modern fields are present for video and/or audio.
+   */
+  #validateNoConflictingStreamFields(request: { videoStreams?: number[]; audioStreams?: number[]; videoStreamId?: number | null; audioStreamId?: number | null }): void {
+    if ((request.videoStreams !== undefined && request.videoStreamId !== undefined) || (request.audioStreams !== undefined && request.audioStreamId !== undefined)) {
+      throw new StatusResponseError(
+        'MatterbridgeWebRtcTransportProviderServer: videoStreams/audioStreams and the deprecated videoStreamId/audioStreamId fields are mutually exclusive',
+        Status.InvalidCommand,
+      );
+    }
+  }
+
+  /**
    * Whether SolicitOffer/ProvideOffer requests with no stream-identifying fields at all should be rejected with
    * InvalidCommand instead of falling back to automatic stream selection (see {@link #autoAssignStreams}).
    *
@@ -575,8 +596,10 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @throws {StatusResponseError} With status DynamicConstraintError if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 and streamUsage is not present in streamUsagePriorities (see {@link #validateStreamUsage}).
    * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError if MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (see {@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}).
    * @throws {StatusResponseError} With status ConstraintError if neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
+   * @throws {StatusResponseError} With status InvalidCommand if both a deprecated single-id field and its modern list counterpart are present (see {@link #validateNoConflictingStreamFields}).
    */
   override async solicitOffer(request: WebRtcTransportProvider.SolicitOfferRequest): Promise<WebRtcTransportProvider.SolicitOfferResponse> {
+    this.#validateNoConflictingStreamFields(request);
     let videoStreams: number[] | undefined;
     let audioStreams: number[] | undefined;
     if (this.#isStrictWebRtcTransport()) {
@@ -668,11 +691,13 @@ export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportPr
    * @throws {StatusResponseError} With status DynamicConstraintError if webRtcSessionId is null, MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1, and streamUsage is not present in streamUsagePriorities (see {@link #validateStreamUsage}).
    * @throws {StatusResponseError} With status InvalidInState, AlreadyExists, or DynamicConstraintError if webRtcSessionId is null and MATTERBRIDGE_STRICT_WEBRTCTRANSPORT=1 (see {@link #resolveStrictStreamLists}/{@link #validateAllocatedStreamIds}).
    * @throws {StatusResponseError} With status ConstraintError if webRtcSessionId is null and neither videoStreams nor audioStreams is provided or automatically assignable (see {@link #autoAssignStreams}).
+   * @throws {StatusResponseError} With status InvalidCommand if webRtcSessionId is null and both a deprecated single-id field and its modern list counterpart are present (see {@link #validateNoConflictingStreamFields}).
    */
   override async provideOffer(request: WebRtcTransportProvider.ProvideOfferRequest): Promise<WebRtcTransportProvider.ProvideOfferResponse> {
     const device = this.endpoint.stateOf(MatterbridgeServer);
     let webRtcSessionId = request.webRtcSessionId;
     if (webRtcSessionId === null) {
+      this.#validateNoConflictingStreamFields(request);
       let videoStreams: number[] | undefined;
       let audioStreams: number[] | undefined;
       if (this.#isStrictWebRtcTransport()) {

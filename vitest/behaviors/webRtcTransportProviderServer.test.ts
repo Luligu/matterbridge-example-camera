@@ -660,9 +660,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(endpoint.getAttribute(WebRtcTransportProvider, 'currentSessions')).toHaveLength(5);
-    expect(loggerNoticeSpy).toHaveBeenCalledWith(
-      expect.stringContaining('session 5 exceeds MAX_CONCURRENT_SESSIONS (5); evicting with WebRtcEndReason.OutOfResources'),
-    );
+    expect(loggerNoticeSpy).toHaveBeenCalledWith(expect.stringContaining('session 5 exceeds MAX_CONCURRENT_SESSIONS (5); evicting with WebRtcEndReason.OutOfResources'));
   });
 
   it('should evict the newest session with OutOfResources when provideOffer exceeds MAX_CONCURRENT_SESSIONS', async () => {
@@ -685,9 +683,7 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     ).resolves.toBeUndefined();
 
     expect(endpoint.getAttribute(WebRtcTransportProvider, 'currentSessions')).toHaveLength(5);
-    expect(loggerNoticeSpy).toHaveBeenCalledWith(
-      expect.stringContaining('session 5 exceeds MAX_CONCURRENT_SESSIONS (5); evicting with WebRtcEndReason.OutOfResources'),
-    );
+    expect(loggerNoticeSpy).toHaveBeenCalledWith(expect.stringContaining('session 5 exceeds MAX_CONCURRENT_SESSIONS (5); evicting with WebRtcEndReason.OutOfResources'));
   });
 
   it('should reject solicitOffer without videoStreams or audioStreams when the endpoint has no CameraAvStreamManagement cluster', async () => {
@@ -710,6 +706,40 @@ describe('MatterbridgeWebRtcTransportProviderServer', () => {
     await expect(endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', { webRtcSessionId: null, sdp: 'v=0 o=- offer' })).rejects.toThrow(
       'provideOffer requires at least one of videoStreams or audioStreams; the camera has no video or audio stream to assign automatically',
     );
+  });
+
+  it('should reject solicitOffer with both videoStreamId and videoStreams present', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcConflictingVideoFields' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'solicitOffer', {
+        streamUsage: StreamUsage.LiveView,
+        originatingEndpointId: EndpointNumber(1),
+        videoStreamId: 0,
+        videoStreams: [0],
+      }),
+    ).rejects.toThrow('videoStreams/audioStreams and the deprecated videoStreamId/audioStreamId fields are mutually exclusive');
+  });
+
+  it('should reject provideOffer with both audioStreamId and audioStreams present', async () => {
+    const endpoint = new MatterbridgeEndpoint([camera], { id: 'WebRtcConflictingAudioFields' });
+    createDefaultWebRtcTransportProviderClusterServer(endpoint);
+    endpoint.addRequiredClusterServers();
+    expect(await addDevice(aggregator, endpoint)).toBeTruthy();
+
+    await expect(
+      endpoint.invokeBehaviorCommand(WebRtcTransportProvider, 'provideOffer', {
+        webRtcSessionId: null,
+        sdp: 'v=0 o=- offer',
+        streamUsage: StreamUsage.LiveView,
+        originatingEndpointId: EndpointNumber(1),
+        audioStreamId: 0,
+        audioStreams: [0],
+      }),
+    ).rejects.toThrow('videoStreams/audioStreams and the deprecated videoStreamId/audioStreamId fields are mutually exclusive');
   });
 
   it('should auto-assign only an audio stream when the camera has no assignable video capability', async () => {
