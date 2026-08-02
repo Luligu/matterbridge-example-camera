@@ -33,11 +33,13 @@ If you like this project and find it useful, please consider giving it a star on
 ### Added
 
 - [chip]: Non-skipped CHIP test failures that carry a documented `comment` in `chipTests.json` (known, explained issues) no longer fail the `chip-tests.yml` workflow; only undocumented failures do.
+- [camera]: Add the ffmpeg-based snapshot capture pipeline (`src/behaviors/snapshot.ts`): captures a single JPEG from an RTSP or webcam source, retrying at increasing compression (and a downgraded resolution as a last resort) until it fits the requested byte budget, with request validation, bounded capture timeouts escalating from `SIGTERM` to `SIGKILL`, webcam warm-up frame dropping, empty-capture rejection, and credential redaction in logs and errors.
+- [frontend] Add plugin-frontend agents instructions.
 
 ### Changed
 
 - [plugin]: Require Matterbridge `3.10.3` or later.
-- [ci]: Temporarily pin the `build.yml`, `codecov.yml`, and `publish.yml` (release job) workflows to always clone matterbridge's `dev` branch, working around a matter.js `CameraAvStreamManagement.state` conformance bug still present on matterbridge's `main`.
+- [camera]: Move `weriftSession.ts` from `src/webrtc/` to `src/behaviors/` and extract the ffmpeg binary resolution into a shared `src/behaviors/ffmpeg.ts` helper, resolved once at module load and reused by both the WebRTC injection and the snapshot pipeline.
 
 ## [0.1.0] - Dev branch
 

@@ -195,7 +195,7 @@ Bind Server Intercom 2 to Server Intercom 1 with ![Matter Server Dashboard](scre
 
 ## WebRTC video and audio injection
 
-`WeriftWebRtcSession` (see `src/webrtc/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video and/or audio track into the negotiated connection, so the end-to-end media path can be validated without a real camera/microphone capture pipeline.
+`WeriftWebRtcSession` (see `src/behaviors/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video and/or audio track into the negotiated connection, so the end-to-end media path can be validated without a real camera/microphone capture pipeline.
 
 The platform configuration controls WebRTC video injection with these properties:
 
@@ -243,9 +243,23 @@ With `videoResolution: "auto"`, a real client's resolution/quality picker (e.g. 
 
 Use ffmpeg itself to list the [available capture devices](https://trac.ffmpeg.org/wiki/Capture/Webcam) and find the right value for `videoSource`:
 
-- Linux (v4l2): `v4l2-ctl --list-devices` (from `v4l-utils`), or `ls /dev/video*`.
-- macOS (avfoundation): `ffmpeg -f avfoundation -list_devices true -i dummy` — video devices are listed with their index, e.g. `[0] FaceTime HD Camera`; use that index (e.g. `0`) as the device value.
-- Windows (dshow): `ffmpeg -f dshow -list_devices true -i dummy` — video devices are listed by name under "DirectShow video devices", e.g. `"Integrated Camera"`; use that exact name as the device value.
+- Linux (v4l2): video devices are usually exposed as `/dev/video*`; use the device path as the device value.
+
+```shell
+ffmpeg -hide_banner -f v4l2 -list_formats all -i /dev/video0
+```
+
+- macOS (avfoundation): video devices are listed with their index, e.g. `[0] FaceTime HD Camera`; use that index (e.g. `0`) as the device value.
+
+```shell
+ffmpeg -hide_banner -f avfoundation -list_devices true -i dummy
+```
+
+- Windows (dshow): video devices are listed by name under "DirectShow video devices", e.g. `"Integrated Camera"`; use that exact name as the device value.
+
+```shell
+ffmpeg -hide_banner -f dshow -list_devices true -i dummy
+```
 
 Example configuration for a real Linux webcam at 720p:
 
