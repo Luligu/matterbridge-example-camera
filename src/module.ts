@@ -37,6 +37,7 @@ import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 import { isValidNumber, parseVersionString } from 'matterbridge/utils';
 
+import { WeriftWebRtcSession } from './behaviors/weriftSession.js';
 import { AudioDoorbell } from './devices/audioDoorbell.js';
 import { Camera } from './devices/camera.js';
 import { Chime } from './devices/chime.js';
@@ -45,7 +46,6 @@ import { FloodlightCamera } from './devices/floodlightCamera.js';
 import { Intercom } from './devices/intercom.js';
 import { SnapshotCamera } from './devices/snapshotCamera.js';
 import { VideoDoorbell } from './devices/videoDoorbell.js';
-import { WeriftWebRtcSession } from './webrtc/weriftSession.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
