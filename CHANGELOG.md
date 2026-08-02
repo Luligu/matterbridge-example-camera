@@ -34,7 +34,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [chip]: Non-skipped CHIP test failures that carry a documented `comment` in `chipTests.json` (known, explained issues) no longer fail the `chip-tests.yml` workflow; only undocumented failures do.
 - [camera]: Add the ffmpeg-based snapshot capture pipeline (`src/behaviors/snapshot.ts`): captures a single JPEG from an RTSP or webcam source, retrying at increasing compression (and a downgraded resolution as a last resort) until it fits the requested byte budget, with request validation, bounded capture timeouts escalating from `SIGTERM` to `SIGKILL`, webcam warm-up frame dropping, empty-capture rejection, and credential redaction in logs and errors.
-- [frontend] Add plugin-frontend agents instructions.
+- [frontend]: Add plugin-frontend agents instructions.
 
 ### Changed
 
