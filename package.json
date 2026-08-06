@@ -129,13 +129,13 @@
   "dependencies": {
     "node-ansi-logger": "3.3.0",
     "node-persist-manager": "2.1.0",
-    "werift": "0.24.2"
+    "werift": "0.24.3"
   },
   "devDependencies": {
     "@types/node": "26.1.2",
     "@vitest/coverage-v8": "4.1.10",
-    "oxfmt": "0.61.0",
-    "oxlint": "1.76.0",
+    "oxfmt": "0.62.0",
+    "oxlint": "1.77.0",
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "7.0.2",
     "vitest": "4.1.10"

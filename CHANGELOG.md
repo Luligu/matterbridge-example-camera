@@ -1,5 +1,3 @@
-<!-- eslint-disable markdown/no-missing-label-refs -->
-
 # <img src="https://matterbridge.io/assets/matterbridge.svg" alt="Matterbridge Logo" width="64px" height="64px">&nbsp;&nbsp;&nbsp;Matterbridge camera example plugin changelog
 
 [![npm version](https://img.shields.io/npm/v/matterbridge-example-camera.svg)](https://www.npmjs.com/package/matterbridge-example-camera)
@@ -40,6 +38,9 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [plugin]: Require Matterbridge `3.10.3` or later.
 - [camera]: Move `weriftSession.ts` from `src/webrtc/` to `src/behaviors/` and extract the ffmpeg binary resolution into a shared `src/behaviors/ffmpeg.ts` helper, resolved once at module load and reused by both the WebRTC injection and the snapshot pipeline.
+- [package]: Bump `werift` to v.0.24.3.
+- [package]: Bump `oxfmt` to v.0.62.0.
+- [package]: Bump `oxlint` to v.1.77.0.
 
 ## [0.1.0] - Dev branch
 
