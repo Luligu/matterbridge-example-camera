@@ -401,3 +401,57 @@ All three calibration cards above are kept well under the Matter message size ce
 A `CaptureSnapshot` response whose `data` field doesn't fit fails to send: the client gets a generic invoke failure instead of an image, since the encoder cannot represent the required plaintext length in the message header. `CameraAvStreamManagement.CaptureSnapshot` returns its image as a single field of a single command response, so it inherits this ceiling directly. Matter has a dedicated mechanism for transferring larger payloads — BDX (Bulk Data Exchange), used for OTA updates and diagnostic logs — which splits big content across a sequence of acknowledged messages instead of one oversized one, but `CaptureSnapshot` doesn't use it.
 
 WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they do not send an MP4, Ogg, or MPEG container directly. The current MP4 transfer deliberately uses the separate data-channel path. A future video-track test should parse the relevant elementary frames, packetize them as RTP, call werift's media track `writeRtp()`, and verify reception through `onTrack` and `onReceiveRtp`.
+
+## Style guide
+
+See also the [Style Guide](./STYLEGUIDE.md) for JSDoc, naming, and logging conventions used in this repository.
+
+## Repository toolchain
+
+> **Note:** This repository uses a new toolchain. It replaces the traditional TypeScript / ESLint / Prettier / Jest stack with a faster and lighter setup.
+
+- **No `typescript 6.x` package** — replaced by [TypeScript Native 7.x](https://github.com/microsoft/typescript-go).
+- **No ESLint, no Prettier** — replaced by the [oxc](https://oxc.rs) stack: [oxlint](https://oxc.rs/docs/guide/usage/linter.html) for linting and [oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) for formatting.
+- **No Jest** — replaced by [Vitest](https://vitest.dev), which is much faster and natively supports ESM without extra configuration.
+- **Far fewer development dependencies** — the number of installed packages drops from **~600** to **~75**. A clean install is much faster.
+- **Much faster linting and formatting** — oxlint and oxfmt run in a fraction of the time required by the ESLint / Prettier pipeline.
+- **Much faster builds** — tsgo compiles the project in a fraction of the time required by the standard `tsc` build.
+- **Editor support** — use the VS Code extensions for tsgo and oxc to get the same experience in the editor.
+
+## Copilot instructions
+
+| File                                                                   | Notes                                                                              |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `.github/copilot-instructions.md`                                      | Main project instructions — always loaded                                          |
+| `.github/instructions/chip-tests/chip-tests.instructions.md`           | CHIP conformance test harness — scoped to CHIP test files                          |
+| `.github/instructions/matterbridge/matterbridge.instructions.md`       | Matterbridge endpoint guide — dedicated Copilot instruction file                   |
+| `.github/instructions/plugin-frontend/plugin-frontend.instructions.md` | Plugin frontend SPA and custom REST API guide — scoped to frontend and plugin code |
+| `.github/instructions/testing/unit-tests.instructions.md`              | Testing standards — scoped to `**/*.test.ts`                                       |
+
+## Claude instructions
+
+| File                                                            | Notes                                                                              |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `CLAUDE.md`                                                     | Main project instructions — always loaded                                          |
+| `.claude/rules/chip-tests/chip-tests.instructions.md`           | CHIP conformance test harness — scoped to CHIP test files                          |
+| `.claude/rules/matterbridge/matterbridge.instructions.md`       | Matterbridge endpoint guide — loaded for all contexts                              |
+| `.claude/rules/plugin-frontend/plugin-frontend.instructions.md` | Plugin frontend SPA and custom REST API guide — scoped to frontend and plugin code |
+| `.claude/rules/testing/unit-tests.instructions.md`              | Testing standards — scoped to `**/*.test.ts`                                       |
+
+## Codex/Agents instructions
+
+| File                         | Notes                                             |
+| ---------------------------- | ------------------------------------------------- |
+| `AGENTS.md`                  | Main project instructions                         |
+| `.agents/chip-tests.md`      | CHIP conformance test harness                     |
+| `.agents/matterbridge.md`    | Matterbridge endpoint guide                       |
+| `.agents/plugin-frontend.md` | Plugin frontend SPA and custom REST API guide     |
+| `.agents/testing.md`         | Testing and validation expectations               |
+| `.codex/config.toml`         | Codex project permissions, approvals, and profile |
+| `.codex/rules/default.rules` | Codex command allow, prompt, and deny rules       |
+
+## Development guide
+
+Refer to the Matterbridge [Development guide](https://matterbridge.io/README-DEV.html) for other guidelines.
+
+---

@@ -67,7 +67,6 @@
     "*.schema.json"
   ],
   "automator": {
-    "skipDevContainer": true,
     "pm": "bun",
     "node": true,
     "plugin": true,

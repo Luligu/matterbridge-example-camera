@@ -1,6 +1,9 @@
 # .devcontainer/Dockerfile v.1.2.0
 
 # This Dockerfile is used to build a development container for Node.js applications.
+# It is based on the official Node.js Docker image and includes additional tools and configurations for a better development experience.
+# Bun is installed.
+# Bash history is configured to be synced across terminals.
 
 FROM node:24-trixie-slim
 
@@ -11,7 +14,7 @@ ENV HISTSIZE=100000
 ENV HISTFILESIZE=200000
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ca-certificates curl git procps ripgrep sudo unzip \
+  && apt-get install --yes --no-install-recommends ca-certificates curl git procps ripgrep sudo unzip bubblewrap \
   && curl --fail --location --silent --show-error https://bun.sh/install | bash \
   && mkdir -p /home/node/.bash-cache \
   && { \

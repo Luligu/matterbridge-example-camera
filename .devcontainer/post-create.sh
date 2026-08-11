@@ -23,38 +23,38 @@ echo "Bun version: $(bun -v)"
 echo "Bun global cache: ${HOME}/.bun/install/cache"
 echo ""
 
-echo "1 - Creating directories..."
+echo "1.post-create - Creating directories..."
 sudo mkdir -p /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
 sudo mkdir -p /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm /home/node/.bash-cache /home/node/.bun/install/cache
 
-echo "2 - Setting permissions..."
+echo "2.post-create - Setting permissions..."
 sudo chown -R node:node . /home/node/Matterbridge /home/node/.matterbridge /home/node/.mattercert
 sudo chown -R node:node /home/node/.claude /home/node/.codex /home/node/.agents /home/node/.npm /home/node/.bash-cache /home/node/.bun
 
-echo "3 - Building Matterbridge..."
+echo "3.post-create - Building Matterbridge..."
 sudo chmod +x .devcontainer/install-matterbridge-*.sh
 # Use this for the main branch:
 # .devcontainer/install-matterbridge-main.sh
 # Use this for the dev branch:
 .devcontainer/install-matterbridge-dev.sh
 
-echo "4 - Installing the plugin dependencies..."
+echo "4.post-create - Installing the plugin dependencies..."
 npm install --no-fund --no-audit
 
-echo "5 - Linking Matterbridge..."
+echo "5.post-create - Linking Matterbridge..."
 if ! npm link matterbridge --no-fund --no-audit; then
 	echo "Retrying link with elevated permissions..."
 	sudo npm link matterbridge --no-fund --no-audit
 	sudo chown -R node:node ./node_modules
 fi
 
-echo "6 - Building the plugin..."
+echo "6.post-create - Building the plugin..."
 npm run build
 
-echo "7 - Adding the plugin to Matterbridge..."
+echo "7.post-create - Adding the plugin to Matterbridge..."
 npm run add
 
-echo "8 - Checking for outdated packages..."
+echo "8.post-create - Checking for outdated packages..."
 npm outdated || true
 
-echo "9 - Post create setup completed!"
+echo "9.post-create - Post create setup completed!"
