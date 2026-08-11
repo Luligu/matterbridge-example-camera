@@ -38,9 +38,10 @@ If you like this project and find it useful, please consider giving it a star on
 
 - [plugin]: Require Matterbridge `3.10.3` or later.
 - [camera]: Move `weriftSession.ts` from `src/webrtc/` to `src/behaviors/` and extract the ffmpeg binary resolution into a shared `src/behaviors/ffmpeg.ts` helper, resolved once at module load and reused by both the WebRTC injection and the snapshot pipeline.
-- [package]: Bump `werift` to v.0.24.3.
-- [package]: Bump `oxfmt` to v.0.62.0.
-- [package]: Bump `oxlint` to v.1.77.0.
+- [package]: Bump `werift` to v.0.24.4.
+- [package]: Bump `@types/node` to v.26.2.0.
+- [package]: Bump `oxfmt` to v.0.63.0.
+- [package]: Bump `oxlint` to v.1.78.0.
 
 ## [0.1.0] - Dev branch
 

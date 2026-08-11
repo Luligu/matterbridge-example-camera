@@ -23,7 +23,7 @@ node scripts/run-chip-tests.mjs
 Open a shell in the container
 
 ```shell
-docker exec -it plugin-chip-test bash
+docker exec -it chip-test bash
 ```
 
 In the shell:
@@ -31,7 +31,7 @@ In the shell:
 ```bash
 # Generic device composition and conformance ✅ (all pass)
 python3 src/python_testing/TC_DeviceBasicComposition.py
-python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
+python3 src/python_testing/TC_DeviceConformance.py
 python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
 
 # Basic Information — all TC_BINFO_*.py tests in src/python_testing, endpoint 0 (Matterbridge's own root node, not a bridged device) ✅ (2.1/2.2/3.1 pass, 3.1 self-skips cleanly; 3.2 skipped, see below)
