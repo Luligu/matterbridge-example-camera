@@ -1,6 +1,6 @@
 {
   "name": "matterbridge-example-camera",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Matterbridge camera example plugin",
   "author": "https://github.com/Luligu",
   "license": "Apache-2.0",
@@ -77,6 +77,7 @@
     "version": false,
     "publish": false,
     "chip": true,
+    "video": true,
     "coverage": {
       "lines": 100,
       "functions": 100,
@@ -118,15 +119,6 @@
     "git:rebase:dev": "git fetch origin && git checkout -b dev-backup-001 && git checkout dev && git rebase origin/main && git push --force-with-lease origin dev",
     "chip:start": "node scripts/run-chip-tests.mjs --start",
     "chip:test": "node scripts/run-chip-tests.mjs",
-    "chip:test:generic": "node scripts/run-chip-tests.mjs --test Generic",
-    "chip:test:binfo": "node scripts/run-chip-tests.mjs --test TC_BINFO",
-    "chip:test:bdbinfo": "node scripts/run-chip-tests.mjs --test TC_BRBINFO",
-    "chip:test:identify": "node scripts/run-chip-tests.mjs --test TC_I",
-    "chip:test:powersource": "node scripts/run-chip-tests.mjs --test TC_PS",
-    "chip:test:chime": "node scripts/run-chip-tests.mjs --test TC_CHIME",
-    "chip:test:avsm": "node scripts/run-chip-tests.mjs --test TC_AVSM",
-    "chip:test:avsum": "node scripts/run-chip-tests.mjs --test TC_AVSUM",
-    "chip:test:webrtcp": "node scripts/run-chip-tests.mjs --test TC_WEBRTCP",
     "chip:stop": "node scripts/run-chip-tests.mjs --stop",
     "reset": "npm run deepClean && npm run softReset",
     "softReset": "npm install --no-fund --no-audit && npm prune --no-fund --no-audit && npm link --no-fund --no-audit matterbridge && npm run build && npm run typecheck",
@@ -138,13 +130,13 @@
   "dependencies": {
     "node-ansi-logger": "3.3.0",
     "node-persist-manager": "2.1.0",
-    "werift": "0.24.1"
+    "werift": "0.24.4"
   },
   "devDependencies": {
-    "@types/node": "26.1.1",
+    "@types/node": "26.2.0",
     "@vitest/coverage-v8": "4.1.10",
-    "oxfmt": "0.60.0",
-    "oxlint": "1.75.0",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "7.0.2",
     "vitest": "4.1.10"

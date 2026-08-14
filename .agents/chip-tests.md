@@ -1,15 +1,4 @@
----
-description: 'How the CHIP conformance test harness works for a Matterbridge plugin (v.1.0.0)'
-paths:
-  - 'chipTests.json'
-  - 'chipTests.md'
-  - 'chipTests.log'
-  - 'chipTestsSummary.log'
-  - 'scripts/run-chip-tests.mjs'
-  - '.github/workflows/chip-tests.yml'
----
-
-# CHIP Conformance Test Harness
+# CHIP Conformance Test Harness (v.1.0.0)
 
 A Matterbridge plugin can be validated against the Matter CHIP certification test suite — both the Python
 test scripts and the YAML certification tests used by the CSA's own CI — running inside the

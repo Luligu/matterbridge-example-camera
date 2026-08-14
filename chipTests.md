@@ -23,7 +23,7 @@ node scripts/run-chip-tests.mjs
 Open a shell in the container
 
 ```shell
-docker exec -it plugin-chip-test bash
+docker exec -it chip-test bash
 ```
 
 In the shell:
@@ -31,7 +31,7 @@ In the shell:
 ```bash
 # Generic device composition and conformance ✅ (all pass)
 python3 src/python_testing/TC_DeviceBasicComposition.py
-python3 src/python_testing/TC_DeviceConformance.py --bool-arg allow_provisional:true
+python3 src/python_testing/TC_DeviceConformance.py
 python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
 
 # Basic Information — all TC_BINFO_*.py tests in src/python_testing, endpoint 0 (Matterbridge's own root node, not a bridged device) ✅ (2.1/2.2/3.1 pass, 3.1 self-skips cleanly; 3.2 skipped, see below)
@@ -268,7 +268,7 @@ python3 src/python_testing/TC_WEBRTCP_2_32.py --endpoint 6
 Fixing this surfaced session-residue cascades (2.12/2.15/2.29/2.30/2.31 never call `EndSession`, silently breaking whichever test ran next) — resolved by moving `"resetAfter": true` onto each residue-causing test in `chipTests.json` rather than the tests affected by it (see `run-chip-tests.mjs`'s doc comment for the `resetBefore`/`resetAfter` convention).
 2.16 is a **test bug**, not a gap, now `"skip": true`: its resource-exhaustion loop hardcodes `endpoint=1` instead of the resolved endpoint, so it fails on `UnsupportedCluster` before ever reaching capacity logic. `#evictIfOverCapacity()` is already wired into `provideOffer` too (verified by 2.12 + dedicated vitest), this test just can't observe it.
 
-**#5 — Root-caused, fix attempted and reverted, now `"skip": true` (2.22, 2.23).** [weriftSession.ts](src/webrtc/weriftSession.ts) never forwards gathered ICE candidates to the peer via a follow-up `IceCandidates` invoke — invisible in production since `createOffer`/`createAnswer` already wait for ICE gathering before returning SDP, but 2.22/2.23 specifically wait for a separate `IceCandidates` exchange. A fix was attempted (2026-07-30) but reverted: it made the full WEBRTCP suite crash the CHIP reference client's native WebRTC stack (SIGABRT) on unrelated tests (2.12, 2.17) — a fragility bug in the reference client itself, worse than the original timeout. Both tests skipped rather than shipping that regression.
+**#5 — Root-caused, fix attempted and reverted, now `"skip": true` (2.22, 2.23).** [weriftSession.ts](src/behaviors/weriftSession.ts) never forwards gathered ICE candidates to the peer via a follow-up `IceCandidates` invoke — invisible in production since `createOffer`/`createAnswer` already wait for ICE gathering before returning SDP, but 2.22/2.23 specifically wait for a separate `IceCandidates` exchange. A fix was attempted (2026-07-30) but reverted: it made the full WEBRTCP suite crash the CHIP reference client's native WebRTC stack (SIGABRT) on unrelated tests (2.12, 2.17) — a fragility bug in the reference client itself, worse than the original timeout. Both tests skipped rather than shipping that regression.
 
 **#6 — matter.js doesn't implement the SFrame E2E Encryption feature at all, now `"skip": true` (2.24, 2.25).** `@matter/model`'s generated `web-rtc-transport-provider.element.ts` has no `SFrameConfig` field and no `SFRAME` feature bit — the CHIP tests' `SFrameConfig` TLV is silently dropped before reaching our handler. Requires matter.js itself to add SFrame support first; not fixable from this side.
 

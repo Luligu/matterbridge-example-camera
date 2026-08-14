@@ -1,5 +1,3 @@
-<!-- eslint-disable markdown/no-missing-label-refs -->
-
 # <img src="https://matterbridge.io/assets/matterbridge.svg" alt="Matterbridge Logo" width="64px" height="64px">&nbsp;&nbsp;&nbsp;Matterbridge camera example plugin changelog
 
 [![npm version](https://img.shields.io/npm/v/matterbridge-example-camera.svg)](https://www.npmjs.com/package/matterbridge-example-camera)
@@ -22,13 +20,35 @@
 [![powered by](https://img.shields.io/badge/powered%20by-node--ansi--logger-blue)](https://www.npmjs.com/package/node-ansi-logger)
 [![powered by](https://img.shields.io/badge/powered%20by-node--persist--manager-blue)](https://www.npmjs.com/package/node-persist-manager)
 
+---
+
 All notable changes to this project will be documented in this file.
 
-If you like this project and find it useful, please consider giving it a star on GitHub at https://github.com/Luligu/matterbridge-example-camera and sponsoring it.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+If you like this project and find it useful, please consider giving it a star on [GitHub](https://github.com/Luligu/matterbridge-example-camera) and sponsoring it.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
-## [0.1.0] - Dev branch
+## [0.2.0] - 2026-08-14
+
+### Added
+
+- [chip]: Non-skipped CHIP test failures that carry a documented `comment` in `chipTests.json` (known, explained issues) no longer fail the `chip-tests.yml` workflow; only undocumented failures do.
+- [camera]: Add the ffmpeg-based snapshot capture pipeline (`src/behaviors/snapshot.ts`): captures a single JPEG from an RTSP or webcam source, retrying at increasing compression (and a downgraded resolution as a last resort) until it fits the requested byte budget, with request validation, bounded capture timeouts escalating from `SIGTERM` to `SIGKILL`, webcam warm-up frame dropping, empty-capture rejection, and credential redaction in logs and errors.
+- [frontend]: Add plugin-frontend agents instructions.
+- [devcontainer]: Bump `devcontainer` to v.1.2.0.
+
+### Changed
+
+- [plugin]: Require Matterbridge `3.10.3` or later.
+- [camera]: Move `weriftSession.ts` from `src/webrtc/` to `src/behaviors/` and extract the ffmpeg binary resolution into a shared `src/behaviors/ffmpeg.ts` helper, resolved once at module load and reused by both the WebRTC injection and the snapshot pipeline.
+- [package]: Bump `werift` to v.0.24.4.
+- [package]: Bump `@types/node` to v.26.2.0.
+- [package]: Bump `oxfmt` to v.0.63.0.
+- [package]: Bump `oxlint` to v.1.78.0.
+
+## [0.1.0] - 2026-07-31
 
 ### Added
 
@@ -249,34 +269,3 @@ If you like this project and find it useful, please consider giving it a star on
 - First published release.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
-
-<!-- Commented out section
-## [1.1.2] - 2024-03-08
-
-### Added
-
-- [Feature 1]: Description of the feature.
-- [Feature 2]: Description of the feature.
-
-### Changed
-
-- [Feature 3]: Description of the change.
-- [Feature 4]: Description of the change.
-
-### Deprecated
-
-- [Feature 5]: Description of the deprecation.
-
-### Removed
-
-- [Feature 6]: Description of the removal.
-
-### Fixed
-
-- [Bug 1]: Description of the bug fix.
-- [Bug 2]: Description of the bug fix.
-
-### Security
-
-- [Security 1]: Description of the security improvement.
--->

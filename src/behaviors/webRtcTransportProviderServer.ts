@@ -31,8 +31,8 @@ import type { WebRtcTransportProvider } from 'matterbridge/matter/clusters';
 import { WebRtcTransportDefinitions } from 'matterbridge/matter/clusters';
 import { EndpointNumber, FabricIndex, NodeId, StreamUsage, Status, StatusResponseError } from 'matterbridge/matter/types';
 
-import { WeriftWebRtcSession } from '../webrtc/weriftSession.js';
 import { MatterbridgeCameraAvStreamManagementServer } from './cameraAvStreamManagementServer.js';
+import { WeriftWebRtcSession } from './weriftSession.js';
 
 /**
  * Delay before firing a deferred Offer/Answer invoke on the peer's WebRtcTransportRequestor (see

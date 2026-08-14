@@ -1,5 +1,5 @@
 /**
- * @file src/webrtc/weriftSession.ts
+ * @file src/behaviors/weriftSession.ts
  * @description This file contains the WeriftWebRtcSession class, wrapping a werift RTCPeerConnection.
  * @author Luca Liguori
  * @contributor Ludovic BOUÉ
@@ -22,11 +22,8 @@
  * limitations under the License.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { createSocket } from 'node:dgram';
-import { constants } from 'node:fs';
-import { access, readdir } from 'node:fs/promises';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AnsiLogger, LogLevel, MAGENTA, TimestampFormat } from 'matterbridge/logger';
@@ -34,6 +31,8 @@ import { fireAndForget, getErrorMessage } from 'matterbridge/utils';
 import type { RTCDtlsTransport, RTCIceCandidatePairStats, RTCOutboundRtpStreamStats } from 'werift';
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264, useOPUS, usePCMU, useVP8 } from 'werift';
 import { navigator } from 'werift/nonstandard';
+
+import { hasFfmpeg, runFfmpeg } from './ffmpeg.js';
 
 type VideoSource = 'none' | 'test' | 'webcam' | 'rtsp';
 
@@ -207,116 +206,6 @@ export class WeriftWebRtcSession {
       .filter((line) => line.startsWith('m='))
       .map((line) => line.slice(2).split(' ')[0]);
     return `length=${sdp.length} media=[${mediaKinds.join(',')}]`;
-  }
-
-  /**
-   * Spawns a command and waits for it to exit, discarding its stdio.
-   *
-   * @param {string} command - The command to run.
-   * @param {string[]} args - The arguments to pass to the command.
-   * @returns {Promise<void>} Resolves when the command exits with code 0; rejects otherwise.
-   */
-  private async runProcess(command: string, args: string[]): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(command, args, { stdio: 'ignore' });
-      child.once('error', reject);
-      child.once('exit', (code) => {
-        if (code === 0) {
-          resolve();
-          return;
-        }
-        /* v8 ignore next -- `code` is only null when the child is killed by a signal rather than exiting normally,
-         * which isn't practical to trigger deterministically in this harness; the fallback is cosmetic (error text). */
-        reject(new Error(`${command} exited with code ${code ?? -1}`));
-      });
-    });
-  }
-
-  /**
-   * Checks whether a command is runnable, trying `--version` and `-version` since tools differ (e.g. ffmpeg uses `-version`).
-   *
-   * @param {string} command - The command (or path) to probe.
-   * @returns {Promise<boolean>} `true` if the command ran successfully with either version switch.
-   */
-  private async hasCommand(command: string): Promise<boolean> {
-    for (const versionArg of ['--version', '-version']) {
-      try {
-        await this.runProcess(command, [versionArg]);
-        return true;
-      } catch {
-        // Try alternative version switches because tools differ (e.g. ffmpeg uses -version).
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Builds a list of Windows-specific absolute paths to probe for a command, since it may not be on `PATH`.
-   *
-   * Currently only handles `ffmpeg`: checks winget/Gyan installs under `%LOCALAPPDATA%\Microsoft\WinGet\Packages`,
-   * plus common `%ProgramFiles%`/`%ProgramFiles(x86)%` install locations. Returns an empty list on non-Windows platforms.
-   *
-   * @param {string} command - The command name (or path) to build Windows candidates for.
-   * @returns {Promise<string[]>} Candidate absolute paths, in the order they should be tried.
-   */
-  private async getWindowsCommandCandidates(command: string): Promise<string[]> {
-    if (process.platform !== 'win32') return [];
-
-    const commandName = command.toLowerCase().replace(/\.exe$/, '');
-    const executable = command.toLowerCase().endsWith('.exe') ? command : `${command}.exe`;
-    const candidates: string[] = [];
-
-    if (commandName === 'ffmpeg' && process.env.LOCALAPPDATA) {
-      const wingetPackages = path.join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Packages');
-      try {
-        const packageDirs = await readdir(wingetPackages, { withFileTypes: true });
-        for (const packageDir of packageDirs) {
-          if (!packageDir.isDirectory() || !packageDir.name.startsWith('Gyan.FFmpeg_')) continue;
-          const packagePath = path.join(wingetPackages, packageDir.name);
-          try {
-            const versionDirs = await readdir(packagePath, { withFileTypes: true });
-            for (const versionDir of versionDirs) {
-              if (versionDir.isDirectory() && versionDir.name.startsWith('ffmpeg-')) candidates.push(path.join(packagePath, versionDir.name, 'bin', executable));
-            }
-          } catch {
-            // Ignore incomplete winget package directories.
-          }
-        }
-      } catch {
-        // Ignore missing winget package storage; PATH probing still runs below.
-      }
-    }
-
-    for (const programFiles of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
-      if (!programFiles) continue;
-      candidates.push(path.join(programFiles, 'ffmpeg', 'bin', executable), path.join(programFiles, 'Gyan', 'FFmpeg', 'bin', executable));
-    }
-    return candidates;
-  }
-
-  /**
-   * Resolves a runnable path for a command, trying `PATH`, common Unix install locations, and (on Windows) the
-   * candidates from {@link getWindowsCommandCandidates}, in order.
-   *
-   * @param {string} command - The command name to resolve.
-   * @returns {Promise<string | undefined>} The first candidate that runs successfully, or `undefined` if none do.
-   */
-  private async resolveCommand(command: string): Promise<string | undefined> {
-    const candidates = [command, `/usr/bin/${command}`, `/bin/${command}`, `/usr/local/bin/${command}`, ...(await this.getWindowsCommandCandidates(command))];
-    for (const candidate of candidates) {
-      if (candidate.includes('/')) {
-        try {
-          await access(candidate, constants.X_OK);
-        } catch {
-          continue;
-        }
-      }
-      if (await this.hasCommand(candidate)) {
-        this.log.debug(`Found ${command} in ${candidate}`);
-        return candidate;
-      }
-    }
-    return undefined;
   }
 
   /**
@@ -543,8 +432,7 @@ export class WeriftWebRtcSession {
     const videoInput = this.buildFfmpegVideoInputArgs(videoSource, videoResolution);
     this.log.debug(`Attempting to attach ${videoInput.description} video track at ${videoInput.bitrateKbps}kbps`);
 
-    const ffmpegCommand = await this.resolveCommand('ffmpeg');
-    if (!ffmpegCommand) {
+    if (!hasFfmpeg()) {
       this.log.warn('Cannot inject video stream: missing dependency ffmpeg');
       return;
     }
@@ -578,10 +466,9 @@ export class WeriftWebRtcSession {
         String(selectedPayloadType),
         `rtp://127.0.0.1:${udpPort}`,
       ];
-      this.log.debug(`Spawning ffmpeg: ${ffmpegCommand} ${ffmpegArgs.join(' ')}`);
-      const generator = spawn(ffmpegCommand, ffmpegArgs);
+      const generator = runFfmpeg(ffmpegArgs);
 
-      /* v8 ignore start -- requires the spawned ffmpeg process itself to fail after resolveCommand already verified
+      /* v8 ignore start -- requires the spawned ffmpeg process itself to fail after hasFfmpeg already verified
        * it runs (e.g. the binary is removed between the check and this spawn), which this harness can't simulate
        * without deleting real system binaries or mocking node:child_process. */
       generator.once('error', (error: unknown) => {
@@ -592,9 +479,7 @@ export class WeriftWebRtcSession {
       this.testVideoUdpDisposer = disposer;
       this.testVideoGenerator = generator;
       this.testVideoAttached = true;
-      this.log.info(
-        `Attached ${videoInput.description} video track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
-      );
+      this.log.info(`Attached ${videoInput.description} video track (codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`);
       /* v8 ignore start -- requires a lower-level failure (UDP port allocation racing, werift/nonstandard media
        * internals throwing) that isn't practically triggerable in this harness without mocking werift internals. */
     } catch (error) {
@@ -737,8 +622,7 @@ export class WeriftWebRtcSession {
     const audioInput = this.buildFfmpegAudioInputArgs(audioSource);
     this.log.debug(`Attempting to attach ${audioInput.description} audio track`);
 
-    const ffmpegCommand = await this.resolveCommand('ffmpeg');
-    if (!ffmpegCommand) {
+    if (!hasFfmpeg()) {
       this.log.warn('Cannot inject audio stream: missing dependency ffmpeg');
       return;
     }
@@ -776,10 +660,9 @@ export class WeriftWebRtcSession {
         String(selectedPayloadType),
         `rtp://127.0.0.1:${udpPort}`,
       ];
-      this.log.debug(`Spawning ffmpeg: ${ffmpegCommand} ${ffmpegArgs.join(' ')}`);
-      const generator = spawn(ffmpegCommand, ffmpegArgs);
+      const generator = runFfmpeg(ffmpegArgs);
 
-      /* v8 ignore start -- requires the spawned ffmpeg process itself to fail after resolveCommand already verified
+      /* v8 ignore start -- requires the spawned ffmpeg process itself to fail after hasFfmpeg already verified
        * it runs (e.g. the binary is removed between the check and this spawn), which this harness can't simulate
        * without deleting real system binaries or mocking node:child_process. */
       generator.once('error', (error: unknown) => {
@@ -790,9 +673,7 @@ export class WeriftWebRtcSession {
       this.testAudioUdpDisposer = disposer;
       this.testAudioGenerator = generator;
       this.testAudioAttached = true;
-      this.log.info(
-        `Attached ${audioInput.description} audio track (ffmpeg=${ffmpegCommand}, codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`,
-      );
+      this.log.info(`Attached ${audioInput.description} audio track (codec=${selectedMimeType}, payloadType=${selectedPayloadType}, sourcePort=${udpPort})`);
       /* v8 ignore start -- requires a lower-level failure (UDP port allocation racing, werift/nonstandard media
        * internals throwing) that isn't practically triggerable in this harness without mocking werift internals. */
     } catch (error) {

@@ -1,5 +1,5 @@
 /**
- * @file vitest/webrtc/weriftSession.test.ts
+ * @file vitest/behaviors/weriftSession.test.ts
  * @description This file contains the tests for the WeriftWebRtcSession class.
  * @author Luca Liguori
  * @contributor Ludovic BOUÉ
@@ -7,17 +7,31 @@
 
 const NAME = 'WeriftSession';
 
-import type { ChildProcess } from 'node:child_process';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { spawn, type ChildProcess } from 'node:child_process';
 
 import { setupTest } from 'matterbridge/vitest-utils';
 import { RTCPeerConnection, RTCRtpCodecParameters, useH264, usePCMU } from 'werift';
 
-import { WeriftWebRtcSession } from '../../src/webrtc/weriftSession.js';
+import { hasFfmpeg, runFfmpeg } from '../../src/behaviors/ffmpeg.js';
+import { WeriftWebRtcSession } from '../../src/behaviors/weriftSession.js';
+
+vi.mock('../../src/behaviors/ffmpeg.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/behaviors/ffmpeg.js')>();
+  return { ...actual, hasFfmpeg: vi.fn(actual.hasFfmpeg), runFfmpeg: vi.fn(actual.runFfmpeg) };
+});
 
 await setupTest(NAME);
+
+const realHasFfmpeg = await vi.importActual<typeof import('../../src/behaviors/ffmpeg.js')>('../../src/behaviors/ffmpeg.js').then((m) => m.hasFfmpeg);
+
+/**
+ * Makes `runFfmpeg` spawn a real, harmless `node` process instead of ffmpeg, so injection lifecycle (attach,
+ * kill-on-close) can be exercised without a real ffmpeg dependency.
+ */
+function mockResolvableFfmpeg(): void {
+  vi.mocked(hasFfmpeg).mockReturnValue(true);
+  vi.mocked(runFfmpeg).mockImplementation(() => spawn(process.execPath, ['-e', '""']));
+}
 
 /**
  * Creates a real SDP offer from a throwaway remote peer connection, to feed into a WeriftWebRtcSession under test as
@@ -105,6 +119,13 @@ describe('WeriftWebRtcSession', () => {
   beforeEach(() => {
     process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = 'test';
     process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = 'test';
+  });
+
+  afterEach(() => {
+    // vite.config.ts sets clearMocks/restoreMocks to false, so a test-local hasFfmpeg/runFfmpeg override would
+    // otherwise leak into every later test.
+    vi.mocked(hasFfmpeg).mockImplementation(realHasFfmpeg);
+    vi.mocked(runFfmpeg).mockReset();
   });
 
   afterAll(() => {
@@ -594,12 +615,11 @@ describe('WeriftWebRtcSession', () => {
     });
 
     it('should create an SDP answer without an injectable audio codec when the remote offer only supports PCMU', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       type TestAudioState = { testAudioAttached: boolean; testAudioGenerator?: { killed: boolean } };
       const session = new WeriftWebRtcSession(1);
       // A resolvable ffmpeg command would let a wrongly-defaulted Opus track slip through; asserting testAudioAttached
       // stays false below proves injection is skipped because no codec was negotiated, not because ffmpeg is missing.
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+      mockResolvableFfmpeg();
       const offerSdp = await createPcmuOnlyRemoteOfferSdp();
 
       const answerSdp = await session.createAnswer(offerSdp);
@@ -698,166 +718,10 @@ describe('WeriftWebRtcSession', () => {
     });
   });
 
-  describe('ffmpeg command resolution', () => {
-    const originalPath = process.env.PATH;
-    const originalLocalAppData = process.env.LOCALAPPDATA;
-    const originalProgramFiles = process.env.ProgramFiles;
-    const originalProgramFilesX86 = process.env['ProgramFiles(x86)'];
-    const originalPlatform = process.platform;
-
-    afterEach(() => {
-      process.env.PATH = originalPath;
-      process.env.LOCALAPPDATA = originalLocalAppData;
-      process.env.ProgramFiles = originalProgramFiles;
-      process.env['ProgramFiles(x86)'] = originalProgramFilesX86;
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
-    });
-
-    it('should resolve when a spawned command exits successfully', async () => {
-      type RunProcess = { runProcess(command: string, args: string[]): Promise<void> };
-      const session = new WeriftWebRtcSession(1);
-
-      await expect((session as unknown as RunProcess).runProcess(process.execPath, ['--version'])).resolves.toBeUndefined();
-
-      await session.close();
-    });
-
-    it('should reject when a spawned command exits with a non-zero code', async () => {
-      type RunProcess = { runProcess(command: string, args: string[]): Promise<void> };
-      const session = new WeriftWebRtcSession(1);
-
-      await expect((session as unknown as RunProcess).runProcess(process.execPath, ['-e', 'process.exit(7)'])).rejects.toThrow('exited with code 7');
-
-      await session.close();
-    });
-
-    it('should report that a command exists when a version probe succeeds', async () => {
-      type HasCommand = { hasCommand(command: string): Promise<boolean> };
-      const session = new WeriftWebRtcSession(1);
-
-      await expect((session as unknown as HasCommand).hasCommand(process.execPath)).resolves.toBe(true);
-
-      await session.close();
-    });
-
-    it('should fail to resolve a command via the bare PATH lookup when PATH is empty', async () => {
-      type HasCommand = { hasCommand(command: string): Promise<boolean> };
-      const session = new WeriftWebRtcSession(1);
-
-      process.env.PATH = '';
-      const found = await (session as unknown as HasCommand).hasCommand('ffmpeg');
-      process.env.PATH = originalPath;
-
-      expect(found).toBe(false);
-
-      await session.close();
-    });
-
-    it('should resolve undefined when a command does not exist on PATH nor at any of its absolute fallback locations', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
-      const session = new WeriftWebRtcSession(1);
-
-      const resolved = await (session as unknown as ResolveCommand).resolveCommand('matterbridge-example-camera-test-nonexistent-command');
-
-      expect(resolved).toBeUndefined();
-
-      await session.close();
-    });
-
-    it('should resolve the first command candidate when its version probe succeeds', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
-      const session = new WeriftWebRtcSession(1);
-
-      const resolved = await (session as unknown as ResolveCommand).resolveCommand(process.execPath);
-
-      expect(resolved).toBe(process.execPath);
-
-      await session.close();
-    });
-
-    it('should include the winget Gyan.FFmpeg package bin path on Windows', async () => {
-      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession(1);
-      const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
-      const wingetPackage = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build');
-      await mkdir(path.join(wingetPackage, 'bin'), { recursive: true });
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-      process.env.LOCALAPPDATA = localAppData;
-
-      try {
-        const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg');
-
-        expect(candidates).toContain(path.join(wingetPackage, 'bin', 'ffmpeg.exe'));
-      } finally {
-        await rm(localAppData, { force: true, recursive: true });
-        await session.close();
-      }
-    });
-
-    it('should ignore unrelated winget package entries on Windows', async () => {
-      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession(1);
-      const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
-      const wingetPackages = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
-      await mkdir(path.join(wingetPackages, 'Other.Package_Microsoft.Winget.Source_8wekyb3d8bbwe'), { recursive: true });
-      await mkdir(path.join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin'), { recursive: true });
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-      process.env.LOCALAPPDATA = localAppData;
-      process.env.ProgramFiles = '';
-      process.env['ProgramFiles(x86)'] = '';
-
-      try {
-        const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg.exe');
-
-        expect(candidates).toEqual([path.join(wingetPackages, 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-8.1.2-full_build', 'bin', 'ffmpeg.exe')]);
-      } finally {
-        await rm(localAppData, { force: true, recursive: true });
-        await session.close();
-      }
-    });
-
-    it('should ignore Gyan winget package entries without ffmpeg version directories on Windows', async () => {
-      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession(1);
-      const localAppData = await mkdtemp(path.join(tmpdir(), 'matterbridge-ffmpeg-'));
-      const wingetPackage = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe');
-      await mkdir(path.join(wingetPackage, 'metadata'), { recursive: true });
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-      process.env.LOCALAPPDATA = localAppData;
-      process.env.ProgramFiles = '';
-      process.env['ProgramFiles(x86)'] = '';
-
-      try {
-        const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('ffmpeg');
-
-        expect(candidates).toEqual([]);
-      } finally {
-        await rm(localAppData, { force: true, recursive: true });
-        await session.close();
-      }
-    });
-
-    it('should return no Windows candidates for non-ffmpeg commands when Program Files paths are missing', async () => {
-      type GetWindowsCommandCandidates = { getWindowsCommandCandidates(command: string): Promise<string[]> };
-      const session = new WeriftWebRtcSession(1);
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-      process.env.LOCALAPPDATA = undefined;
-      process.env.ProgramFiles = '';
-      process.env['ProgramFiles(x86)'] = '';
-
-      const candidates = await (session as unknown as GetWindowsCommandCandidates).getWindowsCommandCandidates('not-ffmpeg');
-
-      expect(candidates).toEqual([]);
-
-      await session.close();
-    });
-  });
-
   describe('missing ffmpeg dependency', () => {
     it('should still negotiate a video transceiver but not inject a track when ffmpeg cannot be resolved', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       const session = new WeriftWebRtcSession(1);
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(void 0);
+      vi.mocked(hasFfmpeg).mockReturnValue(false);
 
       const sdp = await session.createOffer({ video: true, audio: false });
 
@@ -867,9 +731,8 @@ describe('WeriftWebRtcSession', () => {
     });
 
     it('should still negotiate an audio transceiver but not inject a track when ffmpeg cannot be resolved', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       const session = new WeriftWebRtcSession(1);
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(void 0);
+      vi.mocked(hasFfmpeg).mockReturnValue(false);
       const offerSdp = await createRemoteAudioOfferSdp();
 
       const answerSdp = await session.createAnswer(offerSdp);
@@ -882,10 +745,9 @@ describe('WeriftWebRtcSession', () => {
 
   describe('video track injection lifecycle', () => {
     it('should attach a default VP8 video track only once when no codec is already preferred', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       type TestVideoState = { testVideoAttached: boolean; testVideoGenerator?: { killed: boolean } };
       const session = new WeriftWebRtcSession(1);
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+      mockResolvableFfmpeg();
 
       const firstSdp = await session.createOffer({ video: true, audio: false });
       const secondSdp = await session.createOffer({ video: true, audio: false });
@@ -902,10 +764,9 @@ describe('WeriftWebRtcSession', () => {
       ['VP8', new RTCRtpCodecParameters({ mimeType: 'video/VP8', clockRate: 90000, payloadType: 96 })],
       ['H264', new RTCRtpCodecParameters({ mimeType: 'video/H264', clockRate: 90000, payloadType: 97 })],
     ])('should attach and clean up a %s video track when command resolution succeeds', async (_name, codec) => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       type TestVideoState = { testVideoAttached: boolean; testVideoGenerator?: { killed: boolean } };
       const session = new WeriftWebRtcSession(1);
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+      mockResolvableFfmpeg();
       const transceiver = session.peerConnection.addTransceiver('video', { direction: 'sendonly' });
       transceiver.codecs = [codec];
 
@@ -924,10 +785,9 @@ describe('WeriftWebRtcSession', () => {
 
   describe('audio track injection lifecycle', () => {
     it('should not attach a second test audio track when creating a subsequent answer on the same session', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       type TestAudioState = { testAudioAttached: boolean; testAudioGenerator?: { killed: boolean } };
       const session = new WeriftWebRtcSession(1);
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+      mockResolvableFfmpeg();
       const offerSdp = await createRemoteAudioOfferSdp();
 
       await session.createAnswer(offerSdp);
@@ -946,10 +806,9 @@ describe('WeriftWebRtcSession', () => {
 
   describe('process exit cleanup', () => {
     it('should kill a leftover ffmpeg process when the process emits exit', async () => {
-      type ResolveCommand = { resolveCommand(command: string): Promise<string | undefined> };
       type SessionState = { testVideoGenerator?: ChildProcess };
       const session = new WeriftWebRtcSession(1);
-      vi.spyOn(session as unknown as ResolveCommand, 'resolveCommand').mockResolvedValue(process.execPath);
+      mockResolvableFfmpeg();
 
       await session.createOffer({ video: true, audio: false });
       const videoGenerator = (session as unknown as SessionState).testVideoGenerator;
