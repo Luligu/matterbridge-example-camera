@@ -119,6 +119,15 @@
     "git:rebase:dev": "git fetch origin && git checkout -b dev-backup-001 && git checkout dev && git rebase origin/main && git push --force-with-lease origin dev",
     "chip:start": "node scripts/run-chip-tests.mjs --start",
     "chip:test": "node scripts/run-chip-tests.mjs",
+    "chip:test:generic": "node scripts/run-chip-tests.mjs --test Generic",
+    "chip:test:binfo": "node scripts/run-chip-tests.mjs --test TC_BINFO",
+    "chip:test:bdbinfo": "node scripts/run-chip-tests.mjs --test TC_BRBINFO",
+    "chip:test:identify": "node scripts/run-chip-tests.mjs --test TC_I",
+    "chip:test:powersource": "node scripts/run-chip-tests.mjs --test TC_PS",
+    "chip:test:chime": "node scripts/run-chip-tests.mjs --test TC_CHIME",
+    "chip:test:avsm": "node scripts/run-chip-tests.mjs --test TC_AVSM",
+    "chip:test:avsum": "node scripts/run-chip-tests.mjs --test TC_AVSUM",
+    "chip:test:webrtcp": "node scripts/run-chip-tests.mjs --test TC_WEBRTCP",
     "chip:stop": "node scripts/run-chip-tests.mjs --stop",
     "reset": "npm run deepClean && npm run softReset",
     "softReset": "npm install --no-fund --no-audit && npm prune --no-fund --no-audit && npm link --no-fund --no-audit matterbridge && npm run build && npm run typecheck",
@@ -128,8 +137,8 @@
     "prepublishOnly": "npm run cleanBuildProduction && npm pkg delete devDependencies scripts automator && node scripts/prepublish-clean.mjs && npm install --no-fund --no-audit --omit=dev && npm shrinkwrap --omit=dev"
   },
   "dependencies": {
-    "node-ansi-logger": "3.3.0",
-    "node-persist-manager": "2.1.0",
+    "node-ansi-logger": "3.3.1",
+    "node-persist-manager": "2.1.1",
     "werift": "0.24.4"
   },
   "devDependencies": {

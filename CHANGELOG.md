@@ -39,6 +39,8 @@ If you like this project and find it useful, please consider giving it a star on
 ### Changed
 
 - [package]: Upgrade package.
+- [package]: Bump `node-ansi-logger` to v.3.3.1.
+- [package]: Bump `node-persist-manager` to v.2.1.1.
 - [package]: Bump `oxfmt` to v.0.65.0.
 - [package]: Bump `oxlint` to v.1.80.0.
 - [package]: Bump `vitest` to v.4.1.11.
