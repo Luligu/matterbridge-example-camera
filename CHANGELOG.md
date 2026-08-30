@@ -30,6 +30,24 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
+## [0.2.1] - 2026-08-30
+
+### Added
+
+- [devcontainer]: Add `Dev Container` v.2.0.0 with dual Node and Bun runtime support.
+
+### Changed
+
+- [package]: Upgrade package.
+- [package]: Bump `node-ansi-logger` to v.3.3.1.
+- [package]: Bump `node-persist-manager` to v.2.1.1.
+- [package]: Bump `oxfmt` to v.0.65.0.
+- [package]: Bump `oxlint` to v.1.80.0.
+- [package]: Bump `vitest` to v.4.1.11.
+- [package]: Bump `@types/node` to v.26.4.0.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
 ## [0.2.0] - 2026-08-14
 
 ### Added
