@@ -118,12 +118,6 @@ interface RemoteActorSessionContext {
  * the fact. The underlying WeriftWebRtcSession can inject a synthetic moving test pattern video track for end-to-end media
  * validation when video is negotiated.
  *
- * Known upstream limitation: matter.js's fabric-index injection for fabric-scoped command invokes
- * (CommandInvokeResponse#decodeWithSchema) recurses into every nested struct field of the request when decoding, including
- * optional ones like SolicitOfferRequest/ProvideOfferRequest's `sFrameConfig`. When a real client omits `sFrameConfig`
- * (the common case, since SFrame E2E encryption is optional), `ObjectSchema.injectField` crashes trying to read a field
- * off that `undefined` value, before this behavior's command handlers ever run. This is a matter.js bug, not something
- * fixable from this plugin; it needs a fix upstream (or an updated matter.js version pulled in by matterbridge core).
  */
 export class MatterbridgeWebRtcTransportProviderServer extends WebRtcTransportProviderServer {
   /**
