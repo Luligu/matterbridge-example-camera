@@ -109,7 +109,7 @@
     "lint:fix": "oxlint --disable-nested-config --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "git:status": "git status && git branch -vv && git stash list && git fsck --full --no-reflogs",
+    "git:status": "git status && git branch -vv && git stash list && git fsck --full --no-reflogs --no-dangling && git worktree list",
     "git:remote": "git remote -v && git remote show origin",
     "git:prune": "git fetch --prune --prune-tags",
     "git:hardreset:main": "git fetch origin && git checkout main && git reset --hard origin/main",
@@ -119,15 +119,6 @@
     "git:rebase:dev": "git fetch origin && git checkout -b dev-backup-001 && git checkout dev && git rebase origin/main && git push --force-with-lease origin dev",
     "chip:start": "node scripts/run-chip-tests.mjs --start",
     "chip:test": "node scripts/run-chip-tests.mjs",
-    "chip:test:generic": "node scripts/run-chip-tests.mjs --test Generic",
-    "chip:test:binfo": "node scripts/run-chip-tests.mjs --test TC_BINFO",
-    "chip:test:bdbinfo": "node scripts/run-chip-tests.mjs --test TC_BRBINFO",
-    "chip:test:identify": "node scripts/run-chip-tests.mjs --test TC_I",
-    "chip:test:powersource": "node scripts/run-chip-tests.mjs --test TC_PS",
-    "chip:test:chime": "node scripts/run-chip-tests.mjs --test TC_CHIME",
-    "chip:test:avsm": "node scripts/run-chip-tests.mjs --test TC_AVSM",
-    "chip:test:avsum": "node scripts/run-chip-tests.mjs --test TC_AVSUM",
-    "chip:test:webrtcp": "node scripts/run-chip-tests.mjs --test TC_WEBRTCP",
     "chip:stop": "node scripts/run-chip-tests.mjs --stop",
     "reset": "npm run deepClean && npm run softReset",
     "softReset": "npm install --no-fund --no-audit && npm prune --no-fund --no-audit && npm link --no-fund --no-audit matterbridge && npm run build && npm run typecheck",
@@ -142,12 +133,12 @@
     "werift": "0.24.4"
   },
   "devDependencies": {
-    "@types/node": "26.4.0",
-    "@vitest/coverage-v8": "4.1.11",
-    "oxfmt": "0.65.0",
-    "oxlint": "1.80.0",
+    "@types/node": "26.4.1",
+    "@vitest/coverage-v8": "5.0.0",
+    "oxfmt": "0.66.0",
+    "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   }
 }
