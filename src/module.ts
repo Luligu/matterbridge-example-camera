@@ -124,7 +124,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
   }
 
   override async onStart(reason?: string): Promise<void> {
-    this.log.info(`Starting platform ${this.config.name} with reason: ${reason ?? 'No reason provided'}...`);
+    this.log.info(`Starting platform ${this.config.name} with reason: ${reason ?? 'no reason provided'}...`);
 
     // Wait for the platform to fully load the select if you use them.
     await this.ready;
@@ -344,7 +344,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
   override async onShutdown(reason?: string): Promise<void> {
     await super.onShutdown(reason);
-    this.log.info(`Shutting down platform ${this.config.name} with reason: ${reason ?? 'No reason provided'}...`);
+    this.log.info(`Shutting down platform ${this.config.name} with reason: ${reason ?? 'no reason provided'}...`);
 
     clearInterval(this.animationInterval);
     this.animationInterval = undefined;

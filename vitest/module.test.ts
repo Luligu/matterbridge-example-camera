@@ -282,12 +282,12 @@ describe('TestPlatform', () => {
     expect(loggerInfoSpy).toHaveBeenCalledWith(`Platform ${config.name} initialized successfully`);
 
     await platform.onStart();
-    expect(loggerInfoSpy).toHaveBeenCalledWith(`Starting platform ${config.name} with reason: No reason provided...`);
+    expect(loggerInfoSpy).toHaveBeenCalledWith(`Starting platform ${config.name} with reason: no reason provided...`);
 
     const unregisterSpy = vi.spyOn(platform, 'unregisterAllDevices').mockResolvedValue();
     platform.config.unregisterOnShutdown = true;
     await platform.onShutdown();
-    expect(loggerInfoSpy).toHaveBeenCalledWith(`Shutting down platform ${config.name} with reason: No reason provided...`);
+    expect(loggerInfoSpy).toHaveBeenCalledWith(`Shutting down platform ${config.name} with reason: no reason provided...`);
 
     // The device re-registered above was assigned a new endpoint number, so onShutdown's checkEndpointNumbers() warns about the change
     expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Endpoint number for device'));

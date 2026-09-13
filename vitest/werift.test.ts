@@ -3,6 +3,9 @@
  * @description This file tests a complete local client/server WebRTC flow with werift.
  * @author Luca Liguori
  * @contributor Ludovic BOUÉ
+ *
+ * Blocked STUN traffic can stall candidate gathering for five seconds per peer.
+ * Allow both sequential gathering steps plus time for ICE/DTLS and the data channel.
  */
 
 import { createHash } from 'node:crypto';
@@ -11,6 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { RTCPeerConnection } from 'werift';
 
 const connectionTimeout = 10_000;
+const negotiationTimeout = 20_000;
 const mediaChunkSize = 16 * 1024;
 const cameraMp4Url = new URL('../assets/test-camera.mp4', import.meta.url);
 
@@ -39,11 +43,16 @@ describe('werift client/server flow', () => {
 
     // Register all asynchronous observers before negotiation. Werift can connect quickly on localhost, so registering
     // them later could miss a state transition and make the test wait until its timeout.
-    const serverChannelPromise = server.onDataChannel.asPromise(connectionTimeout);
+    const serverChannelPromise = server.onDataChannel.asPromise(negotiationTimeout);
     const clientChannel = client.createDataChannel('camera-control');
-    const clientConnectedPromise = client.connectionStateChange.watch((state) => state === 'connected', connectionTimeout);
-    const serverConnectedPromise = server.connectionStateChange.watch((state) => state === 'connected', connectionTimeout);
-    const clientChannelOpenPromise = clientChannel.stateChanged.watch((state) => state === 'open', connectionTimeout);
+    const clientConnectedPromise = client.connectionStateChange.watch((state) => state === 'connected', negotiationTimeout);
+    const serverConnectedPromise = server.connectionStateChange.watch((state) => state === 'connected', negotiationTimeout);
+    const clientChannelOpenPromise = clientChannel.stateChanged.watch((state) => state === 'open', negotiationTimeout);
+    // Handle every observer immediately, while preserving failures for the await after signaling.
+    const negotiationResult = Promise.all([serverChannelPromise, clientConnectedPromise, serverConnectedPromise, clientChannelOpenPromise]).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
 
     try {
       // 1. The controller creates its SDP offer. setLocalDescription starts ICE candidate gathering on the client.
@@ -68,12 +77,12 @@ describe('werift client/server flow', () => {
       for (const candidate of serverCandidates) await client.addIceCandidate(candidate);
 
       // 5. Wait until ICE/DTLS negotiation has connected both peer connections.
-      await Promise.all([clientConnectedPromise, serverConnectedPromise]);
+      const result = await negotiationResult;
+      if ('error' in result) throw result.error;
 
       // The channel is created by the controller and appears asynchronously on the camera as a remote data channel.
-      const [serverChannel] = await serverChannelPromise;
+      const [[serverChannel]] = result.value;
       if (serverChannel.readyState !== 'open') await serverChannel.stateChanged.watch((state) => state === 'open', connectionTimeout);
-      await clientChannelOpenPromise;
 
       // 6. Model a controller request to start the camera live view.
       const requestPromise = serverChannel.onMessage.asPromise(connectionTimeout);
@@ -124,5 +133,5 @@ describe('werift client/server flow', () => {
     // 9. Confirm that teardown completed on both sides.
     expect(client.connectionState).toBe('closed');
     expect(server.connectionState).toBe('closed');
-  }, 15_000);
+  });
 });
