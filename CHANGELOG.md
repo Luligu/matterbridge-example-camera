@@ -34,6 +34,8 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Changed
 
+- [package]: Upgrade package.
+- [package]: Update dependencies.
 - [camera]: Remove the temporary `ObjectSchema.injectField` workaround now that Matterbridge includes the upstream matter.js fix for optional nested struct fields.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
