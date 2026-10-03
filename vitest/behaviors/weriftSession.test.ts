@@ -5,6 +5,10 @@
  * @contributor Ludovic BOUÉ
  */
 
+// These tests raise the suite timeout because werift always gathers ICE against stun.l.google.com, even when
+// iceServers is set to []; a dropped STUN response stalls an offer/answer for werift's full 5s gathering timeout.
+// See https://github.com/shinyoshiaki/werift-webrtc/issues/691
+
 const NAME = 'WeriftSession';
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -21,6 +25,9 @@ vi.mock('../../src/behaviors/ffmpeg.js', async (importOriginal) => {
 });
 
 await setupTest(NAME);
+
+// Timeout raised for the STUN gathering stall described in the file header above.
+vi.setConfig({ testTimeout: 30_000 });
 
 const realHasFfmpeg = await vi.importActual<typeof import('../../src/behaviors/ffmpeg.js')>('../../src/behaviors/ffmpeg.js').then((m) => m.hasFfmpeg);
 

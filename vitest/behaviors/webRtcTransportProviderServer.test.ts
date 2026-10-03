@@ -5,6 +5,10 @@
  * @contributor Ludovic BOUÉ
  */
 
+// These tests raise the suite timeout because werift always gathers ICE against stun.l.google.com, even when
+// iceServers is set to []; a dropped STUN response stalls an offer/answer for werift's full 5s gathering timeout.
+// See https://github.com/shinyoshiaki/werift-webrtc/issues/691
+
 const NAME = 'WebRtcTransportProviderServerBehavior';
 const MATTER_PORT = 6005;
 const MATTER_CREATE_ONLY = true;
@@ -34,6 +38,10 @@ import {
 import { Camera } from '../../src/devices/camera.js';
 
 await setupTest(NAME);
+
+// Timeout raised for the STUN gathering stall described in the file header above: the WeriftWebRtcSession
+// instances these tests drive gather ICE the same way.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('MatterbridgeWebRtcTransportProviderServer', () => {
   const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
