@@ -13,7 +13,6 @@ import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { ChimeClient, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
 import { CameraAvStreamManagement, Chime, Identify, PowerSource, Switch, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
-import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -21,9 +20,13 @@ import {
   createTestEnvironment,
   destroyTestEnvironment,
   flushServerNode,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerWarnSpy,
+  setupTest,
   startServerNode,
   stopServerNode,
-} from 'matterbridge/vitest-utils/matter';
+} from 'matterbridge/test-utils/vitest';
 
 import { AudioDoorbell, createDefaultAudioCameraAvStreamManagementClusterServer } from '../../src/devices/audioDoorbell.js';
 

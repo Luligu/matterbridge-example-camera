@@ -11,7 +11,6 @@ const MATTER_CREATE_ONLY = true;
 
 import { CameraAvStreamManagement, Identify, PowerSource } from 'matterbridge/matter/clusters';
 import { StreamUsage } from 'matterbridge/matter/types';
-import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -19,9 +18,13 @@ import {
   createTestEnvironment,
   destroyTestEnvironment,
   flushServerNode,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerWarnSpy,
+  setupTest,
   startServerNode,
   stopServerNode,
-} from 'matterbridge/vitest-utils/matter';
+} from 'matterbridge/test-utils/vitest';
 
 import { MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
 import { SnapshotCamera, createDefaultSnapshotCameraAvStreamManagementClusterServer } from '../../src/devices/snapshotCamera.js';

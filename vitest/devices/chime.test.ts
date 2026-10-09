@@ -10,7 +10,6 @@ const MATTER_PORT = 6001;
 const MATTER_CREATE_ONLY = true;
 
 import { Chime as ChimeCluster, Identify, PowerSource } from 'matterbridge/matter/clusters';
-import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -18,9 +17,13 @@ import {
   createTestEnvironment,
   destroyTestEnvironment,
   flushServerNode,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerWarnSpy,
+  setupTest,
   startServerNode,
   stopServerNode,
-} from 'matterbridge/vitest-utils/matter';
+} from 'matterbridge/test-utils/vitest';
 
 import { Chime, createDefaultChimeClusterServer } from '../../src/devices/chime.js';
 

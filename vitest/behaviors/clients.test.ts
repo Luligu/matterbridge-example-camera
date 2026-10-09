@@ -13,8 +13,18 @@ import { doorbell, MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { ChimeClient, WebRtcTransportProviderClient, WebRtcTransportRequestorClient } from 'matterbridge/matter/behaviors';
 import { Chime, Identify, WebRtcTransportProvider, WebRtcTransportRequestor } from 'matterbridge/matter/clusters';
-import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
-import { createServerNode, createTestEnvironment, destroyTestEnvironment, flushServerNode, startServerNode, stopServerNode } from 'matterbridge/vitest-utils/matter';
+import {
+  createServerNode,
+  createTestEnvironment,
+  destroyTestEnvironment,
+  flushServerNode,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerWarnSpy,
+  setupTest,
+  startServerNode,
+  stopServerNode,
+} from 'matterbridge/test-utils/vitest';
 
 import { addChimeClient, addWebRtcTransportProviderClient, addWebRtcTransportRequestorClient } from '../../src/behaviors/clients.js';
 import { Camera } from '../../src/devices/camera.js';

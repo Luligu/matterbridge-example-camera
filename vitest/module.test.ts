@@ -11,8 +11,6 @@ const MATTER_CREATE_ONLY = true;
 
 import type { MatterbridgeEndpoint, PlatformMatterbridge } from 'matterbridge';
 import { Chime as ChimeCluster } from 'matterbridge/matter/clusters';
-import { parseVersionString } from 'matterbridge/utils';
-import { log, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setDebug, setupTest } from 'matterbridge/vitest-utils';
 import {
   addMatterbridge,
   createServerNode,
@@ -20,9 +18,17 @@ import {
   destroyTestEnvironment,
   flushServerNode,
   getMatterbridge,
+  log,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerInfoSpy,
+  loggerWarnSpy,
+  setDebug,
+  setupTest,
   startServerNode,
   stopServerNode,
-} from 'matterbridge/vitest-utils/matter';
+} from 'matterbridge/test-utils/vitest';
+import { parseVersionString } from 'matterbridge/utils';
 
 import initializePlugin, { type CameraPlatformConfig, ExampleMatterbridgeCameraPlatform } from '../src/module.js';
 

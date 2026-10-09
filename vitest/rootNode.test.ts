@@ -12,8 +12,19 @@ const MATTER_CREATE_ONLY = true;
 import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
 import { TimeSynchronizationServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
-import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
-import { createServerNode, createTestEnvironment, destroyTestEnvironment, flushServerNode, server, startServerNode, stopServerNode } from 'matterbridge/vitest-utils/matter';
+import {
+  createServerNode,
+  createTestEnvironment,
+  destroyTestEnvironment,
+  flushServerNode,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerWarnSpy,
+  server,
+  setupTest,
+  startServerNode,
+  stopServerNode,
+} from 'matterbridge/test-utils/vitest';
 
 import { Camera } from '../src/devices/camera.js';
 import { addRootNodeCamera } from '../src/rootNode.js';

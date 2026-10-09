@@ -10,7 +10,6 @@ const MATTER_PORT = 6011;
 const MATTER_CREATE_ONLY = true;
 
 import { CameraAvSettingsUserLevelManagement } from 'matterbridge/matter/clusters';
-import { loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -18,9 +17,14 @@ import {
   createTestEnvironment,
   destroyTestEnvironment,
   flushServerNode,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerInfoSpy,
+  loggerWarnSpy,
+  setupTest,
   startServerNode,
   stopServerNode,
-} from 'matterbridge/vitest-utils/matter';
+} from 'matterbridge/test-utils/vitest';
 
 import { MatterbridgeCameraAvSettingsUserLevelManagementServer } from '../../src/behaviors/cameraAvSettingsUserLevelManagementServer.js';
 import { Camera } from '../../src/devices/camera.js';

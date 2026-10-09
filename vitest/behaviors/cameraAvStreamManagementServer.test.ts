@@ -12,7 +12,6 @@ const MATTER_CREATE_ONLY = true;
 import { camera as cameraDeviceType, MatterbridgeEndpoint } from 'matterbridge';
 import { CameraAvStreamManagement } from 'matterbridge/matter/clusters';
 import { StreamUsage, ThreeLevelAuto } from 'matterbridge/matter/types';
-import { loggerDebugSpy, loggerErrorSpy, loggerFatalSpy, loggerInfoSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -20,9 +19,15 @@ import {
   createTestEnvironment,
   destroyTestEnvironment,
   flushServerNode,
+  loggerDebugSpy,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerInfoSpy,
+  loggerWarnSpy,
+  setupTest,
   startServerNode,
   stopServerNode,
-} from 'matterbridge/vitest-utils/matter';
+} from 'matterbridge/test-utils/vitest';
 
 import { cameraColorTestJpegForResolution, MatterbridgeCameraAvStreamManagementServer } from '../../src/behaviors/cameraAvStreamManagementServer.js';
 import { Camera } from '../../src/devices/camera.js';

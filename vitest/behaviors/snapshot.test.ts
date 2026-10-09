@@ -9,7 +9,7 @@ const NAME = 'Snapshot';
 import type { ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 
-import { setupTest } from 'matterbridge/vitest-utils';
+import { setupTest } from 'matterbridge/test-utils/vitest';
 
 import { hasFfmpeg, runFfmpeg } from '../../src/behaviors/ffmpeg.js';
 import { captureSnapshot } from '../../src/behaviors/snapshot.js';

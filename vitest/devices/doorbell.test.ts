@@ -12,7 +12,6 @@ const MATTER_CREATE_ONLY = true;
 import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Chime, Identify, PowerSource, Switch } from 'matterbridge/matter/clusters';
-import { loggerErrorSpy, loggerFatalSpy, loggerWarnSpy, setupTest } from 'matterbridge/vitest-utils';
 import {
   addDevice,
   aggregator,
@@ -20,9 +19,13 @@ import {
   createTestEnvironment,
   destroyTestEnvironment,
   flushServerNode,
+  loggerErrorSpy,
+  loggerFatalSpy,
+  loggerWarnSpy,
+  setupTest,
   startServerNode,
   stopServerNode,
-} from 'matterbridge/vitest-utils/matter';
+} from 'matterbridge/test-utils/vitest';
 
 import { Doorbell } from '../../src/devices/doorbell.js';
 
