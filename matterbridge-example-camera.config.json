@@ -3,10 +3,11 @@
   "type": "DynamicPlatform",
   "whiteList": [],
   "blackList": [],
-  "videoGenerator": "none",
+  "autoInstallFfmpeg": true,
+  "videoGenerator": "test",
   "videoResolution": "auto",
   "videoBitrate": 1000,
-  "audioGenerator": "none",
+  "audioGenerator": "test",
   "animationInterval": 60,
   "debug": false,
   "unregisterOnShutdown": false

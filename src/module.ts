@@ -26,12 +26,12 @@ import { inspect } from 'node:util';
 
 import { MatterbridgeDynamicPlatform } from 'matterbridge';
 import type { MatterbridgeEndpoint, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
-import { MatterbridgeBindingServer } from 'matterbridge/behaviors';
+import { hasFfmpeg, installFfmpeg, MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import { RESET, type AnsiLogger } from 'matterbridge/logger';
 import { UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
 import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
-import { isValidNumber, parseVersionString } from 'matterbridge/utils';
+import { isDocker, isValidNumber, parseVersionString } from 'matterbridge/utils';
 
 import { WeriftWebRtcSession } from './behaviors/weriftSession.js';
 import { AudioDoorbell } from './devices/audioDoorbell.js';
@@ -46,6 +46,7 @@ import { VideoDoorbell } from './devices/videoDoorbell.js';
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
   blackList: string[];
+  autoInstallFfmpeg: boolean;
   videoGenerator: 'none' | 'test' | 'webcam' | 'rtsp';
   videoSource?: string;
   videoResolution: 'auto' | '640x480' | '1280x720' | '1920x1080';
@@ -80,8 +81,8 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     super(matterbridge, log, config);
 
     // Verify that Matterbridge is the correct version
-    if (typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.10.10')) {
-      throw new Error(`This plugin requires Matterbridge version >= "3.10.10". Please update Matterbridge to the latest version in the frontend.`);
+    if (typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.10.14')) {
+      throw new Error(`This plugin requires Matterbridge version >= "3.10.14". Please update Matterbridge to the latest version in the frontend.`);
     }
 
     this.log.info(`Initializing platform ${this.config.name}...`);
@@ -89,10 +90,11 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     // Normalize old config values to new ones
     this.config.whiteList ??= [];
     this.config.blackList ??= [];
-    this.config.videoGenerator ??= 'none';
+    this.config.autoInstallFfmpeg ??= true;
+    this.config.videoGenerator ??= 'test';
     this.config.videoResolution ??= 'auto';
     this.config.videoBitrate ??= 1000;
-    this.config.audioGenerator ??= 'none';
+    this.config.audioGenerator ??= 'test';
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;
     this.config.unregisterOnShutdown ??= false;
@@ -125,6 +127,21 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
   override async onStart(reason?: string): Promise<void> {
     this.log.info(`Starting platform ${this.config.name} with reason: ${reason ?? 'no reason provided'}...`);
+
+    // Docker or another container (e.g. a dev container) only: install ffmpeg when it is missing
+    if ((this.matterbridge.restartMode === 'docker' || isDocker()) && this.config.autoInstallFfmpeg && !hasFfmpeg()) {
+      this.log.info('Installing ffmpeg...');
+      this.wssSendSnackbarMessage('Installing ffmpeg...', 10, 'info');
+      if (await installFfmpeg()) {
+        const message = 'ffmpeg installed successfully';
+        this.log.info(message);
+        this.wssSendSnackbarMessage(message, 10, 'success');
+      } else {
+        const message = 'Failed to install ffmpeg: install it manually in the container';
+        this.log.error(message);
+        this.wssSendSnackbarMessage(message, 0, 'error');
+      }
+    }
 
     // Wait for the platform to fully load the select if you use them.
     await this.ready;
@@ -338,6 +355,34 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
           });
           break;
         // No default
+      }
+    }
+  }
+
+  /**
+   * Called when an action button defined in the plugin schema is pressed.
+   *
+   * @param {string} action - The action triggered by the button in the plugin config.
+   * @param {string} [value] - The value of the field of the action button.
+   * @param {string} [id] - The id of the schema associated with the action.
+   */
+  override async onAction(action: string, value?: string, id?: string): Promise<void> {
+    this.log.info(`Received action ${action}${value ? ' with ' + value : ''}${id ? ' for schema ' + id : ''}`);
+    if (action === 'installFfmpeg') {
+      if (hasFfmpeg()) {
+        this.wssSendSnackbarMessage('ffmpeg is already installed', 10, 'info');
+        return;
+      }
+      this.log.info('Installing ffmpeg...');
+      this.wssSendSnackbarMessage('Installing ffmpeg...', 10, 'info');
+      if (await installFfmpeg()) {
+        const message = 'ffmpeg installed successfully';
+        this.log.info(message);
+        this.wssSendSnackbarMessage(message, 10, 'success');
+      } else {
+        const message = 'Failed to install ffmpeg: requires Linux, root privileges or passwordless sudo, and apk or apt-get. See the logs for details.';
+        this.log.error(message);
+        this.wssSendSnackbarMessage(message, 0, 'error');
       }
     }
   }

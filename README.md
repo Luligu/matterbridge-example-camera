@@ -38,11 +38,15 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 
 ## Requirements
 
-Requires Matterbridge `3.10.3` or later.
+Requires Matterbridge `3.10.14` or later.
 
 Requires [`ffmpeg`](https://ffmpeg.org/) to be installed on the host or in the container. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
-Install it with the platform's package manager:
+In Docker, enable the `autoInstallFfmpeg` option (enabled by default) and the plugin installs ffmpeg at start with `apk` or `apt-get` if it is not found. If you use more than one ffmpeg plugin (example camera, camera, webcam), enable it on only one of them: concurrent installs fail on the package manager lock.
+
+The **Install ffmpeg (Linux only)** button installs ffmpeg on demand, including outside Docker. Matterbridge must run as root (or with passwordless sudo) on Linux with `apk` (Alpine) or `apt-get` (Debian/Ubuntu). The frontend reports the result; if ffmpeg is already installed, no installation is performed. On macOS and Windows, install ffmpeg manually.
+
+Otherwise install it with the platform's package manager:
 
 ### Linux (Debian/Ubuntu)
 
@@ -199,7 +203,7 @@ Bind Server Intercom 2 to Server Intercom 1 with ![Matter Server Dashboard](scre
 
 The platform configuration controls WebRTC video injection with these properties:
 
-- `videoGenerator` is required and accepts `none`, `test`, `webcam`, or `rtsp`. It defaults to `none`, which negotiates the video transceiver without attaching a track. `test` injects a synthetic moving test pattern, `webcam` captures from the configured local webcam, and `rtsp` pulls from the RTSP url configured in `videoSource`.
+- `videoGenerator` is required and accepts `none`, `test`, `webcam`, or `rtsp`. It defaults to `test`, which injects a synthetic moving test pattern. `none` negotiates the video transceiver without attaching a track, `webcam` captures from the configured local webcam, and `rtsp` pulls from the RTSP url configured in `videoSource`.
 
 - `videoSource` is optional and has no default. For the `webcam` generator it contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path`. Selecting the `webcam` or `rtsp` generator without this property falls back to the test pattern with a warning.
 
@@ -209,7 +213,7 @@ The platform configuration controls WebRTC video injection with these properties
 
 The platform configuration controls WebRTC audio injection with these properties:
 
-- `audioGenerator` is required and accepts `none`, `test`, `microphone`, or `rtsp`. It defaults to `none`, which negotiates the audio transceiver (e.g. for an Intercom's "Listen" live view) without attaching a track. `test` injects a recorded test-voice clip, looped, so the end-to-end audio path can be validated without a real microphone capture pipeline. `microphone` captures from the configured local microphone, and `rtsp` pulls just the audio from the RTSP url configured in `audioSource` (any video in the stream is dropped).
+- `audioGenerator` is required and accepts `none`, `test`, `microphone`, or `rtsp`. It defaults to `test`, which injects a recorded test-voice clip, looped, so the end-to-end audio path can be validated without a real microphone capture pipeline. `none` negotiates the audio transceiver (e.g. for an Intercom's "Listen" live view) without attaching a track. `microphone` captures from the configured local microphone, and `rtsp` pulls just the audio from the RTSP url configured in `audioSource` (any video in the stream is dropped).
 
 - `audioSource` is optional and has no default. For the `microphone` generator it contains the OS-specific ffmpeg device identifier — e.g. an ALSA device such as `hw:0,0` on Linux, an avfoundation audio index such as `0` on macOS, or a device name such as `Microphone Array` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path` (it can be a different camera/url than `videoSource`). Selecting the `microphone` or `rtsp` generator without this property falls back to the test-voice clip with a warning.
 

@@ -42,12 +42,27 @@
       "type": "number",
       "default": 60
     },
+    "autoInstallFfmpeg": {
+      "title": "Auto install ffmpeg (Docker only)",
+      "description": "Docker only: install ffmpeg automatically if it is not found in the container. On other installations, use the Linux install button or install ffmpeg manually.",
+      "type": "boolean",
+      "default": true
+    },
+    "installFfmpeg": {
+      "title": "Install ffmpeg (Linux only)",
+      "description": "Install ffmpeg now on Linux. Requires root privileges and apk (Alpine) or apt-get (Debian/Ubuntu). Available outside Docker too; unsupported on macOS and Windows.",
+      "type": "boolean",
+      "buttonText": "Install ffmpeg",
+      "buttonClose": true,
+      "buttonSave": false,
+      "default": false
+    },
     "videoGenerator": {
       "title": "Video Generator",
       "description": "Select the WebRTC video generator: none disables track injection, test generates a synthetic moving test pattern, webcam captures from the configured local webcam, and rtsp pulls from the RTSP url configured in Video Source.",
       "type": "string",
       "enum": ["none", "test", "webcam", "rtsp"],
-      "default": "none"
+      "default": "test"
     },
     "videoSource": {
       "title": "Video Source",
@@ -72,7 +87,7 @@
       "description": "Select the WebRTC audio generator: none disables track injection (only the audio transceiver is negotiated), test injects a recorded test-voice clip, looped, e.g. for an Intercom's Listen live view, microphone captures from the configured local microphone, and rtsp pulls the audio from the RTSP url configured in Audio Source.",
       "type": "string",
       "enum": ["none", "test", "microphone", "rtsp"],
-      "default": "none"
+      "default": "test"
     },
     "audioSource": {
       "title": "Audio Source",

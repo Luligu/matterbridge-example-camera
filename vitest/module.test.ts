@@ -32,6 +32,19 @@ import { parseVersionString } from 'matterbridge/utils';
 
 import initializePlugin, { type CameraPlatformConfig, ExampleMatterbridgeCameraPlatform } from '../src/module.js';
 
+const behaviors = vi.hoisted(() => ({
+  hasFfmpeg: vi.fn(() => true),
+  installFfmpeg: vi.fn(async () => true),
+}));
+
+vi.mock('matterbridge/behaviors', async (importOriginal) => ({ ...(await importOriginal<typeof import('matterbridge/behaviors')>()), ...behaviors }));
+
+const utils = vi.hoisted(() => ({
+  isDocker: vi.fn(() => false),
+}));
+
+vi.mock('matterbridge/utils', async (importOriginal) => ({ ...(await importOriginal<typeof import('matterbridge/utils')>()), ...utils }));
+
 await setupTest(NAME);
 
 describe('TestPlatform', () => {
@@ -50,6 +63,7 @@ describe('TestPlatform', () => {
     version: '1.0.0',
     whiteList: [],
     blackList: [],
+    autoInstallFfmpeg: true,
     videoGenerator: 'none',
     videoResolution: '640x480',
     videoBitrate: 1000,
@@ -105,12 +119,12 @@ describe('TestPlatform', () => {
 
   it('should throw error in load when version is not valid', () => {
     expect(() => initializePlugin({ ...matterbridge, matterbridgeVersion: '1.0.0' }, log, config)).toThrow(
-      'This plugin requires Matterbridge version >= "3.10.10". Please update Matterbridge to the latest version in the frontend.',
+      'This plugin requires Matterbridge version >= "3.10.14". Please update Matterbridge to the latest version in the frontend.',
     );
   });
 
   it('should add empty selection lists when the config omits them', async () => {
-    const emptyConfig = { ...config, whiteList: undefined, blackList: undefined, videoSource: undefined } as unknown as CameraPlatformConfig;
+    const emptyConfig = { ...config, whiteList: undefined, blackList: undefined, autoInstallFfmpeg: undefined, videoSource: undefined } as unknown as CameraPlatformConfig;
     const emptyConfigPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, emptyConfig);
     addMatterbridge(emptyConfigPlatform);
     vi.spyOn(emptyConfigPlatform, 'registerDevice').mockResolvedValue();
@@ -120,6 +134,7 @@ describe('TestPlatform', () => {
 
       expect(emptyConfigPlatform.config.whiteList).toEqual([]);
       expect(emptyConfigPlatform.config.blackList).toEqual([]);
+      expect(emptyConfigPlatform.config.autoInstallFfmpeg).toBe(true);
       expect(emptyConfigPlatform.config.videoGenerator).toBe('none');
       expect(emptyConfigPlatform.config.videoSource).toBeUndefined();
       expect(emptyConfigPlatform.config.videoResolution).toBe('640x480');
@@ -155,12 +170,14 @@ describe('TestPlatform', () => {
     expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE).toBe('hw:0,0');
   });
 
-  it('should default audioGenerator to none when the config omits it', () => {
-    const defaultAudioConfig = { ...config, audioGenerator: undefined } as unknown as CameraPlatformConfig;
-    const defaultAudioPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, defaultAudioConfig);
+  it('should default videoGenerator and audioGenerator to test when the config omits them', () => {
+    const defaultGeneratorConfig = { ...config, videoGenerator: undefined, audioGenerator: undefined } as unknown as CameraPlatformConfig;
+    const defaultGeneratorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, defaultGeneratorConfig);
 
-    expect(defaultAudioPlatform.config.audioGenerator).toBe('none');
-    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe('none');
+    expect(defaultGeneratorPlatform.config.videoGenerator).toBe('test');
+    expect(defaultGeneratorPlatform.config.audioGenerator).toBe('test');
+    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('test');
+    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe('test');
   });
 
   it('should default videoResolution to auto when the config omits it', () => {
@@ -196,6 +213,119 @@ describe('TestPlatform', () => {
     } finally {
       await filteredPlatform.onShutdown();
     }
+  });
+
+  it('should install ffmpeg on start when running in a container without the docker parameter and ffmpeg is missing', async () => {
+    const containerPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, whiteList: ['No devices'] });
+    addMatterbridge(containerPlatform);
+    vi.spyOn(containerPlatform, 'wssSendSnackbarMessage').mockImplementation(() => {});
+    behaviors.hasFfmpeg.mockReturnValue(false);
+    utils.isDocker.mockReturnValueOnce(true);
+
+    try {
+      await containerPlatform.onStart();
+      expect(behaviors.installFfmpeg).toHaveBeenCalledTimes(1);
+      expect(loggerInfoSpy).toHaveBeenCalledWith('ffmpeg installed successfully');
+
+      behaviors.installFfmpeg.mockClear();
+      await containerPlatform.onStart();
+      expect(behaviors.installFfmpeg).not.toHaveBeenCalled();
+    } finally {
+      behaviors.hasFfmpeg.mockReturnValue(true);
+      await containerPlatform.onShutdown();
+    }
+  });
+
+  it('should install ffmpeg on start when running in docker and ffmpeg is missing', async () => {
+    const dockerMatterbridge = { ...matterbridge, restartMode: 'docker' } as PlatformMatterbridge;
+    const dockerPlatform = new ExampleMatterbridgeCameraPlatform(dockerMatterbridge, log, { ...config, whiteList: ['No devices'] });
+    addMatterbridge(dockerPlatform);
+    const snackbarSpy = vi.spyOn(dockerPlatform, 'wssSendSnackbarMessage').mockImplementation(() => {});
+    behaviors.hasFfmpeg.mockReturnValue(false);
+
+    try {
+      await dockerPlatform.onStart();
+      expect(behaviors.installFfmpeg).toHaveBeenCalledTimes(1);
+      expect(loggerInfoSpy).toHaveBeenCalledWith('ffmpeg installed successfully');
+      expect(snackbarSpy).toHaveBeenCalledWith('Installing ffmpeg...', 10, 'info');
+      expect(snackbarSpy).toHaveBeenCalledWith('ffmpeg installed successfully', 10, 'success');
+
+      snackbarSpy.mockClear();
+      behaviors.installFfmpeg.mockResolvedValueOnce(false);
+      await dockerPlatform.onStart();
+      expect(loggerErrorSpy).toHaveBeenCalledWith('Failed to install ffmpeg: install it manually in the container');
+      expect(snackbarSpy).toHaveBeenCalledWith('Failed to install ffmpeg: install it manually in the container', 0, 'error');
+      loggerErrorSpy.mockClear();
+    } finally {
+      behaviors.hasFfmpeg.mockReturnValue(true);
+      await dockerPlatform.onShutdown();
+    }
+  });
+
+  it('should skip automatic installation outside Docker or when disabled or already installed', async () => {
+    for (const [restartMode, autoInstallFfmpeg, hasFfmpeg] of [
+      ['service', true, false],
+      ['docker', false, false],
+      ['docker', true, true],
+    ] as const) {
+      behaviors.hasFfmpeg.mockReturnValue(hasFfmpeg);
+      const skipPlatform = new ExampleMatterbridgeCameraPlatform({ ...matterbridge, restartMode }, log, { ...config, whiteList: ['No devices'], autoInstallFfmpeg });
+      addMatterbridge(skipPlatform);
+      try {
+        await skipPlatform.onStart();
+        expect(behaviors.installFfmpeg).not.toHaveBeenCalled();
+      } finally {
+        await skipPlatform.onShutdown();
+      }
+    }
+    behaviors.hasFfmpeg.mockReturnValue(true);
+  });
+
+  it('should report an existing ffmpeg installation without installing again', async () => {
+    const actionPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config });
+    const snackbarSpy = vi.spyOn(actionPlatform, 'wssSendSnackbarMessage').mockImplementation(() => {});
+    behaviors.hasFfmpeg.mockReturnValue(true);
+
+    await actionPlatform.onAction('installFfmpeg', 'true', 'root_installFfmpeg');
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith('Received action installFfmpeg with true for schema root_installFfmpeg');
+    expect(behaviors.installFfmpeg).not.toHaveBeenCalled();
+    expect(snackbarSpy).toHaveBeenCalledWith('ffmpeg is already installed', 10, 'info');
+  });
+
+  it('should install ffmpeg on demand and report success or failure', async () => {
+    const actionPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config });
+    const snackbarSpy = vi.spyOn(actionPlatform, 'wssSendSnackbarMessage').mockImplementation(() => {});
+    behaviors.hasFfmpeg.mockReturnValue(false);
+    behaviors.installFfmpeg.mockResolvedValueOnce(true);
+
+    try {
+      await actionPlatform.onAction('installFfmpeg');
+
+      expect(behaviors.installFfmpeg).toHaveBeenCalledTimes(1);
+      expect(snackbarSpy).toHaveBeenCalledWith('Installing ffmpeg...', 10, 'info');
+      expect(snackbarSpy).toHaveBeenCalledWith('ffmpeg installed successfully', 10, 'success');
+
+      behaviors.installFfmpeg.mockResolvedValueOnce(false);
+      await actionPlatform.onAction('installFfmpeg');
+
+      const message = 'Failed to install ffmpeg: requires Linux, root privileges or passwordless sudo, and apk or apt-get. See the logs for details.';
+      expect(behaviors.installFfmpeg).toHaveBeenCalledTimes(2);
+      expect(loggerErrorSpy).toHaveBeenCalledWith(message);
+      expect(snackbarSpy).toHaveBeenCalledWith(message, 0, 'error');
+      loggerErrorSpy.mockClear();
+    } finally {
+      behaviors.hasFfmpeg.mockReturnValue(true);
+    }
+  });
+
+  it('should ignore unknown actions', async () => {
+    const actionPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config });
+
+    await actionPlatform.onAction('unknown');
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith('Received action unknown');
+    expect(behaviors.installFfmpeg).not.toHaveBeenCalled();
   });
 
   it('should initialize platform with config name', () => {
