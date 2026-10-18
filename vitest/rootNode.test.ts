@@ -10,6 +10,7 @@ const MATTER_PORT = 6007;
 const MATTER_CREATE_ONLY = true;
 
 import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
+import { Camera } from 'matterbridge/devices/camera';
 import { TimeSynchronizationServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
 import {
@@ -26,7 +27,6 @@ import {
   stopServerNode,
 } from 'matterbridge/test-utils/vitest';
 
-import { Camera } from '../src/devices/camera.js';
 import { addRootNodeCamera } from '../src/rootNode.js';
 
 await setupTest(NAME);

@@ -27,21 +27,23 @@ import { inspect } from 'node:util';
 import { MatterbridgeDynamicPlatform } from 'matterbridge';
 import type { MatterbridgeEndpoint, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { hasFfmpeg, installFfmpeg, MatterbridgeBindingServer } from 'matterbridge/behaviors';
+import {
+  AudioDoorbell,
+  Camera,
+  type CameraOptions,
+  Chime,
+  closeWebRtcSessions,
+  Doorbell,
+  FloodlightCamera,
+  Intercom,
+  SnapshotCamera,
+  VideoDoorbell,
+} from 'matterbridge/devices/camera';
 import { RESET, type AnsiLogger } from 'matterbridge/logger';
 import { UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
 import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 import { isDocker, isValidNumber, parseVersionString } from 'matterbridge/utils';
-
-import { WeriftWebRtcSession } from './behaviors/weriftSession.js';
-import { AudioDoorbell } from './devices/audioDoorbell.js';
-import { Camera } from './devices/camera.js';
-import { Chime } from './devices/chime.js';
-import { Doorbell } from './devices/doorbell.js';
-import { FloodlightCamera } from './devices/floodlightCamera.js';
-import { Intercom } from './devices/intercom.js';
-import { SnapshotCamera } from './devices/snapshotCamera.js';
-import { VideoDoorbell } from './devices/videoDoorbell.js';
 
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
@@ -69,9 +71,14 @@ export default function initializePlugin(matterbridge: PlatformMatterbridge, log
   return new ExampleMatterbridgeCameraPlatform(matterbridge, log, config);
 }
 
+/** The WebRTC media options of the camera devices, as accepted by `CameraOptions.weriftOfferOptions`. */
+export type WeriftOfferOptions = NonNullable<CameraOptions['weriftOfferOptions']>;
+
 export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatform {
   animationPhase: number = 0;
   animationInterval: NodeJS.Timeout | undefined;
+  /** The WebRTC media options built from the config and shared by every device with a WebRtcTransportProvider cluster. */
+  readonly weriftOfferOptions: WeriftOfferOptions;
 
   constructor(
     matterbridge: PlatformMatterbridge,
@@ -81,8 +88,8 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     super(matterbridge, log, config);
 
     // Verify that Matterbridge is the correct version
-    if (typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.10.14')) {
-      throw new Error(`This plugin requires Matterbridge version >= "3.10.14". Please update Matterbridge to the latest version in the frontend.`);
+    if (typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.10.15')) {
+      throw new Error(`This plugin requires Matterbridge version >= "3.10.15". Please update Matterbridge to the latest version in the frontend.`);
     }
 
     this.log.info(`Initializing platform ${this.config.name}...`);
@@ -98,29 +105,21 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     this.config.animationInterval ??= 60;
     this.config.debug ??= false;
     this.config.unregisterOnShutdown ??= false;
-    process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = this.config.videoGenerator;
-    if (this.config.videoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
-    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = this.config.videoSource;
-    process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = this.config.videoResolution;
-    process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE = String(this.config.videoBitrate);
-    process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = this.config.audioGenerator;
-    if (this.config.audioSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
-    else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE = this.config.audioSource;
+    // The media sources of the devices with a WebRtcTransportProvider cluster
+    this.weriftOfferOptions = {
+      offerVideo: true,
+      offerAudio: true,
+      videoSource: this.config.videoGenerator,
+      videoSourceDevice: this.config.videoSource,
+      // auto is passed as unset, so each session follows the resolution of its allocated video stream
+      videoResolution: this.config.videoResolution === 'auto' ? undefined : this.config.videoResolution,
+      videoBitrate: this.config.videoBitrate,
+      audioSource: this.config.audioGenerator,
+      audioSourceDevice: this.config.audioSource,
+    };
 
     this.log.debug(`Platform ${this.config.name} config:\n${RESET}${inspect(this.config, { depth: 10, colors: true })}`);
-    this.log.debug(
-      `Platform ${this.config.name} environment variables:\n${RESET}${inspect(
-        {
-          MATTERBRIDGE_CAMERA_VIDEO_SOURCE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE,
-          MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE: process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE,
-          MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION: process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION,
-          MATTERBRIDGE_CAMERA_VIDEO_BITRATE: process.env.MATTERBRIDGE_CAMERA_VIDEO_BITRATE,
-          MATTERBRIDGE_CAMERA_AUDIO_SOURCE: process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE,
-          MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE: process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE,
-        },
-        { depth: 10, colors: true },
-      )}`,
-    );
+    this.log.debug(`Platform ${this.config.name} WebRTC options:\n${RESET}${inspect(this.weriftOfferOptions, { depth: 10, colors: true })}`);
 
     this.log.info(`Platform ${this.config.name} initialized successfully`);
   }
@@ -174,17 +173,21 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Replaceable',
+      weriftOfferOptions: { ...this.weriftOfferOptions },
     });
     await this.addDevice(exampleAudioDoorbell);
 
+    // A Snapshot Camera has no WebRTC video stream: it captures its snapshots directly from the configured video source
     const exampleSnapshotCamera = new SnapshotCamera('Snapshot Camera', 'SNAPSHOTCAMERA-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Wired',
+      snapshotSource: this.config.videoGenerator === 'none' ? undefined : this.config.videoGenerator,
+      snapshotSourceDevice: this.config.videoSource,
     });
     await this.addDevice(exampleSnapshotCamera);
 
-    const exampleCamera = new Camera('Camera', 'CAMERA-001');
+    const exampleCamera = new Camera('Camera', 'CAMERA-001', { weriftOfferOptions: { ...this.weriftOfferOptions } });
     await this.addDevice(exampleCamera);
 
     const examplePtzCamera = new Camera('PTZ Camera', 'PTZCAMERA-001', {
@@ -192,12 +195,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Wired',
       ptz: true,
+      weriftOfferOptions: { ...this.weriftOfferOptions },
     });
     await this.addDevice(examplePtzCamera);
 
     const exampleFloodlightCamera = new FloodlightCamera('Floodlight Camera', 'FLOODLIGHTCAMERA-001', {
       powerSourceType: 'Battery',
-      cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
+      cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator, weriftOfferOptions: { ...this.weriftOfferOptions } },
       lightOptions: { name: 'Floodlight' },
     });
     await this.addDevice(exampleFloodlightCamera);
@@ -206,12 +210,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
       powerSourceType: 'Replaceable',
+      weriftOfferOptions: { ...this.weriftOfferOptions },
     });
     await this.addDevice(exampleIntercom);
 
     const exampleVideoDoorbell = new VideoDoorbell('Video Doorbell', 'VIDEODOORBELL-001', {
       powerSourceType: 'Wired',
-      cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator },
+      cameraOptions: { identifyTime: 5, identifyType: Identify.IdentifyType.VisibleIndicator, weriftOfferOptions: { ...this.weriftOfferOptions } },
     });
     await this.addDevice(exampleVideoDoorbell);
 
@@ -240,10 +245,10 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
 
     // 2 separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
     // be bound to each other to test two-way calling (see the README's Intercom pairing section).
-    const serverIntercom1 = new Intercom('Server Intercom 1', 'SERVER-INTERCOM1-001', { mode: 'server' });
+    const serverIntercom1 = new Intercom('Server Intercom 1', 'SERVER-INTERCOM1-001', { mode: 'server', weriftOfferOptions: { ...this.weriftOfferOptions } });
     await this.addDevice(serverIntercom1);
 
-    const serverIntercom2 = new Intercom('Server Intercom 2', 'SERVER-INTERCOM2-001', { mode: 'server' });
+    const serverIntercom2 = new Intercom('Server Intercom 2', 'SERVER-INTERCOM2-001', { mode: 'server', weriftOfferOptions: { ...this.weriftOfferOptions } });
     await this.addDevice(serverIntercom2);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
@@ -388,14 +393,13 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
   }
 
   override async onShutdown(reason?: string): Promise<void> {
+    // Close the WebRTC sessions before super.onShutdown(), which clears the registered devices
+    for (const device of this.getDevices()) await closeWebRtcSessions(device);
     await super.onShutdown(reason);
     this.log.info(`Shutting down platform ${this.config.name} with reason: ${reason ?? 'no reason provided'}...`);
 
     clearInterval(this.animationInterval);
     this.animationInterval = undefined;
-
-    this.log.info('Shutdown: closing WebRTC sessions...');
-    await WeriftWebRtcSession.closeAll();
 
     if (this.config.unregisterOnShutdown) await this.unregisterAllDevices();
 

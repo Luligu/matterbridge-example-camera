@@ -13,7 +13,6 @@
 [![TypeScript Native](https://img.shields.io/badge/TypeScript_Native-3178C6?logo=typescript&logoColor=white)](https://github.com/microsoft/typescript-go)
 [![ESM](https://img.shields.io/badge/ESM-Node.js-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![matterbridge.io](https://img.shields.io/badge/matterbridge.io-online-brightgreen)](https://matterbridge.io)
-![under development](https://img.shields.io/badge/status-under%20development-orange)
 
 [![powered by](https://img.shields.io/badge/powered%20by-matterbridge-blue)](https://www.npmjs.com/package/matterbridge)
 [![powered by](https://img.shields.io/badge/powered%20by-matter--history-blue)](https://www.npmjs.com/package/matter-history)
@@ -33,12 +32,11 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 ## Setup
 
 - `src/module.ts` will create all device types for easy testing;
-- `src/devices/` contains all single class device types (it will be moved directly in matterbridge core package).
-- `src/behaviors/` contains all required behaviors (it will be moved directly in matterbridge core package).
+- the device types and the WebRTC stack come from matterbridge (`matterbridge/devices/camera`), see the [Matterbridge cameras](https://matterbridge.io/Camera.html) guide.
 
 ## Requirements
 
-Requires Matterbridge `3.10.14` or later.
+Requires Matterbridge `3.10.15` or later.
 
 Requires [`ffmpeg`](https://ffmpeg.org/) to be installed on the host or in the container. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
@@ -185,7 +183,7 @@ Bind Server Doorbell to Server Chime with ![Matter Server Dashboard](screenshots
 
 `src/module.ts` registers exactly this pair for testing: `Server Intercom 1` (`mode: 'server'`, its own Matter node) and `Server Intercom 2` (`mode: 'server'`, its own Matter node) — commission both and follow the steps below to bind them together.
 
-Unlike a Doorbell/Chime pair, where only the Doorbell invokes commands on the Chime, an Intercom both hosts (server) and invokes (client) WebRtcTransportProvider and WebRtcTransportRequestor (see `#resolvePeerRequestorEndpoint` in `src/behaviors/webRtcTransportProviderServer.ts`). Once a peer invokes SolicitOffer/ProvideOffer on an Intercom's WebRtcTransportProvider, that Intercom resolves the caller's WebRtcTransportRequestor endpoint directly from the invoking peer's node id/fabric index carried by the command's CASE session — not via the Binding cluster — so the Offer/Answer "return leg" needs no binding of its own. Only the initiating invoke needs one.
+Unlike a Doorbell/Chime pair, where only the Doorbell invokes commands on the Chime, an Intercom both hosts (server) and invokes (client) WebRtcTransportProvider and WebRtcTransportRequestor (see `#resolvePeerRequestorEndpoint` in matterbridge's `packages/core/src/behaviors/webRtcTransportProviderServer.ts`). Once a peer invokes SolicitOffer/ProvideOffer on an Intercom's WebRtcTransportProvider, that Intercom resolves the caller's WebRtcTransportRequestor endpoint directly from the invoking peer's node id/fabric index carried by the command's CASE session — not via the Binding cluster — so the Offer/Answer "return leg" needs no binding of its own. Only the initiating invoke needs one.
 
 So, to let either Server Intercom 1 or Server Intercom 2 start a call, on the fabric they share.
 
@@ -199,23 +197,23 @@ Bind Server Intercom 2 to Server Intercom 1 with ![Matter Server Dashboard](scre
 
 ## WebRTC video and audio injection
 
-`WeriftWebRtcSession` (see `src/behaviors/weriftSession.ts`) wraps a real werift `RTCPeerConnection` for each WebRtcTransportProvider session (see `MatterbridgeWebRtcTransportProviderServer` in `src/behaviors/webRtcTransportProviderServer.ts`), so the session's SDP offer/answer and ICE candidates are handled by a real WebRTC peer connection instead of being just recorded. It can also inject a real ffmpeg-generated video and/or audio track into the negotiated connection, so the end-to-end media path can be validated without a real camera/microphone capture pipeline.
+The WebRtcTransportProvider cluster of each camera device comes from matterbridge: it wraps a real werift `RTCPeerConnection` for each session and injects an ffmpeg-generated video and/or audio track into it. The plugin builds the device `weriftOfferOptions` from the properties below and closes the WebRTC sessions of its devices on shutdown with `closeWebRtcSessions`. See the [Matterbridge cameras](https://matterbridge.io/Camera.html) guide for how a session is established and what the network needs.
 
 The platform configuration controls WebRTC video injection with these properties:
 
 - `videoGenerator` is required and accepts `none`, `test`, `webcam`, or `rtsp`. It defaults to `test`, which injects a synthetic moving test pattern. `none` negotiates the video transceiver without attaching a track, `webcam` captures from the configured local webcam, and `rtsp` pulls from the RTSP url configured in `videoSource`.
 
-- `videoSource` is optional and has no default. For the `webcam` generator it contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path`. Selecting the `webcam` or `rtsp` generator without this property falls back to the test pattern with a warning.
+- `videoSource` is optional and has no default. For the `webcam` generator it contains the OS-specific ffmpeg device identifier — e.g. `/dev/video0` on Linux (v4l2), an avfoundation index such as `0` on macOS, or a device name such as `Integrated Camera` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path`. Selecting the `webcam` or `rtsp` generator without this property is a configuration error: no video track is injected and snapshots fail.
 
-- `videoResolution` is required and accepts `auto`, `640x480`, `1280x720`, or `1920x1080`. It defaults to `auto`, which uses the resolution requested by the controller for the session (see below), falling back to `640x480` when no request is available or it names an unsupported resolution. A fixed resolution always wins over what the controller requested. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
+- `videoResolution` is required and accepts `auto`, `640x480`, `1280x720`, or `1920x1080`. It defaults to `auto`, which follows the resolution of the video stream allocated by the controller for the session (see below), falling back to `640x480` when there is none or it is not supported. A fixed resolution always wins over what the controller requested. The actual achievable frame rate depends on the webcam and can be much lower than 30 FPS at higher resolutions (check with `v4l2-ctl -d <device> --list-formats-ext` on Linux).
 
-- `videoBitrate` is required and accepts a number (the target encoder bitrate in kbps). It defaults to `1000`. It applies to the `webcam` and `rtsp` sources only; the `test` pattern is always encoded at a fixed 1000 kbps regardless of this setting. Since the encoder always uses `-preset ultrafast -tune zerolatency` for low-latency live view (lower compression efficiency than slower presets), suggested values are higher than typical streaming guides: ~800 for `640x480`, ~2000 for `1280x720`, ~2500 for `1920x1080`.
+- `videoBitrate` is required and accepts a number (the target encoder bitrate in kbps). It defaults to `1000`. It applies to every video source, including the `test` pattern. Since the encoder always uses `-preset ultrafast -tune zerolatency` for low-latency live view (lower compression efficiency than slower presets), suggested values are higher than typical streaming guides: ~800 for `640x480`, ~2000 for `1280x720`, ~2500 for `1920x1080`.
 
 The platform configuration controls WebRTC audio injection with these properties:
 
-- `audioGenerator` is required and accepts `none`, `test`, `microphone`, or `rtsp`. It defaults to `test`, which injects a recorded test-voice clip, looped, so the end-to-end audio path can be validated without a real microphone capture pipeline. `none` negotiates the audio transceiver (e.g. for an Intercom's "Listen" live view) without attaching a track. `microphone` captures from the configured local microphone, and `rtsp` pulls just the audio from the RTSP url configured in `audioSource` (any video in the stream is dropped).
+- `audioGenerator` is required and accepts `none`, `test`, `microphone`, or `rtsp`. It defaults to `test`, which injects a generated 440 Hz tone that beeps once per second, so the end-to-end audio path can be validated without a real microphone capture pipeline. `none` negotiates the audio transceiver (e.g. for an Intercom's "Listen" live view) without attaching a track. `microphone` captures from the configured local microphone, and `rtsp` pulls just the audio from the RTSP url configured in `audioSource` (any video in the stream is dropped).
 
-- `audioSource` is optional and has no default. For the `microphone` generator it contains the OS-specific ffmpeg device identifier — e.g. an ALSA device such as `hw:0,0` on Linux, an avfoundation audio index such as `0` on macOS, or a device name such as `Microphone Array` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path` (it can be a different camera/url than `videoSource`). Selecting the `microphone` or `rtsp` generator without this property falls back to the test-voice clip with a warning.
+- `audioSource` is optional and has no default. For the `microphone` generator it contains the OS-specific ffmpeg device identifier — e.g. an ALSA device such as `hw:0,0` on Linux, an avfoundation audio index such as `0` on macOS, or a device name such as `Microphone Array` on Windows (dshow). For the `rtsp` generator it instead holds the RTSP url, e.g. `rtsp://user:password@host:554/path` (it can be a different camera/url than `videoSource`). Selecting the `microphone` or `rtsp` generator without this property is a configuration error: no audio track is injected.
 
 Use ffmpeg itself to list the [available capture devices](https://trac.ffmpeg.org/wiki/Capture/Webcam) and find the right value for `audioSource`:
 
@@ -243,7 +241,9 @@ Example, pulling the audio from the same RTSP camera used for `videoSource`:
 }
 ```
 
-With `videoResolution: "auto"`, a real client's resolution/quality picker (e.g. in Home Assistant) drives the capture/output resolution: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and `MatterbridgeWebRtcTransportProviderServer` looks up that stream's `maxResolution` to select the resolution for the session. For `webcam` this is the capture resolution passed to ffmpeg; for `rtsp` the camera keeps streaming at its own native resolution and ffmpeg scales it to match.
+Snapshots (`CameraAvStreamManagement.CaptureSnapshot`) are captured with ffmpeg from the same video source: the cameras use their WebRTC video source and the Snapshot Camera, which has no video stream, uses `videoGenerator` and `videoSource` directly. With `videoGenerator: "none"` there is no source, so `CaptureSnapshot` fails.
+
+With `videoResolution: "auto"`, a real client's resolution/quality picker (e.g. in Home Assistant) drives the capture/output resolution: it allocates a video stream with `CameraAvStreamManagement.VideoStreamAllocate` before soliciting or providing a WebRTC offer, and matterbridge looks up that stream's `maxResolution` to select the resolution for the session. For `webcam` this is the capture resolution passed to ffmpeg; for `rtsp` the camera keeps streaming at its own native resolution and ffmpeg scales it to match.
 
 Use ffmpeg itself to list the [available capture devices](https://trac.ffmpeg.org/wiki/Capture/Webcam) and find the right value for `videoSource`:
 
@@ -335,76 +335,33 @@ The fix is on the browser side, not in this plugin: disable mDNS obfuscation of 
 
 ### Known limitation: a client with an unreachable network interface can slow down ICE negotiation logging
 
-A browser gathers one host ICE candidate per local network interface it sees, mDNS-obfuscated or not. When one of those interfaces has no multicast route to the machine running Matterbridge — a disconnected VPN adapter, a Hyper-V/WSL virtual switch, a second NIC on an unrelated subnet — werift-ice's mDNS resolution for that candidate's `*.local` name can never succeed, and takes the full per-candidate apply timeout (5s, see `ICE_CANDIDATE_APPLY_TIMEOUT_MS` in `src/behaviors/webRtcTransportProviderServer.ts`) to give up on it.
+A browser gathers one host ICE candidate per local network interface it sees, mDNS-obfuscated or not. When one of those interfaces has no multicast route to the machine running Matterbridge — a disconnected VPN adapter, a Hyper-V/WSL virtual switch, a second NIC on an unrelated subnet — werift-ice's mDNS resolution for that candidate's `*.local` name can never succeed, and takes the full per-candidate apply timeout (5s, see `ICE_CANDIDATE_APPLY_TIMEOUT_MS` in matterbridge's `packages/core/src/behaviors/webRtcTransportProviderServer.ts`) to give up on it.
 
 Candidates are applied concurrently, not one after another, so this doesn't compound: a candidate on a reachable interface succeeds in a few milliseconds without waiting behind a sibling candidate that's doomed to time out. `provideIceCandidates` also responds to the peer as soon as the candidates are recorded, rather than waiting for their application to finish — the same reason `SolicitOffer`/`ProvideOffer` already invoke Offer/Answer on the peer without blocking their own response — so an unreachable interface no longer delays the Matter command itself, only the background log entry for that specific candidate. If a stream is slow to start or intermittently fails specifically on a machine with multiple network interfaces/VPNs, this is the mechanism to check first (grep the Matterbridge log for `ICE candidate apply timeout`).
 
-## Werift integration test
-
-The `vitest/werift.test.ts` integration test creates local client and server peers and verifies SDP offer/answer negotiation, ICE candidate exchange, a bidirectional data-channel transfer, and connection teardown with `werift`.
-
-The test uses the client as the Matter controller and the server as the camera device. Its signaling flow is:
-
-```text
-Controller/client                         Camera/server
-      |                                        |
-      |---------- SDP offer ----------------->|
-      |------ client ICE candidates --------->|
-      |<--------- SDP answer -----------------|
-      |<------ server ICE candidates ---------|
-      |                                        |
-      |<======= ICE + DTLS connected =========>|
-      |<======= SCTP data channel =============>|
-      |                                        |
-      |---------- start-live-view ------------>|
-      |<--------- live-view-started -----------|
-      |                                        |
-      |<=========== close peers ===============>|
-```
-
-Legend:
-
-- **SDP — Session Description Protocol:** describes the media session, including codecs, formats, transport parameters, and how each peer expects to communicate. The controller sends an SDP offer and the camera returns an SDP answer.
-- **ICE — Interactive Connectivity Establishment:** discovers and tests possible network paths between the peers. ICE candidates contain addresses and ports that may be used to establish the direct WebRTC connection.
-- **DTLS — Datagram Transport Layer Security:** authenticates the peers and encrypts communication over the selected UDP network path. WebRTC uses the negotiated DTLS connection to protect subsequent media and data transport.
-- **SCTP — Stream Control Transmission Protocol:** transports WebRTC data-channel messages over the secure DTLS connection. In this test, it carries `start-live-view` and `live-view-started` between the controller and camera.
-- **RTSP — Real Time Streaming Protocol:** a separate, older protocol (not part of the WebRTC flow above) used to pull a live stream from a real IP camera. See the `rtsp` video generator earlier in this README: `ffmpeg` connects to the camera's RTSP url and re-encodes its stream into the WebRTC video track injected into this same peer connection.
-
-`createOffer()` and `createAnswer()` produce the SDP descriptions. Applying each local description gathers that peer's ICE candidates. After each peer receives the other peer's description and candidates, werift selects a network path, performs the DTLS handshake, and opens the SCTP data channel. The two control messages prove that data can travel in both directions. The camera peer then sends `assets/test-camera.mp4` to the controller in 16 KiB binary chunks; the test reconstructs it and compares its byte length and SHA-256 hash before closing both peers.
-
-In the camera implementation, Matter's WebRTC Transport Provider and Requestor clusters are responsible for carrying the SDP and ICE signaling between devices. The resulting WebRTC connection carries the media or data directly; Matter does not carry the WebRTC payload itself. This test validates werift independently and does not yet connect it to `MatterbridgeWebRtcTransportProviderServer`.
-
-Run it with:
-
-```bash
-npm run test -- vitest/werift.test.ts
-```
-
 ### Media test assets
 
-The `assets` directory contains deterministic three-second media fixtures for extending the werift test to real media tracks:
+The `assets` directory contains deterministic three-second media fixtures. The plugin does not use them: matterbridge generates its test video, audio and snapshots with ffmpeg.
 
 - `test-video.h264`: raw H.264 Constrained Baseline video, 640×360 at 15 FPS, with a moving test pattern. Use this elementary stream when implementing H.264 NAL-unit parsing and RTP packetization.
 - `test-audio.opus`: Ogg container with mono Opus audio at 48 kHz and 64 kbit/s, containing a recorded voice track. Use the Opus packets for an audio RTP track; the Ogg container itself is not sent over WebRTC.
-- `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track. The werift test transfers the complete file over its SCTP data channel and verifies its integrity. This exercises binary file transport, not a WebRTC video RTP track.
+- `test-camera.mp4`: playable reference containing the same 640×360 H.264 test pattern and a mono 1 kHz AAC track.
 - `camera-color-1920-1080.jpeg`: 1920×1080 simplified ffmpeg-generated color-rectangle snapshot.
 - `camera-color-1280-720.jpeg`: 1280×720 simplified ffmpeg-generated color-rectangle snapshot.
 - `camera-color-640-480.jpeg`: 640×480 simplified ffmpeg-generated color-rectangle snapshot.
-- `camera-color-test-1920-1080.jpeg`: 1920×1080 extended color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
-- `camera-color-test-1280-720.jpeg`: 1280×720 extended color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
-- `camera-color-test-640-480.jpeg`: 640×480 extended color-rectangle snapshot returned by the example's `CaptureSnapshot` command.
+- `camera-color-test-1920-1080.jpeg`: 1920×1080 extended color-rectangle snapshot.
+- `camera-color-test-1280-720.jpeg`: 1280×720 extended color-rectangle snapshot.
+- `camera-color-test-640-480.jpeg`: 640×480 extended color-rectangle snapshot.
 
-#### Why the snapshot calibration cards stay under ~64 KB
+#### Why snapshots stay under ~64 KB
 
-All three calibration cards above are kept well under the Matter message size ceiling, which caps at **65535 bytes** for a single message and cannot be worked around by tuning TCP:
+Snapshots, like the calibration cards above, are kept well under the Matter message size ceiling, which caps at **65535 bytes** for a single message and cannot be worked around by tuning TCP:
 
 - Every Matter message is encrypted with AES-128-CCM, using a 13-byte nonce built from the security flags, message counter, and node ID (`Session.generateNonce`, part of the Matter message-security spec, not a matter.js choice).
 - AES-CCM (RFC 3610 / NIST SP 800-38C) requires the nonce length `N` and the length-field size `L` to satisfy `N + L = 15` bytes for a 128-bit block cipher. With `N = 13`, that leaves `L = 2`.
 - A 2-byte length field caps the plaintext of a single CCM-encrypted message at `2^16 - 1 = 65535` bytes — a cryptographic ceiling, not a networking one. matter.js's `DEFAULT_MAX_TCP_MESSAGE_SIZE` (64000) is just a round number kept safely under that limit.
 
 A `CaptureSnapshot` response whose `data` field doesn't fit fails to send: the client gets a generic invoke failure instead of an image, since the encoder cannot represent the required plaintext length in the message header. `CameraAvStreamManagement.CaptureSnapshot` returns its image as a single field of a single command response, so it inherits this ceiling directly. Matter has a dedicated mechanism for transferring larger payloads — BDX (Bulk Data Exchange), used for OTA updates and diagnostic logs — which splits big content across a sequence of acknowledged messages instead of one oversized one, but `CaptureSnapshot` doesn't use it.
-
-WebRTC media tracks transport encoded H.264 or Opus frames in RTP packets; they do not send an MP4, Ogg, or MPEG container directly. The current MP4 transfer deliberately uses the separate data-channel path. A future video-track test should parse the relevant elementary frames, packetize them as RTP, call werift's media track `writeRtp()`, and verify reception through `onTrack` and `onReceiveRtp`.
 
 ## Style guide
 

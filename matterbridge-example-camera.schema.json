@@ -71,20 +71,20 @@
     },
     "videoResolution": {
       "title": "Video Resolution",
-      "description": "Resolution used when capturing from the configured webcam or RTSP camera. auto uses the resolution requested by the controller (the allocated video stream's maxResolution) instead of a fixed value.",
+      "description": "Video resolution for every video source, including test. auto uses the resolution requested by the controller (the allocated video stream's maxResolution) instead of a fixed value.",
       "type": "string",
       "enum": ["auto", "640x480", "1280x720", "1920x1080"],
       "default": "auto"
     },
     "videoBitrate": {
       "title": "Video Bitrate",
-      "description": "Target encoder bitrate (kbps) used when capturing from the configured webcam or RTSP camera, regardless of resolution. Default is 1000. Suggested values: ~800 for 640x480, ~2000 for 1280x720, ~2500 for 1920x1080.",
+      "description": "Target encoder bitrate (kbps) for every video source, including test, regardless of resolution. Default is 1000. Suggested values: ~800 for 640x480, ~2000 for 1280x720, ~2500 for 1920x1080.",
       "type": "number",
       "default": 1000
     },
     "audioGenerator": {
       "title": "Audio Generator",
-      "description": "Select the WebRTC audio generator: none disables track injection (only the audio transceiver is negotiated), test injects a recorded test-voice clip, looped, e.g. for an Intercom's Listen live view, microphone captures from the configured local microphone, and rtsp pulls the audio from the RTSP url configured in Audio Source.",
+      "description": "Select the WebRTC audio generator: none disables track injection (only the audio transceiver is negotiated), test injects a generated 440 Hz beeping tone, e.g. for an Intercom's Listen live view, microphone captures from the configured local microphone, and rtsp pulls the audio from the RTSP url configured in Audio Source.",
       "type": "string",
       "enum": ["none", "test", "microphone", "rtsp"],
       "default": "test"

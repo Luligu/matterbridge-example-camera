@@ -34,13 +34,14 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Breaking changes
 
-- [matterbridge]: Require matterbridge v.3.10.14 with matter v.1.6.0.
+- [matterbridge]: Require matterbridge v.3.10.15 with matter v.1.6.0.
+- [camera]: Use the matterbridge camera stack (`matterbridge/devices/camera`) and remove the local copy in `src/behaviors` and `src/devices` with its tests.
+- [config]: Pass the media options to the devices as `weriftOfferOptions` instead of the `MATTERBRIDGE_CAMERA_*` environment variables. The test audio is now a generated tone, and a `webcam`/`rtsp`/`microphone` generator without a source injects no track instead of falling back to the test source.
 - [config]: Default `videoGenerator` and `audioGenerator` to `test`, so live view and snapshots work out of the box (requires ffmpeg).
 
 ### Added
 
 - [ffmpeg]: Add the `autoInstallFfmpeg` option (Docker only, enabled by default) and the `installFfmpeg` button, as in matterbridge-camera and matterbridge-webcam.
-
 - [devcontainer]: Add [`Dev Container`](.devcontainer/README.md) v.2.2.0 with dual Node and Bun runtime support.
 - [agents]: Add a [`shared setup`](.agents/README.md) for all agents: OpenAI Codex, Claude Code, GitHub Copilot and Google Gemini / Antigravity.
 - [agents]: Add [`commit message instructions`](.github/commit-message-instructions.md) v.1.0.0 for the VS Code Copilot "Generate Commit Message" button (Conventional Commits).
@@ -49,6 +50,8 @@ If you like this project and find it useful, please consider giving it a star on
 ### Changed
 
 - [test]: Migrate tests from `matterbridge/vitest-utils` to the unified `matterbridge/test-utils`.
+- [workflows]: Build and test against the matterbridge `dev` branch (`automator.workflow`).
+- [webrtc]: Close the WebRTC sessions of the plugin devices on shutdown with `closeWebRtcSessions`.
 - [chip]: Keep only the generic composition, conformance and default warnings tests in `chipTests.json`: the camera clusters are tested in matterbridge.
 - [styleguide]: Update [`STYLEGUIDE.md`](STYLEGUIDE.md) to v.1.1.0: align it with the lint and format config and add the Commit Messages and Changelog sections.
 - [vscode]: Update `.vscode/settings.json` to v.1.0.15: configure commit message instructions, exclude templates from Vitest discovery and refine terminal command approvals.

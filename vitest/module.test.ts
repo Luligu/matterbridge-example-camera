@@ -48,12 +48,6 @@ vi.mock('matterbridge/utils', async (importOriginal) => ({ ...(await importOrigi
 await setupTest(NAME);
 
 describe('TestPlatform', () => {
-  const originalVideoSource = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
-  const originalVideoSourceDevice = process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
-  const originalVideoResolution = process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
-  const originalAudioSource = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
-  const originalAudioSourceDevice = process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
-
   let matterbridge: PlatformMatterbridge;
   let platform: ExampleMatterbridgeCameraPlatform;
 
@@ -105,21 +99,11 @@ describe('TestPlatform', () => {
     await destroyTestEnvironment();
     // Restore all mocks
     vi.restoreAllMocks();
-    if (originalVideoSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE;
-    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE = originalVideoSource;
-    if (originalVideoSourceDevice === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE;
-    else process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE = originalVideoSourceDevice;
-    if (originalVideoResolution === undefined) delete process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION;
-    else process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION = originalVideoResolution;
-    if (originalAudioSource === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE;
-    else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE = originalAudioSource;
-    if (originalAudioSourceDevice === undefined) delete process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE;
-    else process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE = originalAudioSourceDevice;
   });
 
   it('should throw error in load when version is not valid', () => {
     expect(() => initializePlugin({ ...matterbridge, matterbridgeVersion: '1.0.0' }, log, config)).toThrow(
-      'This plugin requires Matterbridge version >= "3.10.14". Please update Matterbridge to the latest version in the frontend.',
+      'This plugin requires Matterbridge version >= "3.10.15". Please update Matterbridge to the latest version in the frontend.',
     );
   });
 
@@ -139,10 +123,16 @@ describe('TestPlatform', () => {
       expect(emptyConfigPlatform.config.videoSource).toBeUndefined();
       expect(emptyConfigPlatform.config.videoResolution).toBe('640x480');
       expect(emptyConfigPlatform.config.audioGenerator).toBe('none');
-      expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('none');
-      expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE).toBeUndefined();
-      expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe('640x480');
-      expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe('none');
+      expect(emptyConfigPlatform.weriftOfferOptions).toEqual({
+        offerVideo: true,
+        offerAudio: true,
+        videoSource: 'none',
+        videoSourceDevice: undefined,
+        videoResolution: '640x480',
+        videoBitrate: 1000,
+        audioSource: 'none',
+        audioSourceDevice: undefined,
+      });
       expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(13);
     } finally {
       await emptyConfigPlatform.onShutdown();
@@ -153,21 +143,21 @@ describe('TestPlatform', () => {
     const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, videoGenerator });
 
     expect(generatorPlatform.config.videoGenerator).toBe(videoGenerator);
-    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe(videoGenerator);
+    expect(generatorPlatform.weriftOfferOptions.videoSource).toBe(videoGenerator);
   });
 
   it.each(['none', 'test', 'microphone', 'rtsp'] as const)('should apply the configured %s audio generator', (audioGenerator) => {
     const generatorPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, audioGenerator });
 
     expect(generatorPlatform.config.audioGenerator).toBe(audioGenerator);
-    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe(audioGenerator);
+    expect(generatorPlatform.weriftOfferOptions.audioSource).toBe(audioGenerator);
   });
 
   it('should apply the configured microphone audioSource', () => {
     const microphonePlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, audioGenerator: 'microphone', audioSource: 'hw:0,0' });
 
     expect(microphonePlatform.config.audioSource).toBe('hw:0,0');
-    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE_DEVICE).toBe('hw:0,0');
+    expect(microphonePlatform.weriftOfferOptions.audioSourceDevice).toBe('hw:0,0');
   });
 
   it('should default videoGenerator and audioGenerator to test when the config omits them', () => {
@@ -176,19 +166,25 @@ describe('TestPlatform', () => {
 
     expect(defaultGeneratorPlatform.config.videoGenerator).toBe('test');
     expect(defaultGeneratorPlatform.config.audioGenerator).toBe('test');
-    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE).toBe('test');
-    expect(process.env.MATTERBRIDGE_CAMERA_AUDIO_SOURCE).toBe('test');
+    expect(defaultGeneratorPlatform.weriftOfferOptions.videoSource).toBe('test');
+    expect(defaultGeneratorPlatform.weriftOfferOptions.audioSource).toBe('test');
   });
 
-  it('should default videoResolution to auto when the config omits it', () => {
+  it('should default videoResolution to auto and pass it as unset when the config omits it', () => {
     const defaultResolutionConfig = { ...config, videoResolution: undefined } as unknown as CameraPlatformConfig;
     const defaultResolutionPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, defaultResolutionConfig);
 
     expect(defaultResolutionPlatform.config.videoResolution).toBe('auto');
-    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe('auto');
+    // auto is passed as unset, so each session follows the resolution of its allocated video stream
+    expect(defaultResolutionPlatform.weriftOfferOptions.videoResolution).toBeUndefined();
   });
 
-  it.each(['auto', '640x480', '1280x720', '1920x1080'] as const)('should apply the configured %s webcam resolution', (videoResolution) => {
+  it.each([
+    ['auto', undefined],
+    ['640x480', '640x480'],
+    ['1280x720', '1280x720'],
+    ['1920x1080', '1920x1080'],
+  ] as const)('should apply the configured %s webcam resolution', (videoResolution, expectedResolution) => {
     const webcamPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, {
       ...config,
       videoGenerator: 'webcam',
@@ -198,8 +194,8 @@ describe('TestPlatform', () => {
 
     expect(webcamPlatform.config.videoSource).toBe('Integrated Camera');
     expect(webcamPlatform.config.videoResolution).toBe(videoResolution);
-    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_SOURCE_DEVICE).toBe('Integrated Camera');
-    expect(process.env.MATTERBRIDGE_CAMERA_VIDEO_RESOLUTION).toBe(videoResolution);
+    expect(webcamPlatform.weriftOfferOptions.videoSourceDevice).toBe('Integrated Camera');
+    expect(webcamPlatform.weriftOfferOptions.videoResolution).toBe(expectedResolution);
   });
 
   it('should not create devices when none match the whitelist', async () => {
@@ -212,6 +208,37 @@ describe('TestPlatform', () => {
       expect(filteredPlatform.size()).toBe(0);
     } finally {
       await filteredPlatform.onShutdown();
+    }
+  });
+
+  it.each([
+    ['none', undefined],
+    ['test', 'test'],
+    ['rtsp', 'rtsp'],
+  ] as const)('should capture the Snapshot Camera snapshots from the %s video generator', async (videoGenerator, expectedSource) => {
+    const snapshotPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, {
+      ...config,
+      whiteList: ['Snapshot Camera'],
+      videoGenerator,
+      videoSource: 'rtsp://camera/stream',
+    });
+    addMatterbridge(snapshotPlatform);
+    // The device is not registered, so it does not collide with the Snapshot Camera registered by the other tests
+    const registerSpy = vi.spyOn(snapshotPlatform, 'registerDevice').mockResolvedValue();
+
+    try {
+      await snapshotPlatform.onStart();
+
+      const snapshotCamera = registerSpy.mock.calls.map(([device]) => device).find((device) => device.deviceName === 'Snapshot Camera');
+      if (!snapshotCamera) throw new Error('Snapshot Camera not registered');
+      // The initial state of the CameraAvStreamManagement cluster, read from the device that is not registered
+      const avsmOptions: { snapshotSource?: string; snapshotSourceDevice?: string } | undefined = snapshotCamera.behaviors.optionsFor(
+        snapshotCamera.behaviors.supported.cameraAvStreamManagement,
+      );
+      expect(avsmOptions?.snapshotSource).toBe(expectedSource);
+      expect(avsmOptions?.snapshotSourceDevice).toBe('rtsp://camera/stream');
+    } finally {
+      await snapshotPlatform.onShutdown();
     }
   });
 
