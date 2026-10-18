@@ -25,8 +25,10 @@
 // Matterbridge
 import type { MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
-import { TimeSynchronizationServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
+import { TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
+
+import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer } from './timeSynchronizationServer.js';
 
 /**
  * Configures the Root Node (endpoint 0) of a `mode: 'server'` Camera device's own Matter server node with the
@@ -75,21 +77,22 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
   // deviceTypeList automatically, alongside the Root Node (0x0016) entry matter.js already sets.
 
   // TimeSyncWithClientCond, TimeSyncWithNTPCCond, TimeSyncWithTZCond: Time Synchronization with the TimeSyncClient,
-  // NtpClient and TimeZone features.
-  root.behaviors.require(TimeSynchronizationServer.with(TimeSynchronization.Feature.TimeSyncClient, TimeSynchronization.Feature.NtpClient, TimeSynchronization.Feature.TimeZone), {
+  // NtpClient and TimeZone features, backed by the host clock (see MatterbridgeTimeSynchronizationServer).
+  root.behaviors.require(MatterbridgeTimeSynchronizationServer, {
     utcTime: null,
     granularity: TimeSynchronization.Granularity.NoTimeGranularity,
     timeSource: TimeSynchronization.TimeSource.None,
     trustedTimeSource: null,
     defaultNtp: null,
     supportsDnsResolve: false,
-    // validAt uses the epoch-us type, whose minimum valid value is the Matter epoch (2000-01-01): 0 is out of range.
-    timeZone: [{ offset: 0, validAt: Date.now() * 1000 }],
+    // The epoch-us ValidAt 0 of the first entry is the Matter epoch, kept by matter.js as Unix microseconds.
+    timeZone: [{ offset: 0, validAt: MATTER_EPOCH_US }],
     dstOffset: [],
     localTime: null,
     timeZoneDatabase: TimeSynchronization.TimeZoneDatabase.None,
-    timeZoneListMaxSize: 1,
-    dstOffsetListMaxSize: 1,
+    // Two entries allow a scheduled time zone change (Matter 1.6.1 § 11.17.8.11).
+    timeZoneListMaxSize: 2,
+    dstOffsetListMaxSize: 2,
   });
 
   // TLSCertificatesCond: TLS Certificate Management shall be present on the Root Node.

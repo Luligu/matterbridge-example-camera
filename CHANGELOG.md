@@ -42,6 +42,7 @@ If you like this project and find it useful, please consider giving it a star on
 ### Added
 
 - [ffmpeg]: Add the `autoInstallFfmpeg` option (Docker only, enabled by default) and the `installFfmpeg` button, as in matterbridge-camera and matterbridge-webcam.
+- [timeSync]: Add `MatterbridgeTimeSynchronizationServer`, a Time Synchronization server backed by the host clock, and use it in `addRootNodeCamera`.
 - [devcontainer]: Add [`Dev Container`](.devcontainer/README.md) v.2.2.0 with dual Node and Bun runtime support.
 - [agents]: Add a [`shared setup`](.agents/README.md) for all agents: OpenAI Codex, Claude Code, GitHub Copilot and Google Gemini / Antigravity.
 - [agents]: Add [`commit message instructions`](.github/commit-message-instructions.md) v.1.0.0 for the VS Code Copilot "Generate Commit Message" button (Conventional Commits).
@@ -52,6 +53,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [test]: Migrate tests from `matterbridge/vitest-utils` to the unified `matterbridge/test-utils`.
 - [workflows]: Build and test against the matterbridge `dev` branch (`automator.workflow`).
 - [webrtc]: Close the WebRTC sessions of the plugin devices on shutdown with `closeWebRtcSessions`.
+- [rootNode]: Set the first TimeZone entry with a ValidAt of 0 (the Matter epoch) as required, and allow 2 TimeZone and DSTOffset entries.
 - [chip]: Keep only the generic composition, conformance and default warnings tests in `chipTests.json`: the camera clusters are tested in matterbridge.
 - [styleguide]: Update [`STYLEGUIDE.md`](STYLEGUIDE.md) to v.1.1.0: align it with the lint and format config and add the Commit Messages and Changelog sections.
 - [vscode]: Update `.vscode/settings.json` to v.1.0.15: configure commit message instructions, exclude templates from Vitest discovery and refine terminal command approvals.

@@ -11,7 +11,7 @@ const MATTER_CREATE_ONLY = true;
 
 import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
 import { Camera } from 'matterbridge/devices/camera';
-import { TimeSynchronizationServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
+import { TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
 import {
   createServerNode,
@@ -28,6 +28,7 @@ import {
 } from 'matterbridge/test-utils/vitest';
 
 import { addRootNodeCamera } from '../src/rootNode.js';
+import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer } from '../src/timeSynchronizationServer.js';
 
 await setupTest(NAME);
 
@@ -96,19 +97,20 @@ describe('addRootNodeCamera', () => {
     // Force construction of the dynamically required behaviors: root.behaviors.require() only builds their backing
     // immediately when the type is `early`; otherwise construction is deferred until something accesses the behavior.
     await server.act(async (agent) => {
-      await agent.load(TimeSynchronizationServer);
+      await agent.load(MatterbridgeTimeSynchronizationServer);
       await agent.load(TlsCertificateManagementServer);
       await agent.load(TlsClientManagementServer);
     });
 
-    const timeSyncState = server.stateOf(
-      TimeSynchronizationServer.with(TimeSynchronization.Feature.TimeSyncClient, TimeSynchronization.Feature.NtpClient, TimeSynchronization.Feature.TimeZone),
-    );
-    expect(timeSyncState.granularity).toBe(TimeSynchronization.Granularity.NoTimeGranularity);
-    expect(timeSyncState.timeSource).toBe(TimeSynchronization.TimeSource.None);
+    // The Time Synchronization server reports the host clock
+    const timeSyncState = server.stateOf(MatterbridgeTimeSynchronizationServer);
+    expect(timeSyncState.utcTime).not.toBeNull();
+    expect(timeSyncState.granularity).toBe(TimeSynchronization.Granularity.MillisecondsGranularity);
+    expect(timeSyncState.timeSource).toBe(TimeSynchronization.TimeSource.Unknown);
     expect(timeSyncState.timeZoneDatabase).toBe(TimeSynchronization.TimeZoneDatabase.None);
-    expect(timeSyncState.timeZone).toEqual([{ offset: 0, validAt: timeSyncState.timeZone[0].validAt }]);
-    expect(timeSyncState.timeZone[0].validAt).toBeGreaterThan(0);
+    expect(timeSyncState.timeZone).toEqual([{ offset: 0, validAt: MATTER_EPOCH_US }]);
+    expect(timeSyncState.timeZoneListMaxSize).toBe(2);
+    expect(timeSyncState.dstOffsetListMaxSize).toBe(2);
 
     const tlsCertificateState = server.stateOf(TlsCertificateManagementServer);
     expect(tlsCertificateState.maxRootCertificates).toBe(5);

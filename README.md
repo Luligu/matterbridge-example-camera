@@ -32,7 +32,9 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 ## Setup
 
 - `src/module.ts` will create all device types for easy testing;
-- the device types and the WebRTC stack come from matterbridge (`matterbridge/devices/camera`), see the [Matterbridge cameras](https://matterbridge.io/Camera.html) guide.
+- the device types and the WebRTC stack come from matterbridge (`matterbridge/devices/camera`), see the [Matterbridge cameras](https://matterbridge.io/Camera.html) guide;
+- `src/rootNode.ts` adds the Root Node clusters a Camera requires (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management) to a `mode: 'server'` Camera;
+- `src/timeSynchronizationServer.ts` is the Time Synchronization server used there, with the TimeSyncClient, NtpClient and TimeZone features. It reports the host clock (MillisecondsGranularity) and implements SetTrustedTimeSource, SetDefaultNTP, SetTimeZone and SetDSTOffset with their validation and events; SetUTCTime is refused with TimeNotAccepted since the host clock is kept. The TLS clusters are still the empty matter.js servers.
 
 ## Requirements
 
