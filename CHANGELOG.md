@@ -50,6 +50,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Changed
 
+- [package]: Update the `package.json` description to "Matterbridge example camera plugin".
 - [test]: Migrate tests from `matterbridge/vitest-utils` to the unified `matterbridge/test-utils`.
 - [workflows]: Build and test against the matterbridge `dev` branch (`automator.workflow`).
 - [webrtc]: Close the WebRTC sessions of the plugin devices on shutdown with `closeWebRtcSessions`.
