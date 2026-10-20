@@ -35,7 +35,7 @@ await setupTest(NAME);
 describe('addRootNodeCamera', () => {
   beforeAll(async () => {
     // Setup the Matter test environment
-    await createTestEnvironment();
+    await createTestEnvironment('warn');
 
     // Create the server node acting as the Camera device's own Root Node
     await createServerNode(MATTER_PORT);
