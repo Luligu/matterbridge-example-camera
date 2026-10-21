@@ -34,7 +34,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Breaking changes
 
-- [matterbridge]: Require matterbridge v.3.10.15 with matter v.1.6.0.
+- [matterbridge]: Require matterbridge v.3.11.0 with matter v.1.6.1.
 - [camera]: Use the matterbridge camera stack (`matterbridge/devices/camera`) and remove the local copy in `src/behaviors` and `src/devices` with its tests.
 - [config]: Pass the media options to the devices as `weriftOfferOptions` instead of the `MATTERBRIDGE_CAMERA_*` environment variables. The test audio is now a generated tone, and a `webcam`/`rtsp`/`microphone` generator without a source injects no track instead of falling back to the test source.
 - [config]: Default `videoGenerator` and `audioGenerator` to `test`, so live view and snapshots work out of the box (requires ffmpeg).
