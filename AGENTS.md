@@ -1,11 +1,11 @@
-# Matterbridge Agents Instructions (v.1.0.3)
+# Matterbridge Agents Instructions (v.1.0.7)
 
 ## Style And Formatting
 
 - Follow [STYLEGUIDE.md](./STYLEGUIDE.md) for code style, naming, JSDoc, validation, logging, and formatting expectations.
-- JSDoc requirements are enforced by the linter. Treat missing or incomplete JSDoc on required APIs as a real lint issue, not optional documentation.
-- Import and export ordering are enforced by the linter or by the formatter. Preserve the existing grouped and sorted order unless a change requires updating it.
-- Follow the existing formatting and do not fight the formatter.
+- JSDoc requirements are enforced by the configured linter. Treat missing or incomplete JSDoc on required APIs as a real lint issue, not optional documentation.
+- Import and export ordering are enforced by the formatter. Preserve the existing grouped and sorted order unless a change requires updating it.
+- Formatting is enforced by oxfmt. Follow the existing formatting and do not fight the formatter.
 
 ## Scope And Safety
 
@@ -16,38 +16,28 @@
 
 ## Project Architecture
 
-- This repository is a TypeScript ESM repo. Follow existing project patterns for imports, exports, build configuration, and test setup.
+- This repository uses TypeScript and ESM. Follow existing project patterns for imports, exports, build configuration, and test setup.
 
 ## Testing And Validation
 
-- HARD RULE: never invoke `tsc`, `vitest`, `oxlint`, or `oxfmt` directly (via `npx`, `node node_modules/...`, or any other ad hoc form). Always use the matching entry in [package.json](./package.json) `scripts` or [tasks.json](./.vscode/tasks.json) — e.g. `npm run typecheck` (not `npx tsc`), `npm run lint`/`npm run lint:fix` (not `npx oxlint`), `npm run format`/`npm run format:check` (not `npx oxfmt`), `npm run test`/`npm run test:coverage` or a specific `Test: <Area>` task (not `npx vitest`/`node node_modules/vitest/vitest.mjs` typed out by hand). If a touched area has no matching script or task, say so and ask before improvising a raw invocation — do not silently fall back to `npx`.
+- HARD RULE: never invoke `tsc`, `vitest`, `bun test`, `oxlint`, or `oxfmt` directly (via `npx`, `node node_modules/...`, or any other ad hoc form). Always use the matching entry in [package.json](./package.json) `scripts` or [tasks.json](./.vscode/tasks.json) — e.g. `npm run typecheck` (not `npx tsc`), `npm run lint` (not `npx oxlint`; `npm run lint:fix` rewrites files, so run it only when the user asks), `npm run format`/`npm run format:check` (not `npx oxfmt`), `npm run test`/`npm run test:coverage` or a specific `Test: <Area>` task (not `npx vitest`/`node node_modules/vitest/vitest.mjs` typed out by hand), `npm run test:bun` (not `bun test`). If a touched area has no matching script or task, say so and ask before improvising a raw invocation — do not silently fall back to `npx`.
 - Keep tests deterministic and simple. Prefer small data sets and straightforward setup.
 - Some tests are intentionally multi-step flows. State may persist across successive steps within a single test flow, but each test unit must remain isolated from other tests.
 - For validation, run the relevant full test file or the matching suite/task for the touched area rather than assuming arbitrary isolated single-test execution is reliable.
 
 ## Documentation
 
-- When behavior changes, update the relevant tests and documentation in the README.md files.
+- When behavior changes, update the relevant tests and documentation.
 
 ## Additional Agent Guidance
 
 For task-specific guidance, read relevant files in [.agents/rules](./.agents/rules/):
 
 - `.agents/rules/testing.instructions.md` for testing and validation expectations;
-- `.agents/rules/matterbridge.instructions.md` for instruction about using matterbridge in a plugin;
+- `.agents/rules/matterbridge.instructions.md` for guidance on creating and registering Matterbridge endpoints in a plugin;
 - `.agents/rules/plugin-frontend.instructions.md` for guidance on plugin frontend SPAs and custom REST APIs;
 - `.agents/rules/chip-tests.instructions.md` for guidance on the CHIP conformance test harness.
 
 The following workflows are available as skills in [.agents/skills](./.agents/skills/), discovered automatically and invocable with `$<name>` (Codex) or `/<name>` (Claude Code, Copilot, Gemini / Antigravity):
 
 - `$verify-agent-context` for verifying which coding agent is running and that it loaded the shared instructions, rules and skills from AGENTS.md and `.agents/`.
-
-## Repository specific instructions
-
-- Keep updated [README.md](README.md) and [CHANGELOG.md](CHANGELOG.md).
-
-## Matter Specs
-
-- The full Matter 1.6.0 specifications are available locally as HTML files under [chip/1.6.0/specs](../matterbridge/chip/1.6.0/specs/). Treat those HTML specs as the authoritative source when working on Matter behavior, revisions, qualities, device types, and cluster definitions.
-- The full Matter 1.5.1 specifications are also available locally as HTML files under [chip/1.5.1/specs](../matterbridge/chip/1.5.1/specs/). Use those HTML specs for historical comparisons and delta analysis against Matter 1.6.0, but keep 1.6.0 as the authoritative source.
-- The full Matter 1.4.2 specifications are also available locally as HTML files under [chip/1.4.2/specs](../matterbridge/chip/1.4.2/specs/). Use those HTML specs for historical comparisons and delta analysis against Matter 1.6.0, but keep 1.6.0 as the authoritative source.
