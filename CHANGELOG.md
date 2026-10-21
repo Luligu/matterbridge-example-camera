@@ -41,6 +41,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 ### Added
 
+- [tls]: Add separate Matterbridge TLS Certificate Management and TLS Client Management servers on the Root Node, with explicit placeholder overrides for all commands. They do not implement TLS management or provide usable protocol responses yet.
 - [ffmpeg]: Add the `autoInstallFfmpeg` option (Docker only, enabled by default) and the `installFfmpeg` button, as in matterbridge-camera and matterbridge-webcam.
 - [timeSync]: Add `MatterbridgeTimeSynchronizationServer`, a Time Synchronization server backed by the host clock, and use it in `addRootNodeCamera`.
 - [devcontainer]: Add [`Dev Container`](.devcontainer/README.md) v.2.2.0 with dual Node and Bun runtime support.
