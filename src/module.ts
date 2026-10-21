@@ -24,7 +24,7 @@
 
 import { inspect } from 'node:util';
 
-import { MatterbridgeDynamicPlatform } from 'matterbridge';
+import { getSemtag, MatterbridgeDynamicPlatform } from 'matterbridge';
 import type { MatterbridgeEndpoint, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { hasFfmpeg, installFfmpeg, MatterbridgeBindingServer } from 'matterbridge/behaviors';
 import {
@@ -40,7 +40,7 @@ import {
   VideoDoorbell,
 } from 'matterbridge/devices/camera';
 import { RESET, type AnsiLogger } from 'matterbridge/logger';
-import { UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
+import { CommonNumberTag, UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
 import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 import { isDocker, isValidNumber, parseVersionString } from 'matterbridge/utils';
@@ -221,6 +221,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     await this.addDevice(exampleVideoDoorbell);
 
     // We add below the server chime and doorbell as separate Matter nodes (mode: 'server'), rather than as bridged endpoints, so that they can be bound to each other to test Doorbell (see the README's Doorbell pairing section).
+    // Each server-mode device has a Common Number tag, so it stays distinct from a sibling of the same device type when the test environment adds it under the aggregator.
 
     const serverChime = new Chime('Server Chime', 'SERVER-CHIME-001', {
       identifyTime: 5,
@@ -233,6 +234,7 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       ],
       selectedChime: 0,
       enabled: true,
+      tagList: [getSemtag(CommonNumberTag.One, 'Server Chime')],
       mode: 'server',
     });
     await this.addDevice(serverChime);
@@ -240,15 +242,26 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       this.log.info(`Server Chime enabled attribute changed from ${oldValue} to ${newValue}`);
     });
 
-    const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', { mode: 'server' });
+    const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', {
+      tagList: [getSemtag(CommonNumberTag.One, 'Server Doorbell')],
+      mode: 'server',
+    });
     await this.addDevice(serverDoorbell);
 
     // 2 separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
     // be bound to each other to test two-way calling (see the README's Intercom pairing section).
-    const serverIntercom1 = new Intercom('Server Intercom 1', 'SERVER-INTERCOM1-001', { mode: 'server', weriftOfferOptions: { ...this.weriftOfferOptions } });
+    const serverIntercom1 = new Intercom('Server Intercom 1', 'SERVER-INTERCOM1-001', {
+      tagList: [getSemtag(CommonNumberTag.One, 'Server Intercom 1')],
+      mode: 'server',
+      weriftOfferOptions: { ...this.weriftOfferOptions },
+    });
     await this.addDevice(serverIntercom1);
 
-    const serverIntercom2 = new Intercom('Server Intercom 2', 'SERVER-INTERCOM2-001', { mode: 'server', weriftOfferOptions: { ...this.weriftOfferOptions } });
+    const serverIntercom2 = new Intercom('Server Intercom 2', 'SERVER-INTERCOM2-001', {
+      tagList: [getSemtag(CommonNumberTag.Two, 'Server Intercom 2')],
+      mode: 'server',
+      weriftOfferOptions: { ...this.weriftOfferOptions },
+    });
     await this.addDevice(serverIntercom2);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
