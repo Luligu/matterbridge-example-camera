@@ -25,10 +25,11 @@
 // Matterbridge
 import type { MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
-import { TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
 
 import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer } from './timeSynchronizationServer.js';
+import { MatterbridgeTlsCertificateManagementServer } from './tlsCertificateManagementServer.js';
+import { MatterbridgeTlsClientManagementServer } from './tlsClientManagementServer.js';
 
 /**
  * Configures the Root Node (endpoint 0) of a `mode: 'server'` Camera device's own Matter server node with the
@@ -96,7 +97,7 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
   });
 
   // TLSCertificatesCond: TLS Certificate Management shall be present on the Root Node.
-  root.behaviors.require(TlsCertificateManagementServer, {
+  root.behaviors.require(MatterbridgeTlsCertificateManagementServer, {
     maxRootCertificates: 5,
     provisionedRootCertificates: [],
     maxClientCertificates: 5,
@@ -104,7 +105,7 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
   });
 
   // TLSClientCond: TLS Client Management shall be present on the Root Node.
-  root.behaviors.require(TlsClientManagementServer, {
+  root.behaviors.require(MatterbridgeTlsClientManagementServer, {
     maxProvisioned: 5,
     provisionedEndpoints: [],
   });
