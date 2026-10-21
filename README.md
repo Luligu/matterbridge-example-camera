@@ -39,7 +39,7 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 
 ## Requirements
 
-Requires Matterbridge `3.10.15` or later.
+Requires Matterbridge `3.11.0` or later.
 
 Requires [`ffmpeg`](https://ffmpeg.org/) to be installed on the host or in the container. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 
