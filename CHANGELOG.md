@@ -30,7 +30,7 @@ If you like this project and find it useful, please consider giving it a star on
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
 
-## [1.0.0] - Dev branch
+## [1.0.0] - 2026-10-23
 
 ### Breaking changes
 
@@ -55,7 +55,6 @@ If you like this project and find it useful, please consider giving it a star on
 - [package]: Run `checkDependencies` and `updateDependencies` with `npx npm-check-updates@latest`.
 - [package]: Update the `package.json` description to "Matterbridge example camera plugin".
 - [test]: Migrate tests from `matterbridge/vitest-utils` to the unified `matterbridge/test-utils`.
-- [workflows]: Build and test against the matterbridge `dev` branch (`automator.workflow`).
 - [webrtc]: Close the WebRTC sessions of the plugin devices on shutdown with `closeWebRtcSessions`.
 - [rootNode]: Set the first TimeZone entry with a ValidAt of 0 (the Matter epoch) as required, and allow 2 TimeZone and DSTOffset entries.
 - [chip]: Keep only the generic composition, conformance and default warnings tests in `chipTests.json`: the camera clusters are tested in matterbridge.
@@ -81,6 +80,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [package]: Bump `@vitest/coverage-v8` to v.5.0.5.
 - [package]: Bump `@types/node` to v.26.6.5.
 - [package]: Bump `typescript` to v.7.0.2.
+- [package]: Remove the `werift` dependency: the camera stack now comes from matterbridge.
 - [camera]: Remove the temporary `ObjectSchema.injectField` workaround now that Matterbridge includes the upstream matter.js fix for optional nested struct fields.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>

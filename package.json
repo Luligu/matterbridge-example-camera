@@ -75,7 +75,6 @@
     "git": false,
     "version": false,
     "publish": false,
-    "workflow": "dev",
     "chip": true,
     "video": true,
     "coverage": {
