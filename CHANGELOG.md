@@ -35,6 +35,7 @@ If you like this project and find it useful, please consider giving it a star on
 ### Breaking changes
 
 - [matterbridge]: Require matterbridge v.3.11.0 with matter v.1.6.1.
+- [node]: Drop Node.js 20 support, matching matterbridge v.3.11.0. Supported versions are Node.js 22.13, 24 and 26.
 - [camera]: Use the matterbridge camera stack (`matterbridge/devices/camera`) and remove the local copy in `src/behaviors` and `src/devices` with its tests.
 - [config]: Pass the media options to the devices as `weriftOfferOptions` instead of the `MATTERBRIDGE_CAMERA_*` environment variables. The test audio is now a generated tone, and a `webcam`/`rtsp`/`microphone` generator without a source injects no track instead of falling back to the test source.
 - [config]: Default `videoGenerator` and `audioGenerator` to `test`, so live view and snapshots work out of the box (requires ffmpeg).
@@ -47,7 +48,6 @@ If you like this project and find it useful, please consider giving it a star on
 - [devcontainer]: Add [`Dev Container`](.devcontainer/README.md) v.2.2.0 with dual Node and Bun runtime support.
 - [agents]: Add a [`shared setup`](.agents/README.md) for all agents: OpenAI Codex, Claude Code, GitHub Copilot and Google Gemini / Antigravity.
 - [agents]: Add [`commit message instructions`](.github/commit-message-instructions.md) v.1.0.0 for the VS Code Copilot "Generate Commit Message" button (Conventional Commits).
-- [scripts]: Add `scripts/bun-bundle.mjs` for Bun JavaScript and declaration bundles with workspace, production, watch and dry-run support.
 - [agents]: Add the Copilot `Matterbridge` custom agent (`.github/agents/matterbridge.agent.md`) that works without subagents.
 
 ### Changed
