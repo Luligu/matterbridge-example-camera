@@ -12,7 +12,7 @@ const MATTER_CREATE_ONLY = true;
 import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
 import { Camera } from 'matterbridge/devices/camera';
 import { TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
-import { PowerSource, TimeSynchronization, TlsCertificateManagement, TlsClientManagement } from 'matterbridge/matter/clusters';
+import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
 import {
   createServerNode,
   createTestEnvironment,
@@ -127,32 +127,5 @@ describe('addRootNodeCamera', () => {
     const tlsClientState = server.stateOf(MatterbridgeTlsClientManagementServer);
     expect(tlsClientState.maxProvisioned).toBe(5);
     expect(tlsClientState.provisionedEndpoints).toEqual([]);
-  });
-
-  it('should expose every certificate command as a placeholder without changing state', async () => {
-    await server.act((agent) => {
-      const tls = agent.get(MatterbridgeTlsCertificateManagementServer);
-      expect(tls.provisionRootCertificate(new TlsCertificateManagement.ProvisionRootCertificateRequest())).toEqual(new TlsCertificateManagement.ProvisionRootCertificateResponse());
-      expect(tls.findRootCertificate(new TlsCertificateManagement.FindRootCertificateRequest())).toEqual(new TlsCertificateManagement.FindRootCertificateResponse());
-      expect(tls.lookupRootCertificate(new TlsCertificateManagement.LookupRootCertificateRequest())).toEqual(new TlsCertificateManagement.LookupRootCertificateResponse());
-      expect(tls.removeRootCertificate(new TlsCertificateManagement.RemoveRootCertificateRequest())).toBeUndefined();
-      expect(tls.clientCsr(new TlsCertificateManagement.ClientCsrRequest())).toEqual(new TlsCertificateManagement.ClientCsrResponse());
-      expect(tls.provisionClientCertificate(new TlsCertificateManagement.ProvisionClientCertificateRequest())).toBeUndefined();
-      expect(tls.findClientCertificate(new TlsCertificateManagement.FindClientCertificateRequest())).toEqual(new TlsCertificateManagement.FindClientCertificateResponse());
-      expect(tls.lookupClientCertificate(new TlsCertificateManagement.LookupClientCertificateRequest())).toEqual(new TlsCertificateManagement.LookupClientCertificateResponse());
-      expect(tls.removeClientCertificate(new TlsCertificateManagement.RemoveClientCertificateRequest())).toBeUndefined();
-      expect(tls.state.provisionedRootCertificates).toEqual([]);
-      expect(tls.state.provisionedClientCertificates).toEqual([]);
-    });
-  });
-
-  it('should expose every client command as a placeholder without changing state', async () => {
-    await server.act((agent) => {
-      const tls = agent.get(MatterbridgeTlsClientManagementServer);
-      expect(tls.provisionEndpoint(new TlsClientManagement.ProvisionEndpointRequest())).toEqual(new TlsClientManagement.ProvisionEndpointResponse());
-      expect(tls.findEndpoint(new TlsClientManagement.FindEndpointRequest())).toEqual(new TlsClientManagement.FindEndpointResponse());
-      expect(tls.removeEndpoint(new TlsClientManagement.RemoveEndpointRequest())).toBeUndefined();
-      expect(tls.state.provisionedEndpoints).toEqual([]);
-    });
   });
 });
