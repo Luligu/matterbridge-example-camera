@@ -38,9 +38,10 @@ description: 'Testing standards for unit tests in the project v.1.0.7'
 
 Multi-step workflows a user asks for by name, rather than background reference material.
 
-| Skill                  | Purpose                                                    |
-| ---------------------- | ---------------------------------------------------------- |
-| `verify-agent-context` | Check which agent is running and that it loaded this setup |
+| Skill                            | Purpose                                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `verify-agent-context`           | Check which agent is running and that it loaded this setup                                    |
+| `verify-server-endpoint-context` | Check the Camera Root Node servers against the Matterbridge server contracts and Matter 1.6.1 |
 
 Each is a folder containing `SKILL.md`, whose frontmatter carries a `name` matching the folder and a
 `description` that decides when the skill is offered:

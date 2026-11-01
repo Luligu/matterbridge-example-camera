@@ -46,3 +46,4 @@ For task-specific guidance, read relevant files in [.agents/rules](./.agents/rul
 The following workflows are available as skills in [.agents/skills](./.agents/skills/), discovered automatically and invocable with `$<name>` (Codex) or `/<name>` (Claude Code, Copilot, Gemini / Antigravity):
 
 - `$verify-agent-context` for verifying which coding agent is running and that it loaded the shared instructions, rules and skills from AGENTS.md and `.agents/`.
+- `$verify-server-endpoint-context` for verifying the log and error messages, the Matterbridge endpoint contracts and the Matter 1.6.1 comments of the servers that `src/rootNode.ts` adds to the Camera Root Node, and the Root Node requirements of the Camera device type.
