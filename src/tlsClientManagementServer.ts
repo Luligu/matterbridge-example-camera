@@ -83,57 +83,106 @@ export class MatterbridgeTlsClientManagementServer extends MatterbridgeTlsClient
    * @returns {TlsClientManagement.ProvisionEndpointResponse} The EndpointID of the provisioned TLS endpoint.
    * @throws {StatusResponseError} ConstraintError if the Hostname is not 4 to 253 octets, the Port is 0 or an ID is
    * out of range, InvalidTime if the node has no UTC time to validate the certificates, RootCertificateNotFound or
-   * ClientCertificateNotFound if the CAID or the CCDID does not exist on the fabric, EndpointAlreadyInstalled if
-   * another TLS endpoint of the fabric has the same Hostname and Port, ResourceExhausted if the fabric has
-   * MaxProvisioned TLS endpoints, NotFound if the EndpointID does not exist on the fabric.
+   * ClientCertificateNotFound if the CAID or the CCDID does not exist on the fabric, then for a null EndpointID
+   * ResourceExhausted if the fabric has MaxProvisioned TLS endpoints, for a non-null EndpointID NotFound if it does not
+   * exist on the fabric, and EndpointAlreadyInstalled if another TLS endpoint of the fabric has the same Hostname and
+   * Port (the order of Matter 1.6.1 § 14.5.7.1).
    */
   override provisionEndpoint(request: TlsClientManagement.ProvisionEndpointRequest): TlsClientManagement.ProvisionEndpointResponse {
     const hostname = Bytes.of(request.hostname);
     const { port, caid, ccdid, endpointId } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
+    // Matter 1.6.1 § 14.5.7.1: The Hostname field is 4 to 253 octets (CONSTRAINT_ERROR).
     if (hostname.byteLength < MIN_HOSTNAME_BYTES || hostname.byteLength > MAX_HOSTNAME_BYTES) {
-      throw new StatusResponseError(`ProvisionEndpoint: hostname of ${hostname.byteLength} octets is not ${MIN_HOSTNAME_BYTES} to ${MAX_HOSTNAME_BYTES}`, Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: hostname of ${hostname.byteLength} octets is not ${MIN_HOSTNAME_BYTES} to ${MAX_HOSTNAME_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
-    if (port < 1) throw new StatusResponseError('ProvisionEndpoint: port 0 is not valid', Status.ConstraintError);
+    // Matter 1.6.1 § 14.5.7.1: The Port field is 1 to 65535 (CONSTRAINT_ERROR).
+    if (port < 1)
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: the port 0 is not valid (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
+    // Matter 1.6.1 § 14.4.4.1, § 14.4.4.2 and § 14.5.4.1: A TLSCAID, a TLSCCDID and a TLSEndpointID have valid values from 0 to 65534 (CONSTRAINT_ERROR).
     if (caid > MAX_TLS_ENDPOINT_ID || (ccdid !== null && ccdid > MAX_TLS_ENDPOINT_ID) || (endpointId !== null && endpointId > MAX_TLS_ENDPOINT_ID)) {
-      throw new StatusResponseError('ProvisionEndpoint: CAID, CCDID or EndpointID out of range', Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: the CAID, CCDID or EndpointID is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
-    // The InvalidTime status code: the certificates of a TLS endpoint cannot be validated before time synchronization.
+    // Matter 1.6.1 § 14.5.7.1: Fail with InvalidTime if the UTCTime attribute of the Time Synchronization cluster is null.
     if (this.endpoint.behaviors.has(TimeSynchronizationServer) && this.endpoint.stateOf(TimeSynchronizationServer).utcTime === null) {
-      throw new TlsClientManagement.InvalidTimeError('ProvisionEndpoint: time synchronization has not yet occurred');
+      throw new TlsClientManagement.InvalidTimeError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: time synchronization has not yet occurred (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     }
     const certificates = this.endpoint.stateOf(TlsCertificateManagementServer);
+    // Matter 1.6.1 § 14.5.7.1: Fail with RootCertificateNotFound if the CAID does not exist on the accessing fabric.
     if (!certificates.provisionedRootCertificates.some((entry) => entry.fabricIndex === fabric && entry.caid === caid)) {
-      throw new TlsClientManagement.RootCertificateNotFoundError(`ProvisionEndpoint: CAID ${caid} not found`);
+      throw new TlsClientManagement.RootCertificateNotFoundError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: the CAID ${caid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     }
+    // Matter 1.6.1 § 14.5.7.1: Fail with ClientCertificateNotFound if a non-null CCDID does not exist on the accessing fabric.
     if (ccdid !== null && !certificates.provisionedClientCertificates.some((entry) => entry.fabricIndex === fabric && entry.ccdid === ccdid)) {
-      throw new TlsClientManagement.ClientCertificateNotFoundError(`ProvisionEndpoint: CCDID ${ccdid} not found`);
+      throw new TlsClientManagement.ClientCertificateNotFoundError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: the CCDID ${ccdid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     }
     const endpoints = this.state.provisionedEndpoints;
     const fabricEndpoints = endpoints.filter((endpoint) => endpoint.fabricIndex === fabric);
-    if (fabricEndpoints.some((endpoint) => endpoint.port === port && bytesEqual(endpoint.hostname, hostname) && endpoint.endpointId !== endpointId)) {
-      throw new TlsClientManagement.EndpointAlreadyInstalledError('ProvisionEndpoint: an endpoint with the same hostname and port is already installed');
-    }
+    const duplicate = fabricEndpoints.some((endpoint) => endpoint.port === port && bytesEqual(endpoint.hostname, hostname) && endpoint.endpointId !== endpointId);
     if (endpointId === null) {
+      // Matter 1.6.1 § 14.5.7.1: For a null EndpointID, fail with RESOURCE_EXHAUSTED if MaxProvisioned TLS endpoints are provisioned on the accessing fabric.
       if (fabricEndpoints.length >= this.state.maxProvisioned) {
-        throw new StatusResponseError(`ProvisionEndpoint: fabric ${fabric} already has ${this.state.maxProvisioned} endpoints`, Status.ResourceExhausted);
+        throw new StatusResponseError(
+          `MatterbridgeTlsClientManagementServer.provisionEndpoint: fabric ${fabric} already has ${this.state.maxProvisioned} endpoints (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.ResourceExhausted,
+        );
       }
+      // Matter 1.6.1 § 14.5.7.1: For a null EndpointID, fail with EndpointAlreadyInstalled if another TLS endpoint of the accessing fabric has the same Hostname and Port.
+      if (duplicate) {
+        throw new TlsClientManagement.EndpointAlreadyInstalledError(
+          `MatterbridgeTlsClientManagementServer.provisionEndpoint: an endpoint with the same hostname and port is already installed (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        );
+      }
+      // Matter 1.6.1 § 14.5.7.1: For a null EndpointID, generate a new TLSEndpointID.
       const id = allocateId(new Set(endpoints.map((endpoint) => endpoint.endpointId)), this.state.nextEndpointId);
       this.state.nextEndpointId = (id + 1) % (MAX_TLS_ENDPOINT_ID + 1);
+      // Matter 1.6.1 § 14.5.7.1: Add the new TLS endpoint with a ReferenceCount of 0, associated with the accessing fabric.
       this.state.provisionedEndpoints = [...endpoints, { endpointId: id, hostname, port, caid, ccdid, referenceCount: 0, fabricIndex: FabricIndex(fabric) }];
-      log.info(`TLS endpoint ${id} provisioned on fabric ${fabric}`);
+      log.info(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: the TLS endpoint ${id} provisioned on fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
       return { endpointId: id };
     }
     const existing = fabricEndpoints.find((endpoint) => endpoint.endpointId === endpointId);
-    if (existing === undefined) throw new StatusResponseError(`ProvisionEndpoint: EndpointID ${endpointId} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.5.7.1: For a non-null EndpointID, fail with NOT_FOUND if the EndpointID does not exist on the accessing fabric.
+    if (existing === undefined)
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: the EndpointID ${endpointId} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
+    // Matter 1.6.1 § 14.5.7.1: For a non-null EndpointID, fail with EndpointAlreadyInstalled if another TLS endpoint of the accessing fabric has the same Hostname and Port.
+    if (duplicate) {
+      throw new TlsClientManagement.EndpointAlreadyInstalledError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: an endpoint with the same hostname and port is already installed (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
+    }
     // The ReferenceCount is kept: the clusters using the TLS endpoint still use it after the update.
     const { referenceCount } = existing;
+    // Matter 1.6.1 § 14.5.7.1: Update the fields of the matching TLS endpoint with the values of the command.
     this.state.provisionedEndpoints = endpoints.map((endpoint) =>
       endpoint.fabricIndex === fabric && endpoint.endpointId === endpointId
         ? { endpointId, hostname, port, caid, ccdid, referenceCount, fabricIndex: FabricIndex(fabric) }
         : endpoint,
     );
-    log.info(`TLS endpoint ${endpointId} updated on fabric ${fabric}`);
+    log.info(
+      `MatterbridgeTlsClientManagementServer.provisionEndpoint: the TLS endpoint ${endpointId} updated on fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
     return { endpointId };
   }
 
@@ -146,10 +195,21 @@ export class MatterbridgeTlsClientManagementServer extends MatterbridgeTlsClient
    */
   override findEndpoint(request: TlsClientManagement.FindEndpointRequest): TlsClientManagement.FindEndpointResponse {
     const { endpointId } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
-    if (endpointId > MAX_TLS_ENDPOINT_ID) throw new StatusResponseError(`FindEndpoint: EndpointID ${endpointId} out of range`, Status.ConstraintError);
+    // Matter 1.6.1 § 14.5.4.1: A TLSEndpointID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (endpointId > MAX_TLS_ENDPOINT_ID)
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.findEndpoint: the EndpointID ${endpointId} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     const endpoint = this.state.provisionedEndpoints.find((entry) => entry.fabricIndex === fabric && entry.endpointId === endpointId);
-    if (endpoint === undefined) throw new StatusResponseError(`FindEndpoint: EndpointID ${endpointId} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.5.7.3: Fail with NOT_FOUND if the EndpointID does not exist on the accessing fabric.
+    if (endpoint === undefined)
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.findEndpoint: the EndpointID ${endpointId} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
     return { endpoint };
   }
 
@@ -162,16 +222,33 @@ export class MatterbridgeTlsClientManagementServer extends MatterbridgeTlsClient
    */
   override removeEndpoint(request: TlsClientManagement.RemoveEndpointRequest): void {
     const { endpointId } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
-    if (endpointId > MAX_TLS_ENDPOINT_ID) throw new StatusResponseError(`RemoveEndpoint: EndpointID ${endpointId} out of range`, Status.ConstraintError);
+    // Matter 1.6.1 § 14.5.4.1: A TLSEndpointID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (endpointId > MAX_TLS_ENDPOINT_ID)
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.removeEndpoint: the EndpointID ${endpointId} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     const endpoints = this.state.provisionedEndpoints;
     const endpoint = endpoints.find((entry) => entry.fabricIndex === fabric && entry.endpointId === endpointId);
-    if (endpoint === undefined) throw new StatusResponseError(`RemoveEndpoint: EndpointID ${endpointId} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.5.7.5: Fail with NOT_FOUND if the EndpointID does not exist on the accessing fabric.
+    if (endpoint === undefined)
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer.removeEndpoint: the EndpointID ${endpointId} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
+    // Matter 1.6.1 § 14.5.7.5 and § 14.5.5.1: Fail with EndpointInUse if the ReferenceCount of the TLS endpoint is greater than 0.
     if (endpoint.referenceCount > 0) {
-      throw new TlsClientManagement.EndpointInUseError(`RemoveEndpoint: EndpointID ${endpointId} is in use by ${endpoint.referenceCount} clusters`);
+      throw new TlsClientManagement.EndpointInUseError(
+        `MatterbridgeTlsClientManagementServer.removeEndpoint: the EndpointID ${endpointId} is in use by ${endpoint.referenceCount} clusters (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     }
+    // Matter 1.6.1 § 14.5.7.5: Remove the TLS endpoint from ProvisionedEndpoints.
     this.state.provisionedEndpoints = endpoints.filter((entry) => !(entry.fabricIndex === fabric && entry.endpointId === endpointId));
-    log.info(`TLS endpoint ${endpointId} removed from fabric ${fabric}`);
+    log.info(
+      `MatterbridgeTlsClientManagementServer.removeEndpoint: the TLS endpoint ${endpointId} removed from fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 
   /**
@@ -183,8 +260,12 @@ export class MatterbridgeTlsClientManagementServer extends MatterbridgeTlsClient
    */
   #accessingFabric(): number {
     const fabric = this.context.fabric;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     if (fabric === undefined || fabric === FabricIndex.NO_FABRIC)
-      throw new StatusResponseError('TLS Client Management commands require an accessing fabric', Status.UnsupportedAccess);
+      throw new StatusResponseError(
+        `MatterbridgeTlsClientManagementServer: an accessing fabric is required (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.UnsupportedAccess,
+      );
     return fabric;
   }
 }

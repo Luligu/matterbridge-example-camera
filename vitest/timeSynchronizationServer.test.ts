@@ -176,7 +176,9 @@ describe('MatterbridgeTimeSynchronizationServer', () => {
     await expect(withTimeSync((timeSync) => timeSync.setUtcTime({ utcTime: nowUs(), granularity: TimeSynchronization.Granularity.SecondsGranularity }))).rejects.toThrow(
       TimeSynchronization.TimeNotAcceptedError,
     );
-    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining('SetUTCTime with granularity 2 not accepted'));
+    expect(loggerInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining('MatterbridgeTimeSynchronizationServer.setUtcTime: time with granularity 2 not accepted, the node uses the host clock (endpoint '),
+    );
   });
 
   it('should set the TrustedTimeSource with the accessing fabric', async () => {
