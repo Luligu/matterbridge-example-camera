@@ -219,6 +219,7 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
   declare state: MatterbridgeTlsCertificateManagementServer.State;
 
   override initialize(): void {
+    // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
     this.#updateAttributes();
     // The OperationalCredentials cluster is on the Root Node: Node.forEndpoint() finds it traversing the owners of this endpoint.
     // Offline: the reaction runs in its own transaction, not in the OperationalCredentials one that changed the fabrics.
@@ -241,39 +242,74 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
   override provisionRootCertificate(request: TlsCertificateManagement.ProvisionRootCertificateRequest): TlsCertificateManagement.ProvisionRootCertificateResponse {
     const certificate = Bytes.of(request.certificate);
     const { caid } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
+    // Matter 1.6.1 § 14.4.6.1: The Certificate field has a maximum length of 3000 octets (CONSTRAINT_ERROR).
     if (certificate.byteLength > MAX_CERTIFICATE_BYTES) {
-      throw new StatusResponseError(`ProvisionRootCertificate: certificate of ${certificate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES}`, Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: certificate of ${certificate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
     const store = this.state.rootCertificateStore;
     const fingerprint = certificateFingerprint(certificate);
+    // Matter 1.6.1 § 14.4.6.1: Fail with ALREADY_EXISTS if a certificate with the same fingerprint is provisioned on the accessing fabric.
     if (store.some((entry) => entry.fabric === fabric && certificateFingerprint(entry.certificate).equals(fingerprint))) {
-      throw new StatusResponseError('ProvisionRootCertificate: certificate already provisioned', Status.AlreadyExists);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: certificate already provisioned (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.AlreadyExists,
+      );
     }
     if (caid === null) {
+      // Matter 1.6.1 § 14.4.6.1: For a null CAID, fail with RESOURCE_EXHAUSTED if the accessing fabric already has MaxRootCertificates root certificates.
       if (store.filter((entry) => entry.fabric === fabric).length >= this.state.maxRootCertificates) {
-        throw new StatusResponseError(`ProvisionRootCertificate: fabric ${fabric} already has ${this.state.maxRootCertificates} root certificates`, Status.ResourceExhausted);
+        throw new StatusResponseError(
+          `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: fabric ${fabric} already has ${this.state.maxRootCertificates} root certificates (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.ResourceExhausted,
+        );
       }
     } else {
-      if (caid > MAX_TLS_CERTIFICATE_ID) throw new StatusResponseError(`ProvisionRootCertificate: CAID ${caid} out of range`, Status.ConstraintError);
+      // Matter 1.6.1 § 14.4.4.1: A TLSCAID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+      if (caid > MAX_TLS_CERTIFICATE_ID)
+        throw new StatusResponseError(
+          `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: the CAID ${caid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.ConstraintError,
+        );
+      // Matter 1.6.1 § 14.4.6.1: For a non-null CAID, fail with NOT_FOUND if the CAID does not exist on the accessing fabric.
       if (!store.some((entry) => entry.fabric === fabric && entry.caid === caid)) {
-        throw new StatusResponseError(`ProvisionRootCertificate: CAID ${caid} not found`, Status.NotFound);
+        throw new StatusResponseError(
+          `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: the CAID ${caid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.NotFound,
+        );
       }
     }
+    // Matter 1.6.1 § 14.4.6.1: Fail with DYNAMIC_CONSTRAINT_ERROR if the Certificate is not a valid TLS certificate.
     if (parseValidCertificate(certificate) === undefined) {
-      throw new StatusResponseError('ProvisionRootCertificate: not a valid DER encoded X.509 certificate', Status.DynamicConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.DynamicConstraintError,
+      );
     }
     if (caid !== null) {
+      // Matter 1.6.1 § 14.4.6.1: For a non-null CAID, update the certificate of the existing entry.
       this.state.rootCertificateStore = store.map((entry) => (entry.fabric === fabric && entry.caid === caid ? { caid, fabric, certificate } : entry));
+      // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
       this.#updateAttributes();
-      log.info(`Root certificate CAID ${caid} updated on fabric ${fabric}`);
+      log.info(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: root certificate CAID ${caid} updated on fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
       return { caid };
     }
+    // Matter 1.6.1 § 14.4.6.1: For a null CAID, generate a new TLSCAID.
     const id = allocateId(new Set(store.map((entry) => entry.caid)), this.state.nextCaid);
     this.state.nextCaid = (id + 1) % (MAX_TLS_CERTIFICATE_ID + 1);
+    // Matter 1.6.1 § 14.4.6.1: Add the new root certificate with the generated TLSCAID, associated with the accessing fabric.
     this.state.rootCertificateStore = [...store, { caid: id, fabric, certificate }];
+    // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
     this.#updateAttributes();
-    log.info(`Root certificate CAID ${id} provisioned on fabric ${fabric}`);
+    log.info(
+      `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: root certificate CAID ${id} provisioned on fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
     return { caid: id };
   }
 
@@ -287,12 +323,23 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    */
   override findRootCertificate(request: TlsCertificateManagement.FindRootCertificateRequest): TlsCertificateManagement.FindRootCertificateResponse {
     const { caid } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
-    if (caid !== null && caid > MAX_TLS_CERTIFICATE_ID) throw new StatusResponseError(`FindRootCertificate: CAID ${caid} out of range`, Status.ConstraintError);
+    // Matter 1.6.1 § 14.4.4.1: A TLSCAID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (caid !== null && caid > MAX_TLS_CERTIFICATE_ID)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.findRootCertificate: the CAID ${caid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     const certificateDetails = this.state.rootCertificateStore
       .filter((entry) => entry.fabric === fabric && (caid === null || entry.caid === caid))
       .map((entry) => ({ caid: entry.caid, certificate: entry.certificate, fabricIndex: FabricIndex(fabric) }));
-    if (certificateDetails.length === 0) throw new StatusResponseError(`FindRootCertificate: CAID ${caid ?? 'null'} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.4.6.3: Fail with NOT_FOUND if no root certificate of the accessing fabric matches the CAID, or none exists for a null CAID.
+    if (certificateDetails.length === 0)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.findRootCertificate: the CAID ${caid ?? 'null'} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
     return { certificateDetails };
   }
 
@@ -305,12 +352,22 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    */
   override lookupRootCertificate(request: TlsCertificateManagement.LookupRootCertificateRequest): TlsCertificateManagement.LookupRootCertificateResponse {
     const fingerprint = Buffer.from(Bytes.of(request.fingerprint));
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
+    // Matter 1.6.1 § 14.4.6.5: The Fingerprint field has a maximum length of 64 octets (CONSTRAINT_ERROR).
     if (fingerprint.byteLength > MAX_FINGERPRINT_BYTES) {
-      throw new StatusResponseError(`LookupRootCertificate: fingerprint of ${fingerprint.byteLength} octets exceeds ${MAX_FINGERPRINT_BYTES}`, Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.lookupRootCertificate: fingerprint of ${fingerprint.byteLength} octets exceeds ${MAX_FINGERPRINT_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
     const found = this.state.rootCertificateStore.find((entry) => entry.fabric === fabric && certificateFingerprint(entry.certificate).equals(fingerprint));
-    if (found === undefined) throw new StatusResponseError('LookupRootCertificate: fingerprint not found', Status.NotFound);
+    // Matter 1.6.1 § 14.4.6.5: Fail with NOT_FOUND if no root certificate of the accessing fabric has the fingerprint.
+    if (found === undefined)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.lookupRootCertificate: fingerprint not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
     return { caid: found.caid };
   }
 
@@ -323,17 +380,36 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    */
   override removeRootCertificate(request: TlsCertificateManagement.RemoveRootCertificateRequest): void {
     const { caid } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
-    if (caid > MAX_TLS_CERTIFICATE_ID) throw new StatusResponseError(`RemoveRootCertificate: CAID ${caid} out of range`, Status.ConstraintError);
+    // Matter 1.6.1 § 14.4.4.1: A TLSCAID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (caid > MAX_TLS_CERTIFICATE_ID)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.removeRootCertificate: the CAID ${caid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
+    // Matter 1.6.1 § 14.4.6.7: Fail with INVALID_IN_STATE if a TLS endpoint of the TLS Client Management cluster uses the CAID.
     if (this.#tlsEndpoints(fabric).some((endpoint) => endpoint.caid === caid)) {
-      throw new StatusResponseError(`RemoveRootCertificate: CAID ${caid} is used by a TLS endpoint`, Status.InvalidInState);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.removeRootCertificate: the CAID ${caid} is used by a TLS endpoint (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.InvalidInState,
+      );
     }
     const store = this.state.rootCertificateStore;
     const remaining = store.filter((entry) => !(entry.fabric === fabric && entry.caid === caid));
-    if (remaining.length === store.length) throw new StatusResponseError(`RemoveRootCertificate: CAID ${caid} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.4.6.7: Fail with NOT_FOUND if the CAID does not exist on the accessing fabric.
+    if (remaining.length === store.length)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.removeRootCertificate: the CAID ${caid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
+    // Matter 1.6.1 § 14.4.6.7: Remove the entry of the CAID from ProvisionedRootCertificates.
     this.state.rootCertificateStore = remaining;
+    // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
     this.#updateAttributes();
-    log.info(`Root certificate CAID ${caid} removed from fabric ${fabric}`);
+    log.info(
+      `MatterbridgeTlsCertificateManagementServer.removeRootCertificate: root certificate CAID ${caid} removed from fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 
   /**
@@ -350,30 +426,56 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
   override clientCsr(request: TlsCertificateManagement.ClientCsrRequest): TlsCertificateManagement.ClientCsrResponse {
     const nonce = Bytes.of(request.nonce);
     const { ccdid } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
+    // Matter 1.6.1 § 14.4.6.8: The Nonce field is 32 octets (CONSTRAINT_ERROR).
     if (nonce.byteLength !== CLIENT_CSR_NONCE_BYTES) {
-      throw new StatusResponseError(`ClientCSR: nonce of ${nonce.byteLength} octets is not ${CLIENT_CSR_NONCE_BYTES}`, Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.clientCsr: nonce of ${nonce.byteLength} octets is not ${CLIENT_CSR_NONCE_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
     const store = this.state.clientCertificateStore;
     let id: number;
     let privateKey: Uint8Array;
     if (ccdid === null) {
+      // Matter 1.6.1 § 14.4.6.8: For a null CCDID, fail with RESOURCE_EXHAUSTED if the accessing fabric already has MaxClientCertificates client certificates.
       if (store.filter((entry) => entry.fabric === fabric).length >= this.state.maxClientCertificates) {
-        throw new StatusResponseError(`ClientCSR: fabric ${fabric} already has ${this.state.maxClientCertificates} client certificates`, Status.ResourceExhausted);
+        throw new StatusResponseError(
+          `MatterbridgeTlsCertificateManagementServer.clientCsr: fabric ${fabric} already has ${this.state.maxClientCertificates} client certificates (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.ResourceExhausted,
+        );
       }
+      // Matter 1.6.1 § 14.4.6.8: For a null CCDID, generate a new key pair and a new TLSCCDID.
       id = allocateId(new Set(store.map((entry) => entry.ccdid)), this.state.nextCcdid);
       privateKey = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey.export({ type: 'pkcs8', format: 'der' });
       this.state.nextCcdid = (id + 1) % (MAX_TLS_CERTIFICATE_ID + 1);
+      // Matter 1.6.1 § 14.4.6.8: Add the new client certificate details with null ClientCertificate and empty IntermediateCertificates, associated with the accessing fabric.
       this.state.clientCertificateStore = [...store, { ccdid: id, fabric, clientCertificate: null, intermediateCertificates: [], privateKey }];
+      // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
       this.#updateAttributes();
-      log.info(`Client certificate CCDID ${id} created on fabric ${fabric}`);
+      log.info(
+        `MatterbridgeTlsCertificateManagementServer.clientCsr: client certificate CCDID ${id} created on fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     } else {
-      if (ccdid > MAX_TLS_CERTIFICATE_ID) throw new StatusResponseError(`ClientCSR: CCDID ${ccdid} out of range`, Status.ConstraintError);
+      // Matter 1.6.1 § 14.4.4.2: A TLSCCDID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+      if (ccdid > MAX_TLS_CERTIFICATE_ID)
+        throw new StatusResponseError(
+          `MatterbridgeTlsCertificateManagementServer.clientCsr: the CCDID ${ccdid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.ConstraintError,
+        );
       const existing = store.find((entry) => entry.fabric === fabric && entry.ccdid === ccdid);
-      if (existing === undefined) throw new StatusResponseError(`ClientCSR: CCDID ${ccdid} not found`, Status.NotFound);
+      // Matter 1.6.1 § 14.4.6.8: For a non-null CCDID, fail with NOT_FOUND if the CCDID does not exist on the accessing fabric.
+      if (existing === undefined)
+        throw new StatusResponseError(
+          `MatterbridgeTlsCertificateManagementServer.clientCsr: the CCDID ${ccdid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.NotFound,
+        );
       id = ccdid;
       privateKey = existing.privateKey;
-      log.info(`Client certificate CCDID ${id} CSR generated for rotation on fabric ${fabric}`);
+      log.info(
+        `MatterbridgeTlsCertificateManagementServer.clientCsr: client certificate CCDID ${id} CSR generated for rotation on fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
     }
     return { ccdid: id, csr: createClientCsr(privateKey), nonceSignature: signClientCsrNonce(privateKey, nonce) };
   }
@@ -392,48 +494,85 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
     const { ccdid } = request;
     const clientCertificate = Bytes.of(request.clientCertificate);
     const intermediateCertificates = request.intermediateCertificates.map((certificate) => Bytes.of(certificate));
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
-    if (ccdid > MAX_TLS_CERTIFICATE_ID) throw new StatusResponseError(`ProvisionClientCertificate: CCDID ${ccdid} out of range`, Status.ConstraintError);
+    // Matter 1.6.1 § 14.4.4.2: A TLSCCDID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (ccdid > MAX_TLS_CERTIFICATE_ID)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: the CCDID ${ccdid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
+    // Matter 1.6.1 § 14.4.6.10: The ClientCertificate field has a maximum length of 3000 octets (CONSTRAINT_ERROR).
     if (clientCertificate.byteLength > MAX_CERTIFICATE_BYTES) {
-      throw new StatusResponseError(`ProvisionClientCertificate: certificate of ${clientCertificate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES}`, Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: certificate of ${clientCertificate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
     const x509 = parseValidCertificate(clientCertificate);
+    // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if the ClientCertificate is not a valid TLS certificate.
     if (x509 === undefined) {
-      throw new StatusResponseError('ProvisionClientCertificate: not a valid DER encoded X.509 certificate', Status.DynamicConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.DynamicConstraintError,
+      );
     }
+    // Matter 1.6.1 § 14.4.6.10: The IntermediateCertificates field has at most 10 entries (CONSTRAINT_ERROR).
     if (intermediateCertificates.length > MAX_INTERMEDIATE_CERTIFICATES) {
       throw new StatusResponseError(
-        `ProvisionClientCertificate: ${intermediateCertificates.length} intermediate certificates exceed ${MAX_INTERMEDIATE_CERTIFICATES}`,
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: ${intermediateCertificates.length} intermediate certificates exceed ${MAX_INTERMEDIATE_CERTIFICATES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
         Status.ConstraintError,
       );
     }
     for (const intermediate of intermediateCertificates) {
+      // Matter 1.6.1 § 14.4.6.10: Each intermediate certificate has a maximum length of 3000 octets (CONSTRAINT_ERROR).
       if (intermediate.byteLength > MAX_CERTIFICATE_BYTES) {
         throw new StatusResponseError(
-          `ProvisionClientCertificate: intermediate certificate of ${intermediate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES}`,
+          `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: intermediate certificate of ${intermediate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
           Status.ConstraintError,
         );
       }
+      // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if an intermediate certificate is not a valid TLS certificate.
       if (parseValidCertificate(intermediate) === undefined) {
-        throw new StatusResponseError('ProvisionClientCertificate: intermediate certificate not a valid DER encoded X.509 certificate', Status.DynamicConstraintError);
+        throw new StatusResponseError(
+          `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: intermediate certificate not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.DynamicConstraintError,
+        );
       }
     }
     const store = this.state.clientCertificateStore;
     const fingerprint = certificateFingerprint(clientCertificate);
+    // Matter 1.6.1 § 14.4.6.10: Fail with ALREADY_EXISTS if a client certificate with the same fingerprint is provisioned on the accessing fabric.
     if (store.some((entry) => entry.fabric === fabric && entry.clientCertificate !== null && certificateFingerprint(entry.clientCertificate).equals(fingerprint))) {
-      throw new StatusResponseError('ProvisionClientCertificate: certificate already provisioned', Status.AlreadyExists);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: certificate already provisioned (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.AlreadyExists,
+      );
     }
     const existing = store.find((entry) => entry.fabric === fabric && entry.ccdid === ccdid);
-    if (existing === undefined) throw new StatusResponseError(`ProvisionClientCertificate: CCDID ${ccdid} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.4.6.10: Fail with NOT_FOUND if the CCDID does not exist on the accessing fabric.
+    if (existing === undefined)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: the CCDID ${ccdid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
     const keyPublicKey = createPublicKey(createPrivateKey({ key: Buffer.from(existing.privateKey), format: 'der', type: 'pkcs8' })).export({ type: 'spki', format: 'der' });
+    // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if the public key of the ClientCertificate does not correspond to the private key of the CCDID.
     if (!x509.publicKey.export({ type: 'spki', format: 'der' }).equals(keyPublicKey)) {
-      throw new StatusResponseError(`ProvisionClientCertificate: certificate not issued for the key pair of CCDID ${ccdid}`, Status.DynamicConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: certificate not issued for the key pair of CCDID ${ccdid} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.DynamicConstraintError,
+      );
     }
+    // Matter 1.6.1 § 14.4.6.10: Update the ClientCertificate and IntermediateCertificates of the entry of the CCDID.
     this.state.clientCertificateStore = store.map((entry) =>
       entry.fabric === fabric && entry.ccdid === ccdid ? { ccdid, fabric, clientCertificate, intermediateCertificates, privateKey: existing.privateKey } : entry,
     );
+    // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
     this.#updateAttributes();
-    log.info(`Client certificate CCDID ${ccdid} provisioned on fabric ${fabric} with ${intermediateCertificates.length} intermediate certificates`);
+    log.info(
+      `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: client certificate CCDID ${ccdid} provisioned on fabric ${fabric} with ${intermediateCertificates.length} intermediate certificates (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 
   /**
@@ -446,8 +585,14 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    */
   override findClientCertificate(request: TlsCertificateManagement.FindClientCertificateRequest): TlsCertificateManagement.FindClientCertificateResponse {
     const { ccdid } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
-    if (ccdid !== null && ccdid > MAX_TLS_CERTIFICATE_ID) throw new StatusResponseError(`FindClientCertificate: CCDID ${ccdid} out of range`, Status.ConstraintError);
+    // Matter 1.6.1 § 14.4.4.2: A TLSCCDID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (ccdid !== null && ccdid > MAX_TLS_CERTIFICATE_ID)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.findClientCertificate: the CCDID ${ccdid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     const certificateDetails = this.state.clientCertificateStore
       .filter((entry) => entry.fabric === fabric && (ccdid === null || entry.ccdid === ccdid))
       .map((entry) => ({
@@ -456,7 +601,12 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
         intermediateCertificates: entry.intermediateCertificates,
         fabricIndex: FabricIndex(fabric),
       }));
-    if (certificateDetails.length === 0) throw new StatusResponseError(`FindClientCertificate: CCDID ${ccdid ?? 'null'} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.4.6.11: Fail with NOT_FOUND if no client certificate of the accessing fabric matches the CCDID, or none exists for a null CCDID.
+    if (certificateDetails.length === 0)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.findClientCertificate: the CCDID ${ccdid ?? 'null'} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
     return { certificateDetails };
   }
 
@@ -469,14 +619,24 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    */
   override lookupClientCertificate(request: TlsCertificateManagement.LookupClientCertificateRequest): TlsCertificateManagement.LookupClientCertificateResponse {
     const fingerprint = Buffer.from(Bytes.of(request.fingerprint));
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
+    // Matter 1.6.1 § 14.4.6.13: The Fingerprint field has a maximum length of 64 octets (CONSTRAINT_ERROR).
     if (fingerprint.byteLength > MAX_FINGERPRINT_BYTES) {
-      throw new StatusResponseError(`LookupClientCertificate: fingerprint of ${fingerprint.byteLength} octets exceeds ${MAX_FINGERPRINT_BYTES}`, Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.lookupClientCertificate: fingerprint of ${fingerprint.byteLength} octets exceeds ${MAX_FINGERPRINT_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
     const found = this.state.clientCertificateStore.find(
       (entry) => entry.fabric === fabric && entry.clientCertificate !== null && certificateFingerprint(entry.clientCertificate).equals(fingerprint),
     );
-    if (found === undefined) throw new StatusResponseError('LookupClientCertificate: fingerprint not found', Status.NotFound);
+    // Matter 1.6.1 § 14.4.6.13: Fail with NOT_FOUND if no client certificate of the accessing fabric has the fingerprint.
+    if (found === undefined)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.lookupClientCertificate: fingerprint not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
     return { ccdid: found.ccdid };
   }
 
@@ -489,17 +649,36 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    */
   override removeClientCertificate(request: TlsCertificateManagement.RemoveClientCertificateRequest): void {
     const { ccdid } = request;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
-    if (ccdid > MAX_TLS_CERTIFICATE_ID) throw new StatusResponseError(`RemoveClientCertificate: CCDID ${ccdid} out of range`, Status.ConstraintError);
+    // Matter 1.6.1 § 14.4.4.2: A TLSCCDID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (ccdid > MAX_TLS_CERTIFICATE_ID)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.removeClientCertificate: the CCDID ${ccdid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
+    // Matter 1.6.1 § 14.4.6.15: Fail with INVALID_IN_STATE if a TLS endpoint of the TLS Client Management cluster uses the CCDID.
     if (this.#tlsEndpoints(fabric).some((endpoint) => endpoint.ccdid === ccdid)) {
-      throw new StatusResponseError(`RemoveClientCertificate: CCDID ${ccdid} is used by a TLS endpoint`, Status.InvalidInState);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.removeClientCertificate: the CCDID ${ccdid} is used by a TLS endpoint (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.InvalidInState,
+      );
     }
     const store = this.state.clientCertificateStore;
     const remaining = store.filter((entry) => !(entry.fabric === fabric && entry.ccdid === ccdid));
-    if (remaining.length === store.length) throw new StatusResponseError(`RemoveClientCertificate: CCDID ${ccdid} not found`, Status.NotFound);
+    // Matter 1.6.1 § 14.4.6.15: Fail with NOT_FOUND if the CCDID does not exist on the accessing fabric.
+    if (remaining.length === store.length)
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.removeClientCertificate: the CCDID ${ccdid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.NotFound,
+      );
+    // Matter 1.6.1 § 14.4.6.15: Remove all the stored information of the CCDID, including its key pair.
     this.state.clientCertificateStore = remaining;
+    // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
     this.#updateAttributes();
-    log.info(`Client certificate CCDID ${ccdid} removed from fabric ${fabric}`);
+    log.info(
+      `MatterbridgeTlsCertificateManagementServer.removeClientCertificate: client certificate CCDID ${ccdid} removed from fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 
   /**
@@ -511,8 +690,12 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    */
   #accessingFabric(): number {
     const fabric = this.context.fabric;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     if (fabric === undefined || fabric === FabricIndex.NO_FABRIC)
-      throw new StatusResponseError('TLS Certificate Management commands require an accessing fabric', Status.UnsupportedAccess);
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer: an accessing fabric is required (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.UnsupportedAccess,
+      );
     return fabric;
   }
 
@@ -546,10 +729,14 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
     const rootCertificateStore = this.state.rootCertificateStore.filter((entry) => fabricIndexes.has(entry.fabric));
     const clientCertificateStore = this.state.clientCertificateStore.filter((entry) => fabricIndexes.has(entry.fabric));
     if (rootCertificateStore.length === this.state.rootCertificateStore.length && clientCertificateStore.length === this.state.clientCertificateStore.length) return;
+    // Matter 1.6.1 § 11.18.6.12: Removing a fabric deletes all its fabric-scoped data, including its certificates and key pairs.
     this.state.rootCertificateStore = rootCertificateStore;
     this.state.clientCertificateStore = clientCertificateStore;
+    // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
     this.#updateAttributes();
-    log.info('Fabric removed: certificates of the removed fabrics deleted');
+    log.info(
+      `MatterbridgeTlsCertificateManagementServer: a fabric was removed, the certificates of the removed fabrics were deleted (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 }
 

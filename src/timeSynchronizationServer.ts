@@ -92,7 +92,7 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
   override initialize(): void {
     // Matter 1.6.1 § 11.17.8.6: The TimeZone attribute SHALL have at least one entry, UTC by default.
     if (this.state.timeZone.length === 0) this.state.timeZone = [{ offset: 0, validAt: MATTER_EPOCH_US }];
-    // There is no time zone database (Matter 1.6.1 § 11.17.8.9).
+    // Matter 1.6.1 § 11.17.8.9: TimeZoneDatabase indicates whether the node has access to a time zone database: this node has none.
     this.state.timeZoneDatabase = TimeSynchronization.TimeZoneDatabase.None;
     this.updateClock();
     this.internal.dstActive = this.#activeDstOffset() !== 0;
@@ -128,9 +128,11 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
    */
   updateClock(): void {
     const now = nowUs();
-    // Matter 1.6.1 § 11.17.8.2 and § 11.17.8.3: UTCTime is non-null, so Granularity and TimeSource are not NoTimeGranularity and None.
+    // Matter 1.6.1 § 11.17.8.1: UTCTime indicates the current UTC time once the node has achieved time synchronization.
     this.state.utcTime = now;
+    // Matter 1.6.1 § 11.17.8.2: Granularity SHALL NOT be NoTimeGranularity while UTCTime is non-null.
     this.state.granularity = TimeSynchronization.Granularity.MillisecondsGranularity;
+    // Matter 1.6.1 § 11.17.8.3: TimeSource SHALL NOT be None while UTCTime is non-null.
     this.state.timeSource = TimeSynchronization.TimeSource.Unknown;
 
     // Matter 1.6.1 § 11.17.8.6: Remove the TimeZone entries no longer active and set the ValidAt of the one in use to 0.
@@ -145,7 +147,7 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
       this.state.dstOffset = dstOffset;
       // Matter 1.6.1 § 11.17.10.1: Generate DSTTableEmpty when the last DST offset expires.
       if (dstOffset.length === 0) {
-        log.info('DSTOffset table expired: generating DSTTableEmpty');
+        log.info(`MatterbridgeTimeSynchronizationServer: the DSTOffset table expired, generating DSTTableEmpty (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`);
         this.events.dstTableEmpty.emit(undefined, this.context);
       }
     }
@@ -163,9 +165,13 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
    * @throws {TimeSynchronization.TimeNotAcceptedError} Always, since the node keeps the host clock.
    */
   override setUtcTime(request: TimeSynchronization.SetUtcTimeRequest): void {
-    log.info(`SetUTCTime with granularity ${request.granularity} not accepted: the node uses the host clock`);
+    log.info(
+      `MatterbridgeTimeSynchronizationServer.setUtcTime: time with granularity ${request.granularity} not accepted, the node uses the host clock (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
     // Matter 1.6.1 § 11.17.9.1: If the node opts to not update its time, fail the command with the cluster specific status code TimeNotAccepted.
-    throw new TimeSynchronization.TimeNotAcceptedError('SetUTCTime not accepted: the node uses the host clock');
+    throw new TimeSynchronization.TimeNotAcceptedError(
+      `MatterbridgeTimeSynchronizationServer.setUtcTime: time not accepted, the node uses the host clock (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 
   /**
@@ -179,17 +185,25 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
     // Matter 1.6.1 § 11.17.9.2: A null TrustedTimeSource sets the attribute to null and generates a MissingTrustedTimeSource event.
     if (trustedTimeSource === null) {
       this.state.trustedTimeSource = null;
-      log.info('TrustedTimeSource cleared: generating MissingTrustedTimeSource');
+      log.info(
+        `MatterbridgeTimeSynchronizationServer.setTrustedTimeSource: the TrustedTimeSource was cleared, generating MissingTrustedTimeSource (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
       this.events.missingTrustedTimeSource.emit(undefined, this.context);
       return;
     }
     const fabricIndex = this.context.fabric;
+    // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     if (fabricIndex === undefined) {
-      throw new StatusResponseError('SetTrustedTimeSource requires an accessing fabric', Status.UnsupportedAccess);
+      throw new StatusResponseError(
+        `MatterbridgeTimeSynchronizationServer.setTrustedTimeSource: an accessing fabric is required (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.UnsupportedAccess,
+      );
     }
     // Matter 1.6.1 § 11.17.9.2: Otherwise set the NodeID and Endpoint from the command and the FabricIndex of the accessing fabric.
     this.state.trustedTimeSource = { fabricIndex, nodeId: trustedTimeSource.nodeId, endpoint: trustedTimeSource.endpoint };
-    log.info(`TrustedTimeSource set to node ${trustedTimeSource.nodeId} endpoint ${trustedTimeSource.endpoint} on fabric ${fabricIndex}`);
+    log.info(
+      `MatterbridgeTimeSynchronizationServer.setTrustedTimeSource: the TrustedTimeSource was set to node ${trustedTimeSource.nodeId} endpoint ${trustedTimeSource.endpoint} on fabric ${fabricIndex} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 
   /**
@@ -204,15 +218,24 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
     if (defaultNtp !== null && !isCanonicalIpv6(defaultNtp)) {
       // Matter 1.6.1 § 11.17.9.6: Fail with INVALID_COMMAND if the address is not a domain name or a static IPv6 address without port.
       if (isIPv4(defaultNtp) || !HOSTNAME_REGEX.test(defaultNtp)) {
-        throw new StatusResponseError(`SetDefaultNTP: ${defaultNtp} is not a domain name or a static IPv6 address`, Status.InvalidCommand);
+        throw new StatusResponseError(
+          `MatterbridgeTimeSynchronizationServer.setDefaultNtp: address ${defaultNtp} is not a domain name or a static IPv6 address (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.InvalidCommand,
+        );
       }
       // Matter 1.6.1 § 11.17.9.6: Fail with INVALID_COMMAND if the address is a domain name and the node does not support DNS resolution.
       if (!this.state.supportsDnsResolve) {
-        throw new StatusResponseError(`SetDefaultNTP: ${defaultNtp} is a domain name and the node does not support DNS resolution`, Status.InvalidCommand);
+        throw new StatusResponseError(
+          `MatterbridgeTimeSynchronizationServer.setDefaultNtp: address ${defaultNtp} is a domain name and the node does not support DNS resolution (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.InvalidCommand,
+        );
       }
     }
+    // Matter 1.6.1 § 11.17.9.6: Otherwise set the DefaultNTP attribute to the DefaultNTP of the command.
     this.state.defaultNtp = defaultNtp;
-    log.info(`DefaultNTP set to ${defaultNtp ?? 'null'}`);
+    log.info(
+      `MatterbridgeTimeSynchronizationServer.setDefaultNtp: the DefaultNTP was set to ${defaultNtp ?? 'null'} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
   }
 
   /**
@@ -227,18 +250,26 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
     const { timeZone } = request;
     // Matter 1.6.1 § 11.17.9.3: Respond with RESOURCE_EXHAUSTED if the list is larger than TimeZoneListMaxSize.
     if (timeZone.length > this.state.timeZoneListMaxSize) {
-      throw new StatusResponseError(`SetTimeZone: ${timeZone.length} entries exceed TimeZoneListMaxSize ${this.state.timeZoneListMaxSize}`, Status.ResourceExhausted);
+      throw new StatusResponseError(
+        `MatterbridgeTimeSynchronizationServer.setTimeZone: the list of ${timeZone.length} entries exceeds TimeZoneListMaxSize ${this.state.timeZoneListMaxSize} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ResourceExhausted,
+      );
     }
     // Matter 1.6.1 § 11.17.8.6: The first entry SHALL have a ValidAt of 0, a second entry a non-zero ValidAt.
     const [first, second] = timeZone;
     if (first === undefined || BigInt(first.validAt) !== MATTER_EPOCH_US || (second !== undefined && BigInt(second.validAt) === MATTER_EPOCH_US)) {
-      throw new StatusResponseError('SetTimeZone: the first entry SHALL have a ValidAt of 0 and a second entry a non-zero ValidAt', Status.ConstraintError);
+      throw new StatusResponseError(
+        `MatterbridgeTimeSynchronizationServer.setTimeZone: the first entry SHALL have a ValidAt of 0 and a second entry a non-zero ValidAt (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
     // Matter 1.6.1 § 11.17.9.3: Copy the list to the TimeZone attribute and generate a TimeZoneStatus event with the new time zone.
     this.state.timeZone = timeZone;
     const now = nowUs();
     const active = this.#activeTimeZone(now);
-    log.info(`TimeZone set to offset ${active.offset}s${active.name === undefined ? '' : ` (${active.name})`}: generating TimeZoneStatus`);
+    log.info(
+      `MatterbridgeTimeSynchronizationServer.setTimeZone: the TimeZone was set to offset ${active.offset}s${active.name === undefined ? '' : ` (${active.name})`}, generating TimeZoneStatus (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
     this.events.timeZoneStatus.emit({ offset: active.offset, name: active.name }, this.context);
     // Matter 1.6.1 § 11.17.9.3: Without a time zone database, set DSTOffset to an empty list and generate a DSTTableEmpty event.
     this.state.dstOffset = [];
@@ -260,23 +291,31 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
     const { dstOffset } = request;
     // Matter 1.6.1 § 11.17.9.5: Respond with RESOURCE_EXHAUSTED if the list is larger than DSTOffsetListMaxSize.
     if (dstOffset.length > this.state.dstOffsetListMaxSize) {
-      throw new StatusResponseError(`SetDSTOffset: ${dstOffset.length} entries exceed DSTOffsetListMaxSize ${this.state.dstOffsetListMaxSize}`, Status.ResourceExhausted);
+      throw new StatusResponseError(
+        `MatterbridgeTimeSynchronizationServer.setDstOffset: the list of ${dstOffset.length} entries exceeds DSTOffsetListMaxSize ${this.state.dstOffsetListMaxSize} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ResourceExhausted,
+      );
     }
-    // Matter 1.6.1 § 11.17.9.5: Respond with CONSTRAINT_ERROR if the list does not conform to the DSTOffset attribute requirements (§ 11.17.8.7).
     for (const [index, entry] of dstOffset.entries()) {
       const isLast = index === dstOffset.length - 1;
       const previous = index > 0 ? dstOffset[index - 1] : undefined;
-      // Only the last entry may have a null ValidUntil, and a ValidUntil is after its ValidStarting.
+      // Matter 1.6.1 § 11.17.8.7: Only the last entry may have a null ValidUntil, and a ValidUntil is after its ValidStarting.
       const validUntilOk = entry.validUntil === null ? isLast : BigInt(entry.validUntil) > BigInt(entry.validStarting);
-      // Sorted by ValidStarting, not starting before the ValidUntil of the previous entry.
+      // Matter 1.6.1 § 11.17.8.7: The entries are sorted by ValidStarting, none starting before the ValidUntil of the previous entry.
       const orderOk = previous?.validUntil === null || previous === undefined || BigInt(entry.validStarting) >= BigInt(previous.validUntil);
+      // Matter 1.6.1 § 11.17.9.5: Respond with CONSTRAINT_ERROR if the list does not conform to the DSTOffset attribute requirements.
       if (!validUntilOk || !orderOk) {
-        throw new StatusResponseError(`SetDSTOffset: entry ${index} does not conform to the DSTOffset list requirements`, Status.ConstraintError);
+        throw new StatusResponseError(
+          `MatterbridgeTimeSynchronizationServer.setDstOffset: entry ${index} does not conform to the DSTOffset list requirements (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+          Status.ConstraintError,
+        );
       }
     }
     // Matter 1.6.1 § 11.17.9.5: Copy the list to the DSTOffset attribute; generate DSTTableEmpty if it is empty and DSTStatus if the DST state changes.
     this.state.dstOffset = dstOffset;
-    log.info(`DSTOffset set with ${dstOffset.length} entries`);
+    log.info(
+      `MatterbridgeTimeSynchronizationServer.setDstOffset: the DSTOffset was set with ${dstOffset.length} entries (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
     if (dstOffset.length === 0) this.events.dstTableEmpty.emit(undefined, this.context);
     this.#updateDstStatus();
     this.#updateLocalTime(nowUs());
@@ -293,7 +332,9 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
     if (fabricIndex === undefined || fabrics.some((fabric) => fabric.fabricIndex === fabricIndex)) return;
     // Matter 1.6.1 § 11.17.10.5: Generate MissingTrustedTimeSource when the TrustedTimeSource is set to null upon fabric removal.
     this.state.trustedTimeSource = null;
-    log.info(`TrustedTimeSource fabric ${fabricIndex} removed: generating MissingTrustedTimeSource`);
+    log.info(
+      `MatterbridgeTimeSynchronizationServer: the TrustedTimeSource fabric ${fabricIndex} was removed, generating MissingTrustedTimeSource (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
     this.events.missingTrustedTimeSource.emit(undefined, this.context);
   }
 
@@ -324,9 +365,12 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
    */
   #updateDstStatus(): void {
     const dstActive = this.#activeDstOffset() !== 0;
+    // Matter 1.6.1 § 11.17.10.2: Generate DSTStatus only when the node starts or stops applying a DST offset.
     if (dstActive === this.internal.dstActive) return;
     this.internal.dstActive = dstActive;
-    log.info(`DST offset ${dstActive ? 'applied' : 'no longer applied'}: generating DSTStatus`);
+    log.info(
+      `MatterbridgeTimeSynchronizationServer: the DST offset is ${dstActive ? 'applied' : 'no longer applied'}, generating DSTStatus (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+    );
     this.events.dstStatus.emit({ dstOffsetActive: dstActive }, this.context);
   }
 
@@ -336,10 +380,12 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
    * @param {bigint} now - The current time in Unix microseconds.
    */
   #updateLocalTime(now: bigint): void {
+    // Matter 1.6.1 § 11.17.8.8: LocalTime SHALL be null while the DSTOffset list is empty.
     if (this.state.dstOffset.length === 0) {
       this.state.localTime = null;
       return;
     }
+    // Matter 1.6.1 § 11.17.8.8: LocalTime is the sum of UTCTime and the offsets of the currently valid TimeZone and DSTOffset entries.
     const offsetSeconds = this.#activeTimeZone(now).offset + this.#activeDstOffset();
     this.state.localTime = now + BigInt(offsetSeconds) * 1_000_000n;
   }
