@@ -11,7 +11,8 @@ const MATTER_CREATE_ONLY = true;
 import { Time } from 'matterbridge/matter';
 import { OperationalCredentialsServer } from 'matterbridge/matter/behaviors';
 import { TimeSynchronization } from 'matterbridge/matter/clusters';
-import { EndpointNumber, FabricIndex, NodeId, Status, StatusResponseError } from 'matterbridge/matter/types';
+import { CommandModel } from 'matterbridge/matter/model';
+import { EndpointNumber, FabricIndex, NodeId, Status, StatusResponseError, TlvOfModel } from 'matterbridge/matter/types';
 import {
   createServerNode,
   createTestEnvironment,
@@ -261,6 +262,17 @@ describe('MatterbridgeTimeSynchronizationServer', () => {
     expect((error as StatusResponseError).code).toBe(Status.ResourceExhausted);
   });
 
+  it('should let any SetTimeZone list reach the handler, which checks its 1 to 2 entries (TC-TIMESYNC-2.4 step 16)', () => {
+    // The protocol layer validates the request against the TLV of the command model of the behavior schema before the handler runs
+    const command = MatterbridgeTimeSynchronizationServer.schema.require(CommandModel, 'SetTimeZone');
+    const requestTlv = TlvOfModel(command);
+    const entry = { offset: 0, validAt: MATTER_EPOCH_US };
+    expect(() => requestTlv.validate({ timeZone: [entry, entry, entry] })).not.toThrow();
+    expect(() => requestTlv.validate({ timeZone: [] })).not.toThrow();
+    // The features required on the Root Node of a Camera are kept
+    expect([...MatterbridgeTimeSynchronizationServer.schema.supportedFeatures].toSorted()).toEqual(['NTPC', 'TSC', 'TZ']);
+  });
+
   it.each([
     ['an empty list', []],
     ['a first entry with a non-zero ValidAt', [{ offset: 0, validAt: nowUs() }]],
@@ -414,6 +426,8 @@ describe('MatterbridgeTimeSynchronizationServer', () => {
     }
     const state = server.stateOf(MatterbridgeTimeSynchronizationServer);
     expect(state.timeZone).toEqual([{ offset: 7200, validAt: MATTER_EPOCH_US, name: 'Scheduled' }]);
+    // Matter 1.6.1 § 11.17.10.3: the scheduled entry changes the time zone offset and name, so TimeZoneStatus is generated.
+    expect(events.timeZoneStatus).toHaveBeenLastCalledWith({ offset: 7200, name: 'Scheduled' }, expect.anything());
     expect(BigInt(state.localTime ?? 0) - BigInt(later) * 1000n).toBe(2n * HOUR_US);
   });
 
@@ -437,6 +451,27 @@ describe('MatterbridgeTimeSynchronizationServer', () => {
       nowMs.mockRestore();
     }
     expect(server.stateOf(MatterbridgeTimeSynchronizationServer).timeZone).toEqual([{ offset: -3600, validAt: MATTER_EPOCH_US }]);
+    expect(events.timeZoneStatus).toHaveBeenLastCalledWith({ offset: -3600, name: undefined }, expect.anything());
+  });
+
+  it('should not generate TimeZoneStatus when a scheduled TimeZone entry keeps the offset and name', async () => {
+    await withTimeSync((timeSync) =>
+      timeSync.setTimeZone({
+        timeZone: [
+          { offset: 3600, validAt: MATTER_EPOCH_US },
+          { offset: 3600, validAt: nowUs() + HOUR_US },
+        ],
+      }),
+    );
+    events.timeZoneStatus.mockClear();
+    const nowMs = vi.spyOn(Time, 'nowMs', 'get').mockReturnValue((Date.now() + 2 * 3_600_000) as never);
+    try {
+      await withTimeSync((timeSync) => timeSync.updateClock());
+    } finally {
+      nowMs.mockRestore();
+    }
+    expect(server.stateOf(MatterbridgeTimeSynchronizationServer).timeZone).toEqual([{ offset: 3600, validAt: MATTER_EPOCH_US }]);
+    expect(events.timeZoneStatus).not.toHaveBeenCalled();
   });
 
   it('should stop the clock refresh when the server is disposed', async () => {

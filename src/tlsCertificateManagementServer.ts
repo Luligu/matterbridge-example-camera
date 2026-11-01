@@ -25,7 +25,7 @@ import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sig
 
 // Matterbridge
 import { AnsiLogger, LogLevel, MAGENTA, TimestampFormat } from 'matterbridge/logger';
-import { Bytes, Node, Time } from 'matterbridge/matter';
+import { Bytes, Node, Time, Val } from 'matterbridge/matter';
 import { OperationalCredentialsServer, TimeSynchronizationServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { type OperationalCredentials, TlsCertificateManagement } from 'matterbridge/matter/clusters';
 import { AttributeModel, FieldElement } from 'matterbridge/matter/model';
@@ -159,7 +159,7 @@ const { schema } = TlsCertificateManagement;
 /**
  * The cluster schema with:
  * - The persistent certificate store, kept in nonvolatile fields of the behavior state that are not cluster
- *   attributes: the certificate payloads and the private keys never appear in the attributes (see the class remarks).
+ *   attributes: the private keys never appear in the attributes (see the class remarks).
  * - No constraint on the length of ProvisionedRootCertificates and ProvisionedClientCertificates: MaxRootCertificates
  *   and MaxClientCertificates limit the certificates of each fabric (the fabric filtered view a controller reads),
  *   while matter.js would check the list of all the fabrics. The server enforces the limits per fabric.
@@ -209,11 +209,11 @@ const MatterbridgeTlsCertificateManagementServerBase = TlsCertificateManagementS
  * v1.6.1.0 reference server and the TC-TLSCERT-2.x certification tests.
  *
  * @remarks
- * The CHIP reference server omits the certificate payloads from the ProvisionedRootCertificates and
- * ProvisionedClientCertificates attributes when the read does not use a large message transport. matter.js serves an
- * attribute with the same value on every transport, and a list entry larger than one MRP message fails the whole read,
- * so these attributes always carry only the CAID / CCDID and the fabric: the payloads are returned by
- * FindRootCertificate and FindClientCertificate, which are large message commands.
+ * Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: the ProvisionedRootCertificates and ProvisionedClientCertificates attributes
+ * include the certificate payloads when read over a Large Message capable transport (TCP) and omit them otherwise. The
+ * stored attributes carry the payloads, and the {@link MatterbridgeTlsCertificateManagementServer.State} provides a
+ * context-aware view (`Val.properties`) that removes them for a remote read over a non Large Message capable
+ * transport, so a list entry never exceeds one MRP message. The private keys never appear in the attributes.
  */
 export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsCertificateManagementServerBase {
   declare state: MatterbridgeTlsCertificateManagementServer.State;
@@ -720,11 +720,20 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
 
   /**
    * Updates the ProvisionedRootCertificates and ProvisionedClientCertificates attributes from the certificate store,
-   * with the certificate IDs and fabrics only (see the class remarks).
+   * with the certificate payloads but never the private keys (see the class remarks).
    */
   #updateAttributes(): void {
-    this.state.provisionedRootCertificates = this.state.rootCertificateStore.map((entry) => ({ caid: entry.caid, fabricIndex: FabricIndex(entry.fabric) }));
-    this.state.provisionedClientCertificates = this.state.clientCertificateStore.map((entry) => ({ ccdid: entry.ccdid, fabricIndex: FabricIndex(entry.fabric) }));
+    this.state.provisionedRootCertificates = this.state.rootCertificateStore.map((entry) => ({
+      caid: entry.caid,
+      certificate: entry.certificate,
+      fabricIndex: FabricIndex(entry.fabric),
+    }));
+    this.state.provisionedClientCertificates = this.state.clientCertificateStore.map((entry) => ({
+      ccdid: entry.ccdid,
+      clientCertificate: entry.clientCertificate,
+      intermediateCertificates: entry.intermediateCertificates,
+      fabricIndex: FabricIndex(entry.fabric),
+    }));
   }
 
   /**
@@ -789,6 +798,36 @@ export namespace MatterbridgeTlsCertificateManagementServer {
     nextCaid = 0;
     /** The next CCDID to allocate. */
     nextCcdid = 0;
+
+    /**
+     * Serves ProvisionedRootCertificates and ProvisionedClientCertificates without the certificate payloads to a
+     * remote read over a transport that is not Large Message capable (see the class remarks). Local actors and reads
+     * over a Large Message capable transport get the stored attributes.
+     *
+     * @param {unknown} _owner - The owner of the root reference of the managed value.
+     * @param {{ subject?: unknown; largeMessage?: boolean }} session - The session reading the attributes.
+     * @returns {Partial<State>} The context-aware attribute values.
+     */
+    [Val.properties](_owner: unknown, session: { subject?: unknown; largeMessage?: boolean }): Partial<State> {
+      if (session.subject === undefined || session.largeMessage === true) return {};
+      // oxlint-disable-next-line typescript/no-this-alias -- the getters read the raw state this provider belongs to
+      const state = this;
+      return {
+        // Matter 1.6.1 § 14.4.4.3 and § 14.4.5.2: Over a non Large Message capable transport the Certificate field SHALL NOT be included.
+        get provisionedRootCertificates() {
+          return state.provisionedRootCertificates.map(({ certificate: _certificate, ...entry }) => entry);
+        },
+        // Matter 1.6.1 § 14.4.4.5 and § 14.4.5.4: Over a non Large Message capable transport a non-null ClientCertificate and
+        // non-empty IntermediateCertificates SHALL NOT be included.
+        get provisionedClientCertificates() {
+          return state.provisionedClientCertificates.map(({ clientCertificate, intermediateCertificates, ...entry }) => ({
+            ...entry,
+            ...(clientCertificate === null ? { clientCertificate } : {}),
+            ...(intermediateCertificates?.length === 0 ? { intermediateCertificates } : {}),
+          }));
+        },
+      };
+    }
   }
   /* v8 ignore next -- compiler-generated fallback (`Foo || (Foo = {})`) for namespace/class declaration merging;
    * the class is always already defined by the time this runs, so the assignment branch is structurally unreachable. */

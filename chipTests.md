@@ -246,6 +246,29 @@ python3 src/python_testing/TC_WEBRTCP_2_32.py --endpoint 6
 
 **Use `node scripts/run-chip-tests.mjs --test TC_WEBRTCP`** to run the full WebRTC Transport Provider test suite. All tests run with `--endpoint 6` (the `Camera` device).
 
+### Server Camera Root Node — Power Source, Time Synchronization, TLS (added 2026-11-01)
+
+The Server Camera (`SERVER-CAMERA-001`) is a `mode: 'server'` Camera: its own Matter node, whose Root Node (endpoint 0) gets the Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management servers from `addRootNodeCamera` (`src/rootNode.ts`). The bridged Cameras cannot have them: their Root Node is the bridge's.
+
+- **Commissioning:** the image only pairs the bridge (node `0x12344321`). `scripts/chip/commission_node.py` commissions the Server Camera into the Python test fabric as node `0x12344322`, with the passcode `20252030` and the discriminator `3540` that Matterbridge assigns to the 5th server node (logged as `Creating server node for ServerCamera on port 5545 with passcode 20252030 and discriminator 3540`). They change if server-mode devices are added, removed or reordered in `src/module.ts`. The tests target the node with `--dut-node-id 0x12344322 --endpoint 0`.
+- **Reset before each TLS test:** the CSA CI runs each test against a freshly started reference app, while here they share one node. The same helper, run before each `TC_TLSCERT_*` / `TC_TLSCLIENT_*` entry, disarms a leftover fail-safe, removes the fabrics other than its own (the CR2 fabric of a failed multi-fabric test), resets the Time Synchronization DSTOffset (empty) and TimeZone (one entry with offset 0), and removes its own fabric's TLS endpoints, client certificates and root certificates. The commissioning entry does the same before the TIMESYNC tests: TC_TIMESYNC_2_1 step 9 crashes on a test bug (`abs(local_dut, local_calculated)`) whenever the DSTOffset list a previous run left is not empty. Without it, one failed multi-fabric test leaves fabric 2 behind and every later one fails on AddNOC (`Fabric with Id 2 ... already exists`), hidden by a bug of `CommissioningBuildingBlocks.AddNOCForNewFabricFromExisting` (`'ArmFailSafeResponse' object has no attribute 'statusCode'`).
+- **PICS:** `scripts/chip/root-node-camera.pics` (read through the repo mount), since the generic `ci-pics-values` does not declare `TLSCERT.S` / `TLSCLIENT.S`. `TC_PS_2_3` uses `/root/power-source.wired.pics`.
+- **YAML tests skipped:** `Test_TC_TIMESYNC_2_3`, `Test_TC_PS_2_1` and `Test_TC_PS_2_2` run through chip-tool, whose fabric has no pairing to the Server Camera.
+
+✅ All pass (53/53 with the commissioning entry and the resets, verified 2026-11-01): TC_PS_2_3, TC_TIMESYNC 2.1, 2.2, 2.4-2.13, 3.1, TC_TLSCERT 2.1-2.13, TC_TLSCLIENT 2.1, 3.1, 3.2, 3.3, 3.10, 3.20.
+
+TC_TIMESYNC_2_4 step 16 expects RESOURCE_EXHAUSTED for a SetTimeZone with 3 entries (§ 11.17.9.3). matter.js checks the "1 to 2" constraint of the TimeZone field in the protocol layer and answers CONSTRAINT_ERROR before the command handler runs, so `src/timeSynchronizationServer.ts` removes that constraint from its schema and checks the list in `setTimeZone` (see `TimeSynchronizationSchema`).
+
+```bash
+python3 /root/Matterbridge/matterbridge-example-camera/scripts/chip/commission_node.py --dut-node-id 0x12344322 --int-arg passcode:20252030 --int-arg discriminator:3540
+python3 src/python_testing/TC_PS_2_3.py --dut-node-id 0x12344322 --endpoint 0 --PICS /root/power-source.wired.pics
+python3 src/python_testing/TC_TIMESYNC_2_1.py --dut-node-id 0x12344322 --endpoint 0 --PICS /root/Matterbridge/matterbridge-example-camera/scripts/chip/root-node-camera.pics
+python3 src/python_testing/TC_TLSCERT_2_1.py --dut-node-id 0x12344322 --endpoint 0 --PICS /root/Matterbridge/matterbridge-example-camera/scripts/chip/root-node-camera.pics
+python3 src/python_testing/TC_TLSCLIENT_2_1.py --dut-node-id 0x12344322 --endpoint 0 --PICS /root/Matterbridge/matterbridge-example-camera/scripts/chip/root-node-camera.pics
+```
+
+**Use `npm run chip:test:servercamera`** to run them all, or `npm run chip:test:timesync`, `npm run chip:test:tlscert`, `npm run chip:test:tlsclient` for one cluster (each includes the commissioning entry and the resets).
+
 ### Camera AV Stream Management — Default Stream Self-Allocation (added 2026-07-28)
 
 `MatterbridgeCameraAvStreamManagementServer#initialize()` ([cameraAvStreamManagementServer.ts](src/behaviors/cameraAvStreamManagementServer.ts)) self-allocates a default video/audio/snapshot stream for any feature the endpoint supports that has none allocated yet, on every endpoint construction. This applies automatically to every device using this shared behavior: `Camera`, `SnapshotCamera`, `AudioDoorbell`, `Intercom`, and the composite `FloodlightCamera`/`VideoDoorbell`.

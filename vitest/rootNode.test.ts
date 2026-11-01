@@ -9,9 +9,10 @@ const NAME = 'RootNode';
 const MATTER_PORT = 6007;
 const MATTER_CREATE_ONLY = true;
 
+import type { MatterbridgeEndpoint } from 'matterbridge';
 import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
 import { Camera } from 'matterbridge/devices/camera';
-import { TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
+import { PowerSourceServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
 import {
   createServerNode,
@@ -74,6 +75,21 @@ describe('addRootNodeCamera', () => {
     await expect(addRootNodeCamera(device)).rejects.toThrow(
       `addRootNodeCamera requires device.serverNode to be set: register the device with mode: 'server' before calling this helper.`,
     );
+  });
+
+  it('should keep the Power Source that Matterbridge already added to the Root Node', async () => {
+    // Matterbridge adds a Wired Power Source to the Root Node of every server node with --root-power-source or MATTERBRIDGE_CHIP_TEST
+    const require = vi.fn();
+    const device = new Camera('Root Node Camera Power Source', 'ROOTNODE-POWERSOURCE');
+    device.serverNode = { behaviors: { supported: { powerSource: PowerSourceServer.with(PowerSource.Feature.Wired) }, require } } as unknown as MatterbridgeEndpoint['serverNode'];
+
+    expect(await addRootNodeCamera(device)).toBe(device);
+
+    expect(require.mock.calls.map(([type]) => type)).toEqual([
+      MatterbridgeTimeSynchronizationServer,
+      MatterbridgeTlsCertificateManagementServer,
+      MatterbridgeTlsClientManagementServer,
+    ]);
   });
 
   it('should configure the Root Node of a mode: server Camera device', async () => {

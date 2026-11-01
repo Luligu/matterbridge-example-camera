@@ -33,9 +33,10 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 
 - `src/module.ts` will create all device types for easy testing;
 - the device types and the WebRTC stack come from matterbridge (`matterbridge/devices/camera`), see the [Matterbridge cameras](https://matterbridge.io/Camera.html) guide;
-- `src/rootNode.ts` adds the Root Node clusters a Camera requires (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management) to a `mode: 'server'` Camera;
+- `src/rootNode.ts` adds the Root Node clusters a Camera requires (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management) to a `mode: 'server'` Camera. `src/module.ts` creates the **Server Camera** (`SERVER-CAMERA-001`) as its own Matter node and calls it on that node;
 - `src/timeSynchronizationServer.ts` is the Time Synchronization server used there, with the TimeSyncClient, NtpClient and TimeZone features. It reports the host clock (MillisecondsGranularity) and implements SetTrustedTimeSource, SetDefaultNTP, SetTimeZone and SetDSTOffset with their validation and events; SetUTCTime is refused with TimeNotAccepted since the host clock is kept.
-- `src/tlsCertificateManagementServer.ts` and `src/tlsClientManagementServer.ts` provide the Matterbridge TLS server subclasses used on the Root Node. All commands have explicit placeholder overrides: response commands return empty typed response objects, and void commands do nothing. They do not implement TLS management or provide usable protocol responses yet.
+- `src/tlsCertificateManagementServer.ts` and `src/tlsClientManagementServer.ts` are the TLS Certificate Management and TLS Client Management servers used there, per Matter 1.6.1: per fabric root and client certificates (stored nonvolatile, with the client private keys) and TLS endpoints. The certificate payloads are in the ProvisionedRootCertificates and ProvisionedClientCertificates attributes only when read over a Large Message capable transport (TCP).
+- The Root Node servers of the Server Camera are tested with the CHIP harness (`npm run chip:test:servercamera`, see `chipTests.md`).
 
 ## Requirements
 

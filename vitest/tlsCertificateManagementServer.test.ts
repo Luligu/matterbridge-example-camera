@@ -10,6 +10,7 @@ const MATTER_CREATE_ONLY = true;
 
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 
+import { Val } from 'matterbridge/matter';
 import { OperationalCredentialsServer } from 'matterbridge/matter/behaviors';
 import { FabricIndex, Status, StatusResponseError } from 'matterbridge/matter/types';
 import {
@@ -260,7 +261,7 @@ describe('MatterbridgeTlsCertificateManagementServer', () => {
   it('should provision, update and find root certificates per fabric (TC-TLSCERT-2.2)', async () => {
     const rootCertificate = [createCertificate(), createCertificate(), createCertificate()];
 
-    // A new root certificate gets the first CAID; the attribute has the CAID and the fabric only
+    // A new root certificate gets the first CAID, listed in the attribute with its fabric
     expect(await withCertificates((tls) => tls.provisionRootCertificate({ certificate: rootCertificate[0], caid: null }))).toEqual({ caid: 0 });
     expect(certificateState().provisionedRootCertificates).toEqual([{ caid: 0, fabricIndex: FABRIC_1 }]);
 
@@ -478,6 +479,50 @@ describe('MatterbridgeTlsCertificateManagementServer', () => {
     await withCertificates((tls) => tls.removeClientCertificate({ ccdid }));
     await expect(withCertificates((tls) => tls.removeClientCertificate({ ccdid }))).rejects.toMatchObject({ code: Status.NotFound });
     expect(certificateState().clientCertificateStore).toEqual([]);
+  });
+
+  it('should include the certificate payloads in the attributes only over a Large Message capable transport (TC-TLSCERT-2.2, 2.8, 2.9)', async () => {
+    const rootCertificate = createCertificate();
+    const { caid } = await withCertificates((tls) => tls.provisionRootCertificate({ certificate: rootCertificate, caid: null }));
+    const { ccdid, csr } = await withCertificates((tls) => tls.clientCsr({ nonce: nonce(), ccdid: null }));
+    const intermediateKey = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey;
+    const intermediate = createCertificate({ signerKey: intermediateKey });
+    const clientCertificate = createCertificate({ signerKey: intermediateKey, publicKey: decodeCsr(csr).publicKey });
+    await withCertificates((tls) => tls.provisionClientCertificate({ ccdid, clientCertificate, intermediateCertificates: [intermediate] }));
+    // A pending client certificate: null ClientCertificate and empty IntermediateCertificates
+    const pending = await withCertificates((tls) => tls.clientCsr({ nonce: nonce(), ccdid: null }));
+
+    // The stored attributes carry the payloads, never the private keys
+    const state = server.stateOf(MatterbridgeTlsCertificateManagementServer);
+    const rootAttribute = [{ caid, certificate: rootCertificate, fabricIndex: FABRIC_1 }];
+    const clientAttribute = [
+      { ccdid, clientCertificate, intermediateCertificates: [intermediate], fabricIndex: FABRIC_1 },
+      { ccdid: pending.ccdid, clientCertificate: null, intermediateCertificates: [], fabricIndex: FABRIC_1 },
+    ];
+    expect(state.provisionedRootCertificates.map((entry) => ({ ...entry }))).toEqual(rootAttribute);
+    expect(state.provisionedClientCertificates.map((entry) => ({ ...entry, intermediateCertificates: [...(entry.intermediateCertificates ?? [])] }))).toEqual(clientAttribute);
+
+    const raw = Object.assign(new MatterbridgeTlsCertificateManagementServer.State(), {
+      provisionedRootCertificates: rootAttribute,
+      provisionedClientCertificates: clientAttribute,
+    });
+    // A local actor and a remote read over a Large Message capable transport get the stored attributes
+    expect(raw[Val.properties](undefined, {})).toEqual({});
+    expect(raw[Val.properties](undefined, { subject: 1, largeMessage: true })).toEqual({});
+    // A remote read over MRP gets the attributes without the certificate payloads, keeping a null ClientCertificate and empty IntermediateCertificates
+    const mrp = raw[Val.properties](undefined, { subject: 1, largeMessage: false });
+    expect(mrp.provisionedRootCertificates).toEqual([{ caid, fabricIndex: FABRIC_1 }]);
+    expect(mrp.provisionedClientCertificates).toEqual([
+      { ccdid, fabricIndex: FABRIC_1 },
+      { ccdid: pending.ccdid, clientCertificate: null, intermediateCertificates: [], fabricIndex: FABRIC_1 },
+    ]);
+
+    // Clean up
+    await withCertificates((tls) => tls.removeClientCertificate({ ccdid }));
+    await withCertificates((tls) => tls.removeClientCertificate({ ccdid: pending.ccdid }));
+    await withCertificates((tls) => tls.removeRootCertificate({ caid }));
+    expect(certificateState().provisionedRootCertificates).toEqual([]);
+    expect(certificateState().provisionedClientCertificates).toEqual([]);
   });
 
   it('should reject bad ProvisionClientCertificate arguments (TC-TLSCERT-2.10)', async () => {

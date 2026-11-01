@@ -24,6 +24,7 @@ import {
   loggerInfoSpy,
   loggerWarnSpy,
   setDebug,
+  server,
   setupTest,
   startServerNode,
   stopServerNode,
@@ -44,6 +45,13 @@ const utils = vi.hoisted(() => ({
 }));
 
 vi.mock('matterbridge/utils', async (importOriginal) => ({ ...(await importOriginal<typeof import('matterbridge/utils')>()), ...utils }));
+
+// addRootNodeCamera() is tested in vitest/rootNode.test.ts: here only check that onStart() calls it on the Server Camera
+const rootNode = vi.hoisted(() => ({
+  addRootNodeCamera: vi.fn(async (device: unknown) => device),
+}));
+
+vi.mock('../src/rootNode.js', () => rootNode);
 
 await setupTest(NAME);
 
@@ -134,7 +142,7 @@ describe('TestPlatform', () => {
         audioSource: 'none',
         audioSourceDevice: undefined,
       });
-      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(13);
+      expect(emptyConfigPlatform.getSelectDevices()).toHaveLength(14);
     } finally {
       await emptyConfigPlatform.onShutdown();
     }
@@ -382,7 +390,12 @@ describe('TestPlatform', () => {
     expect(platform.getDeviceById('ServerDoorbell-SERVER-DOORBELL-001')).toBeDefined();
     expect(platform.getDeviceById('ServerIntercom1-SERVER-INTERCOM1-001')).toBeDefined();
     expect(platform.getDeviceById('ServerIntercom2-SERVER-INTERCOM2-001')).toBeDefined();
-    expect(platform.size()).toBe(13);
+    const serverCamera = platform.getDeviceById('ServerCamera-SERVER-CAMERA-001');
+    expect(serverCamera).toBeDefined();
+    expect(platform.size()).toBe(14);
+    // The test environment does not create the server node of a mode: 'server' device, so the Root Node is not configured
+    expect(serverCamera?.serverNode).toBeUndefined();
+    expect(rootNode.addRootNodeCamera).not.toHaveBeenCalled();
 
     // Bridged and server-mode devices alike should carry the plugin version as software version
     // and the Matterbridge version as hardware version, set by addDevice() before registration.
@@ -422,6 +435,29 @@ describe('TestPlatform', () => {
       expect(exampleCamera?.hardwareVersionString).toBe('99999.10.0');
     } finally {
       await invalidVersionPlatform.onShutdown();
+    }
+  });
+
+  it('should add the Root Node clusters to the Server Camera server node', async () => {
+    const serverCameraPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, whiteList: ['Server Camera'] });
+    addMatterbridge(serverCameraPlatform);
+    // The device is not registered: only set its server node, as Matterbridge does in registerDevice() for a mode: 'server' device
+    const registerSpy = vi.spyOn(serverCameraPlatform, 'registerDevice').mockImplementation(async (device) => {
+      device.serverNode = server;
+    });
+
+    try {
+      await serverCameraPlatform.onStart();
+
+      expect(registerSpy).toHaveBeenCalledTimes(1);
+      const serverCamera = registerSpy.mock.calls[0][0];
+      expect(serverCamera.deviceName).toBe('Server Camera');
+      expect(serverCamera.mode).toBe('server');
+      expect(rootNode.addRootNodeCamera).toHaveBeenCalledTimes(1);
+      expect(rootNode.addRootNodeCamera).toHaveBeenCalledWith(serverCamera);
+      serverCamera.serverNode = undefined;
+    } finally {
+      await serverCameraPlatform.onShutdown();
     }
   });
 

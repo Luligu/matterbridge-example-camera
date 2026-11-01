@@ -28,6 +28,7 @@ import { AnsiLogger, LogLevel, MAGENTA, TimestampFormat } from 'matterbridge/log
 import { Node, Seconds, Time, type Timer } from 'matterbridge/matter';
 import { OperationalCredentialsServer, TimeSynchronizationServer } from 'matterbridge/matter/behaviors';
 import { type OperationalCredentials, TimeSynchronization } from 'matterbridge/matter/clusters';
+import { CommandModel, FieldModel } from 'matterbridge/matter/model';
 import { Status, StatusResponseError } from 'matterbridge/matter/types';
 
 /**
@@ -69,8 +70,28 @@ export function isCanonicalIpv6(address: string): boolean {
   return new URL(`http://[${address}]`).hostname === `[${address}]`;
 }
 
+/** The Time Synchronization cluster schema of matter.js. */
+const { schema } = TimeSynchronization;
+
+/** The SetTimeZone command of the cluster schema. */
+const setTimeZoneCommand = schema.require(CommandModel, 'SetTimeZone');
+
+/**
+ * The cluster schema with no constraint on the TimeZone field of SetTimeZone: its "1 to 2" entries check is moved from
+ * the schema to {@link MatterbridgeTimeSynchronizationServer.setTimeZone}.
+ *
+ * Why: the spec gives this field constraint two different status codes. Matter 1.6.1 § 11.17.9.3 says a list larger than
+ * TimeZoneListMaxSize (1 or 2, so never above the field's upper bound) SHALL get RESOURCE_EXHAUSTED, and a list that
+ * does not conform to the TimeZone attribute (1 to 2 entries, § 11.17.8.6) SHALL get CONSTRAINT_ERROR. matter.js checks
+ * a request against its field constraints in the protocol layer, before the command handler runs, and answers every
+ * violation with CONSTRAINT_ERROR (the generic SHOULD of § 8.8.2.3), so a list of 3 entries would never reach the
+ * handler to get RESOURCE_EXHAUSTED (TC-TIMESYNC-2.4 step 16). A field constraint can only be replaced as a whole: a
+ * partial one such as "min 1" is merged with the inherited "1 to 2", so the lower bound moves to the handler too.
+ */
+const TimeSynchronizationSchema = schema.extend(undefined, setTimeZoneCommand.extend(undefined, setTimeZoneCommand.require(FieldModel, 'TimeZone').extend({ constraint: 'none' })));
+
 /** Featured matter.js base of {@link MatterbridgeTimeSynchronizationServer}: the features required on the Root Node of a Camera. */
-const MatterbridgeTimeSynchronizationServerBase = TimeSynchronizationServer.with(
+const MatterbridgeTimeSynchronizationServerBase = TimeSynchronizationServer.for(TimeSynchronization, TimeSynchronizationSchema).with(
   TimeSynchronization.Feature.TimeSyncClient,
   TimeSynchronization.Feature.NtpClient,
   TimeSynchronization.Feature.TimeZone,
@@ -136,9 +157,19 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
     this.state.timeSource = TimeSynchronization.TimeSource.Unknown;
 
     // Matter 1.6.1 § 11.17.8.6: Remove the TimeZone entries no longer active and set the ValidAt of the one in use to 0.
-    const [, nextTimeZone] = this.state.timeZone;
+    const [currentTimeZone, nextTimeZone] = this.state.timeZone;
     if (nextTimeZone && BigInt(nextTimeZone.validAt) <= now) {
-      this.state.timeZone = [{ offset: nextTimeZone.offset, validAt: MATTER_EPOCH_US, ...(nextTimeZone.name === undefined ? {} : { name: nextTimeZone.name }) }];
+      // Read the entries before replacing the list: the managed entries are no longer readable afterwards.
+      const { offset, name } = nextTimeZone;
+      const changed = offset !== currentTimeZone.offset || name !== currentTimeZone.name;
+      this.state.timeZone = [{ offset, validAt: MATTER_EPOCH_US, ...(name === undefined ? {} : { name }) }];
+      // Matter 1.6.1 § 11.17.10.3: Generate TimeZoneStatus when the node changes its time zone offset or name.
+      if (changed) {
+        log.info(
+          `MatterbridgeTimeSynchronizationServer: the scheduled TimeZone with offset ${offset}s${name === undefined ? '' : ` (${name})`} became valid, generating TimeZoneStatus (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        );
+        this.events.timeZoneStatus.emit({ offset, name }, this.context);
+      }
     }
 
     // Matter 1.6.1 § 11.17.8.7: Remove the DSTOffset entries no longer active.
@@ -248,6 +279,8 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
    */
   override setTimeZone(request: TimeSynchronization.SetTimeZoneRequest): TimeSynchronization.SetTimeZoneResponse {
     const { timeZone } = request;
+    // The schema has no constraint on the TimeZone field (see TimeSynchronizationSchema): the 1 to 2 entries are checked here,
+    // in the order and with the status codes of § 11.17.9.3, which matter.js cannot do before the handler runs.
     // Matter 1.6.1 § 11.17.9.3: Respond with RESOURCE_EXHAUSTED if the list is larger than TimeZoneListMaxSize.
     if (timeZone.length > this.state.timeZoneListMaxSize) {
       throw new StatusResponseError(
@@ -255,7 +288,8 @@ export class MatterbridgeTimeSynchronizationServer extends MatterbridgeTimeSynch
         Status.ResourceExhausted,
       );
     }
-    // Matter 1.6.1 § 11.17.8.6: The first entry SHALL have a ValidAt of 0, a second entry a non-zero ValidAt.
+    // Matter 1.6.1 § 11.17.9.3 and § 11.17.8.6: Respond with CONSTRAINT_ERROR if the list does not conform to the TimeZone attribute:
+    // at least 1 entry (the lower bound of the field constraint), the first entry with a ValidAt of 0, a second entry with a non-zero ValidAt.
     const [first, second] = timeZone;
     if (first === undefined || BigInt(first.validAt) !== MATTER_EPOCH_US || (second !== undefined && BigInt(second.validAt) === MATTER_EPOCH_US)) {
       throw new StatusResponseError(

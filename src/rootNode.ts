@@ -67,13 +67,16 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
   const root = device.serverNode;
 
   // Matter 1.6.1 § 16.1.5 and § 2.1.4: PowerSourceCond is mandatory for a Camera, so the Power Source device type is on the Root Node.
-  root.behaviors.require(MatterbridgePowerSourceServer.with(PowerSource.Feature.Wired), {
-    status: PowerSource.PowerSourceStatus.Active,
-    order: 0,
-    description: 'AC Power',
-    endpointList: [],
-    wiredCurrentType: PowerSource.WiredCurrentType.Ac,
-  });
+  // Matterbridge already adds a Wired Power Source to the Root Node with --root-power-source or MATTERBRIDGE_CHIP_TEST: keep it.
+  if (!root.behaviors.supported.powerSource) {
+    root.behaviors.require(MatterbridgePowerSourceServer.with(PowerSource.Feature.Wired), {
+      status: PowerSource.PowerSourceStatus.Active,
+      order: 0,
+      description: 'AC Power',
+      endpointList: [],
+      wiredCurrentType: PowerSource.WiredCurrentType.Ac,
+    });
+  }
   // PowerSourceServer.initialize() adds the Power Source (0x0011) device type to the Root Node's Descriptor
   // deviceTypeList automatically, alongside the Root Node (0x0016) entry matter.js already sets.
 

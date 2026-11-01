@@ -45,6 +45,8 @@ import { ChimeClient } from 'matterbridge/matter/behaviors';
 import { Identify, Chime as ChimeCluster, PowerSource } from 'matterbridge/matter/clusters';
 import { isDocker, isValidNumber, parseVersionString } from 'matterbridge/utils';
 
+import { addRootNodeCamera } from './rootNode.js';
+
 export type CameraPlatformConfig = PlatformConfig & {
   whiteList: string[];
   blackList: string[];
@@ -263,6 +265,19 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       weriftOfferOptions: { ...this.weriftOfferOptions },
     });
     await this.addDevice(serverIntercom2);
+
+    // A separate Matter node (mode: 'server') owns its Root Node, so it can carry the Root Node clusters a Camera requires
+    // (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management), which a bridged Camera cannot.
+    const serverCamera = new Camera('Server Camera', 'SERVER-CAMERA-001', {
+      identifyTime: 5,
+      identifyType: Identify.IdentifyType.VisibleIndicator,
+      tagList: [getSemtag(CommonNumberTag.One, 'Server Camera')],
+      mode: 'server',
+      weriftOfferOptions: { ...this.weriftOfferOptions },
+    });
+    await this.addDevice(serverCamera);
+    // The server node is created by registerDevice(): it is not set when the device is filtered out by the white or black list.
+    if (serverCamera.serverNode) await addRootNodeCamera(serverCamera);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
   }
