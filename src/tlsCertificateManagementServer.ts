@@ -26,7 +26,7 @@ import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sig
 // Matterbridge
 import { AnsiLogger, LogLevel, MAGENTA, TimestampFormat } from 'matterbridge/logger';
 import { Bytes, Node, Time } from 'matterbridge/matter';
-import { OperationalCredentialsServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
+import { OperationalCredentialsServer, TimeSynchronizationServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { type OperationalCredentials, TlsCertificateManagement } from 'matterbridge/matter/clusters';
 import { AttributeModel, FieldElement } from 'matterbridge/matter/model';
 import { FabricIndex, Status, StatusResponseError } from 'matterbridge/matter/types';
@@ -234,10 +234,11 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    *
    * @param {TlsCertificateManagement.ProvisionRootCertificateRequest} request - The command request.
    * @returns {TlsCertificateManagement.ProvisionRootCertificateResponse} The CAID of the provisioned certificate.
-   * @throws {StatusResponseError} ConstraintError if the certificate exceeds 3000 octets or the CAID is out of range,
-   * AlreadyExists if the certificate is already provisioned on the fabric, ResourceExhausted if the fabric has
-   * MaxRootCertificates certificates, NotFound if the CAID does not exist on the fabric, DynamicConstraintError if
-   * the certificate is not a valid DER encoded X.509 certificate.
+   * @throws {StatusResponseError} In the order of Matter 1.6.1 § 14.4.6.1: ConstraintError if the certificate exceeds
+   * 3000 octets or the CAID is out of range, InvalidInState if the node has no UTC time to validate the certificate,
+   * DynamicConstraintError if the certificate is not a valid DER encoded X.509 certificate, AlreadyExists if the
+   * certificate is already provisioned on the fabric, NotFound if the CAID does not exist on the fabric,
+   * ResourceExhausted if the fabric has MaxRootCertificates certificates.
    */
   override provisionRootCertificate(request: TlsCertificateManagement.ProvisionRootCertificateRequest): TlsCertificateManagement.ProvisionRootCertificateResponse {
     const certificate = Bytes.of(request.certificate);
@@ -251,6 +252,27 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
         Status.ConstraintError,
       );
     }
+    // Matter 1.6.1 § 14.4.4.1: A TLSCAID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
+    if (caid !== null && caid > MAX_TLS_CERTIFICATE_ID) {
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: the CAID ${caid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
+    }
+    // Matter 1.6.1 § 14.4.6.1: Fail with INVALID_IN_STATE if the UTCTime attribute of the Time Synchronization cluster is null.
+    if (this.endpoint.behaviors.has(TimeSynchronizationServer) && this.endpoint.stateOf(TimeSynchronizationServer).utcTime === null) {
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: time synchronization has not yet occurred (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.InvalidInState,
+      );
+    }
+    // Matter 1.6.1 § 14.4.6.1: Fail with DYNAMIC_CONSTRAINT_ERROR if the Certificate is not a valid TLS certificate.
+    if (parseValidCertificate(certificate) === undefined) {
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.DynamicConstraintError,
+      );
+    }
     const store = this.state.rootCertificateStore;
     const fingerprint = certificateFingerprint(certificate);
     // Matter 1.6.1 § 14.4.6.1: Fail with ALREADY_EXISTS if a certificate with the same fingerprint is provisioned on the accessing fabric.
@@ -260,21 +282,7 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
         Status.AlreadyExists,
       );
     }
-    if (caid === null) {
-      // Matter 1.6.1 § 14.4.6.1: For a null CAID, fail with RESOURCE_EXHAUSTED if the accessing fabric already has MaxRootCertificates root certificates.
-      if (store.filter((entry) => entry.fabric === fabric).length >= this.state.maxRootCertificates) {
-        throw new StatusResponseError(
-          `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: fabric ${fabric} already has ${this.state.maxRootCertificates} root certificates (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-          Status.ResourceExhausted,
-        );
-      }
-    } else {
-      // Matter 1.6.1 § 14.4.4.1: A TLSCAID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
-      if (caid > MAX_TLS_CERTIFICATE_ID)
-        throw new StatusResponseError(
-          `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: the CAID ${caid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-          Status.ConstraintError,
-        );
+    if (caid !== null) {
       // Matter 1.6.1 § 14.4.6.1: For a non-null CAID, fail with NOT_FOUND if the CAID does not exist on the accessing fabric.
       if (!store.some((entry) => entry.fabric === fabric && entry.caid === caid)) {
         throw new StatusResponseError(
@@ -282,15 +290,6 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
           Status.NotFound,
         );
       }
-    }
-    // Matter 1.6.1 § 14.4.6.1: Fail with DYNAMIC_CONSTRAINT_ERROR if the Certificate is not a valid TLS certificate.
-    if (parseValidCertificate(certificate) === undefined) {
-      throw new StatusResponseError(
-        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-        Status.DynamicConstraintError,
-      );
-    }
-    if (caid !== null) {
       // Matter 1.6.1 § 14.4.6.1: For a non-null CAID, update the certificate of the existing entry.
       this.state.rootCertificateStore = store.map((entry) => (entry.fabric === fabric && entry.caid === caid ? { caid, fabric, certificate } : entry));
       // Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4: ProvisionedRootCertificates and ProvisionedClientCertificates list the provisioned certificates of each fabric.
@@ -299,6 +298,13 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
         `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: root certificate CAID ${caid} updated on fabric ${fabric} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
       );
       return { caid };
+    }
+    // Matter 1.6.1 § 14.4.6.1: For a null CAID, fail with RESOURCE_EXHAUSTED if the accessing fabric already has MaxRootCertificates root certificates.
+    if (store.filter((entry) => entry.fabric === fabric).length >= this.state.maxRootCertificates) {
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionRootCertificate: fabric ${fabric} already has ${this.state.maxRootCertificates} root certificates (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ResourceExhausted,
+      );
     }
     // Matter 1.6.1 § 14.4.6.1: For a null CAID, generate a new TLSCAID.
     const id = allocateId(new Set(store.map((entry) => entry.caid)), this.state.nextCaid);
@@ -485,10 +491,11 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
    * CCDID of the accessing fabric, with its intermediate certificates.
    *
    * @param {TlsCertificateManagement.ProvisionClientCertificateRequest} request - The command request.
-   * @throws {StatusResponseError} ConstraintError if the CCDID is out of range, a certificate exceeds 3000 octets or
-   * there are more than 10 intermediate certificates, DynamicConstraintError if a certificate is not a valid DER
-   * encoded X.509 certificate or the client certificate is not issued for the key pair of the CCDID, AlreadyExists if
-   * the client certificate is already provisioned on the fabric, NotFound if the CCDID does not exist on the fabric.
+   * @throws {StatusResponseError} In the order of Matter 1.6.1 § 14.4.6.10: ConstraintError if the CCDID is out of
+   * range, a certificate exceeds 3000 octets or there are more than 10 intermediate certificates, AlreadyExists if the
+   * client certificate is already provisioned on the fabric, NotFound if the CCDID does not exist on the fabric,
+   * DynamicConstraintError if a certificate is not a valid DER encoded X.509 certificate or the client certificate is
+   * not issued for the key pair of the CCDID.
    */
   override provisionClientCertificate(request: TlsCertificateManagement.ProvisionClientCertificateRequest): void {
     const { ccdid } = request;
@@ -497,24 +504,17 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
     // Matter 1.6.1 § 8.8.2.3: A fabric-scoped command without an accessing fabric is rejected with UNSUPPORTED_ACCESS.
     const fabric = this.#accessingFabric();
     // Matter 1.6.1 § 14.4.4.2: A TLSCCDID has valid values from 0 to 65534 (CONSTRAINT_ERROR).
-    if (ccdid > MAX_TLS_CERTIFICATE_ID)
+    if (ccdid > MAX_TLS_CERTIFICATE_ID) {
       throw new StatusResponseError(
         `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: the CCDID ${ccdid} is out of range (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
         Status.ConstraintError,
       );
+    }
     // Matter 1.6.1 § 14.4.6.10: The ClientCertificate field has a maximum length of 3000 octets (CONSTRAINT_ERROR).
     if (clientCertificate.byteLength > MAX_CERTIFICATE_BYTES) {
       throw new StatusResponseError(
         `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: certificate of ${clientCertificate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
         Status.ConstraintError,
-      );
-    }
-    const x509 = parseValidCertificate(clientCertificate);
-    // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if the ClientCertificate is not a valid TLS certificate.
-    if (x509 === undefined) {
-      throw new StatusResponseError(
-        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-        Status.DynamicConstraintError,
       );
     }
     // Matter 1.6.1 § 14.4.6.10: The IntermediateCertificates field has at most 10 entries (CONSTRAINT_ERROR).
@@ -524,21 +524,13 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
         Status.ConstraintError,
       );
     }
-    for (const intermediate of intermediateCertificates) {
-      // Matter 1.6.1 § 14.4.6.10: Each intermediate certificate has a maximum length of 3000 octets (CONSTRAINT_ERROR).
-      if (intermediate.byteLength > MAX_CERTIFICATE_BYTES) {
-        throw new StatusResponseError(
-          `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: intermediate certificate of ${intermediate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-          Status.ConstraintError,
-        );
-      }
-      // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if an intermediate certificate is not a valid TLS certificate.
-      if (parseValidCertificate(intermediate) === undefined) {
-        throw new StatusResponseError(
-          `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: intermediate certificate not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-          Status.DynamicConstraintError,
-        );
-      }
+    // Matter 1.6.1 § 14.4.6.10: Each intermediate certificate has a maximum length of 3000 octets (CONSTRAINT_ERROR).
+    const bigIntermediate = intermediateCertificates.find((intermediate) => intermediate.byteLength > MAX_CERTIFICATE_BYTES);
+    if (bigIntermediate !== undefined) {
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: intermediate certificate of ${bigIntermediate.byteLength} octets exceeds ${MAX_CERTIFICATE_BYTES} (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.ConstraintError,
+      );
     }
     const store = this.state.clientCertificateStore;
     const fingerprint = certificateFingerprint(clientCertificate);
@@ -551,11 +543,27 @@ export class MatterbridgeTlsCertificateManagementServer extends MatterbridgeTlsC
     }
     const existing = store.find((entry) => entry.fabric === fabric && entry.ccdid === ccdid);
     // Matter 1.6.1 § 14.4.6.10: Fail with NOT_FOUND if the CCDID does not exist on the accessing fabric.
-    if (existing === undefined)
+    if (existing === undefined) {
       throw new StatusResponseError(
         `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: the CCDID ${ccdid} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
         Status.NotFound,
       );
+    }
+    const x509 = parseValidCertificate(clientCertificate);
+    // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if the ClientCertificate is not a valid TLS certificate.
+    if (x509 === undefined) {
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.DynamicConstraintError,
+      );
+    }
+    // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if an intermediate certificate is not a valid TLS certificate.
+    if (intermediateCertificates.some((intermediate) => parseValidCertificate(intermediate) === undefined)) {
+      throw new StatusResponseError(
+        `MatterbridgeTlsCertificateManagementServer.provisionClientCertificate: intermediate certificate not a valid DER encoded X.509 certificate (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+        Status.DynamicConstraintError,
+      );
+    }
     const keyPublicKey = createPublicKey(createPrivateKey({ key: Buffer.from(existing.privateKey), format: 'der', type: 'pkcs8' })).export({ type: 'spki', format: 'der' });
     // Matter 1.6.1 § 14.4.6.10: Fail with DYNAMIC_CONSTRAINT_ERROR if the public key of the ClientCertificate does not correspond to the private key of the CCDID.
     if (!x509.publicKey.export({ type: 'spki', format: 'der' }).equals(keyPublicKey)) {

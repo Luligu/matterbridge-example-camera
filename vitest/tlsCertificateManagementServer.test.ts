@@ -321,6 +321,10 @@ describe('MatterbridgeTlsCertificateManagementServer', () => {
     await expect(withCertificates((tls) => tls.provisionRootCertificate({ certificate: createCertificate(), caid: null }))).rejects.toMatchObject({
       code: Status.ResourceExhausted,
     });
+    // Matter 1.6.1 § 14.4.6.1: an invalid certificate is DynamicConstraintError before the MaxRootCertificates check
+    await expect(withCertificates((tls) => tls.provisionRootCertificate({ certificate: randomBytes(100), caid: null }))).rejects.toMatchObject({
+      code: Status.DynamicConstraintError,
+    });
     // The limit is per fabric
     expect(await withCertificates((tls) => tls.provisionRootCertificate({ certificate: createCertificate(), caid: null }), FABRIC_2)).toEqual({ caid: 7 });
     expect((await withCertificates((tls) => tls.findRootCertificate({ caid: null }))).certificateDetails).toHaveLength(5);
@@ -343,6 +347,13 @@ describe('MatterbridgeTlsCertificateManagementServer', () => {
     await expect(withCertificates((tls) => tls.provisionRootCertificate({ certificate: createCertificate(), caid: 10 }))).rejects.toMatchObject({ code: Status.NotFound });
     await expect(withCertificates((tls) => tls.provisionRootCertificate({ certificate: createCertificate(), caid: MAX_TLS_CERTIFICATE_ID + 1 }))).rejects.toMatchObject({
       code: Status.ConstraintError,
+    });
+    // Matter 1.6.1 § 14.4.6.1: the constraints come first, then an invalid certificate is DynamicConstraintError before the CAID lookup
+    await expect(withCertificates((tls) => tls.provisionRootCertificate({ certificate: randomBytes(100), caid: MAX_TLS_CERTIFICATE_ID + 1 }))).rejects.toMatchObject({
+      code: Status.ConstraintError,
+    });
+    await expect(withCertificates((tls) => tls.provisionRootCertificate({ certificate: randomBytes(100), caid: 10 }))).rejects.toMatchObject({
+      code: Status.DynamicConstraintError,
     });
     expect(certificateState().provisionedRootCertificates).toEqual([]);
   });
@@ -489,6 +500,10 @@ describe('MatterbridgeTlsCertificateManagementServer', () => {
     await expect(provision({ intermediateCertificates: [badCertificate] })).rejects.toMatchObject({ code: Status.DynamicConstraintError });
     await expect(provision({ ccdid: ccdid + 1 })).rejects.toMatchObject({ code: Status.NotFound });
     await expect(provision({}, FABRIC_2)).rejects.toMatchObject({ code: Status.NotFound });
+    // Matter 1.6.1 § 14.4.6.10: an unknown CCDID is NotFound before the certificate validity checks
+    await expect(provision({ ccdid: ccdid + 1, clientCertificate: badCertificate })).rejects.toMatchObject({ code: Status.NotFound });
+    await expect(provision({ clientCertificate: createCertificate() }, FABRIC_2)).rejects.toMatchObject({ code: Status.NotFound });
+    await expect(provision({ intermediateCertificates: [badCertificate] }, FABRIC_2)).rejects.toMatchObject({ code: Status.NotFound });
 
     // Up to 10 intermediate certificates are accepted
     const intermediates = Array.from({ length: 10 }, () => createCertificate());

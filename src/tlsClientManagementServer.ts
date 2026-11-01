@@ -83,9 +83,10 @@ export class MatterbridgeTlsClientManagementServer extends MatterbridgeTlsClient
    * @returns {TlsClientManagement.ProvisionEndpointResponse} The EndpointID of the provisioned TLS endpoint.
    * @throws {StatusResponseError} ConstraintError if the Hostname is not 4 to 253 octets, the Port is 0 or an ID is
    * out of range, InvalidTime if the node has no UTC time to validate the certificates, RootCertificateNotFound or
-   * ClientCertificateNotFound if the CAID or the CCDID does not exist on the fabric, EndpointAlreadyInstalled if
-   * another TLS endpoint of the fabric has the same Hostname and Port, ResourceExhausted if the fabric has
-   * MaxProvisioned TLS endpoints, NotFound if the EndpointID does not exist on the fabric.
+   * ClientCertificateNotFound if the CAID or the CCDID does not exist on the fabric, then for a null EndpointID
+   * ResourceExhausted if the fabric has MaxProvisioned TLS endpoints, for a non-null EndpointID NotFound if it does not
+   * exist on the fabric, and EndpointAlreadyInstalled if another TLS endpoint of the fabric has the same Hostname and
+   * Port (the order of Matter 1.6.1 § 14.5.7.1).
    */
   override provisionEndpoint(request: TlsClientManagement.ProvisionEndpointRequest): TlsClientManagement.ProvisionEndpointResponse {
     const hostname = Bytes.of(request.hostname);
@@ -133,18 +134,19 @@ export class MatterbridgeTlsClientManagementServer extends MatterbridgeTlsClient
     }
     const endpoints = this.state.provisionedEndpoints;
     const fabricEndpoints = endpoints.filter((endpoint) => endpoint.fabricIndex === fabric);
-    // Matter 1.6.1 § 14.5.7.1: Fail with EndpointAlreadyInstalled if another TLS endpoint of the accessing fabric has the same Hostname and Port.
-    if (fabricEndpoints.some((endpoint) => endpoint.port === port && bytesEqual(endpoint.hostname, hostname) && endpoint.endpointId !== endpointId)) {
-      throw new TlsClientManagement.EndpointAlreadyInstalledError(
-        `MatterbridgeTlsClientManagementServer.provisionEndpoint: an endpoint with the same hostname and port is already installed (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
-      );
-    }
+    const duplicate = fabricEndpoints.some((endpoint) => endpoint.port === port && bytesEqual(endpoint.hostname, hostname) && endpoint.endpointId !== endpointId);
     if (endpointId === null) {
       // Matter 1.6.1 § 14.5.7.1: For a null EndpointID, fail with RESOURCE_EXHAUSTED if MaxProvisioned TLS endpoints are provisioned on the accessing fabric.
       if (fabricEndpoints.length >= this.state.maxProvisioned) {
         throw new StatusResponseError(
           `MatterbridgeTlsClientManagementServer.provisionEndpoint: fabric ${fabric} already has ${this.state.maxProvisioned} endpoints (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
           Status.ResourceExhausted,
+        );
+      }
+      // Matter 1.6.1 § 14.5.7.1: For a null EndpointID, fail with EndpointAlreadyInstalled if another TLS endpoint of the accessing fabric has the same Hostname and Port.
+      if (duplicate) {
+        throw new TlsClientManagement.EndpointAlreadyInstalledError(
+          `MatterbridgeTlsClientManagementServer.provisionEndpoint: an endpoint with the same hostname and port is already installed (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
         );
       }
       // Matter 1.6.1 § 14.5.7.1: For a null EndpointID, generate a new TLSEndpointID.
@@ -164,6 +166,12 @@ export class MatterbridgeTlsClientManagementServer extends MatterbridgeTlsClient
         `MatterbridgeTlsClientManagementServer.provisionEndpoint: the EndpointID ${endpointId} was not found (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
         Status.NotFound,
       );
+    // Matter 1.6.1 § 14.5.7.1: For a non-null EndpointID, fail with EndpointAlreadyInstalled if another TLS endpoint of the accessing fabric has the same Hostname and Port.
+    if (duplicate) {
+      throw new TlsClientManagement.EndpointAlreadyInstalledError(
+        `MatterbridgeTlsClientManagementServer.provisionEndpoint: an endpoint with the same hostname and port is already installed (endpoint ${this.endpoint.maybeId}.${this.endpoint.maybeNumber})`,
+      );
+    }
     // The ReferenceCount is kept: the clusters using the TLS endpoint still use it after the update.
     const { referenceCount } = existing;
     // Matter 1.6.1 § 14.5.7.1: Update the fields of the matching TLS endpoint with the values of the command.

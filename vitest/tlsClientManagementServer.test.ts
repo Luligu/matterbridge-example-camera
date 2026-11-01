@@ -214,6 +214,10 @@ describe('MatterbridgeTlsClientManagementServer', () => {
       code: Status.Failure,
       clusterCode: TlsClientManagement.StatusCode.InvalidTime,
     });
+    // Matter 1.6.1 § 14.4.6.1: ProvisionRootCertificate fails with InvalidInState before time synchronization
+    await expect(
+      withBehavior(MatterbridgeTlsCertificateManagementServer, (tls) => tls.provisionRootCertificate({ certificate: createCertificate(), caid: null }), FABRIC_1),
+    ).rejects.toMatchObject({ code: Status.InvalidInState });
     await server.setStateOf(MatterbridgeTimeSynchronizationServer, { utcTime: BigInt(Date.now()) * 1000n, granularity: TimeSynchronization.Granularity.MillisecondsGranularity });
   });
 
@@ -250,6 +254,8 @@ describe('MatterbridgeTlsClientManagementServer', () => {
     // EndpointIDs are not reused right after a removal: they continue from the last one allocated
     expect(endpointIds).toEqual([1, 2, 3, 4, 5]);
     await expect(withClient((tls) => tls.provisionEndpoint(provisionRequest({ caid: certificates.caid[0], port: 6 })))).rejects.toMatchObject({ code: Status.ResourceExhausted });
+    // Matter 1.6.1 § 14.5.7.1: for a null EndpointID, ResourceExhausted comes before EndpointAlreadyInstalled
+    await expect(withClient((tls) => tls.provisionEndpoint(provisionRequest({ caid: certificates.caid[0], port: 1 })))).rejects.toMatchObject({ code: Status.ResourceExhausted });
     // The limit is per fabric, the EndpointIDs are unique on the node
     expect(await withClient((tls) => tls.provisionEndpoint(provisionRequest({ caid: certificates.caid[1], port: 6 })), FABRIC_2)).toEqual({ endpointId: 6 });
     for (const endpointId of endpointIds) await withClient((tls) => tls.removeEndpoint({ endpointId }));
@@ -291,6 +297,9 @@ describe('MatterbridgeTlsClientManagementServer', () => {
     });
     // Another fabric can provision the same Hostname and Port
     const third = await withClient((tls) => tls.provisionEndpoint(provisionRequest({ caid: otherCaid })), FABRIC_2);
+
+    // Matter 1.6.1 § 14.5.7.1: for a non-null EndpointID, NotFound comes before EndpointAlreadyInstalled
+    await expect(withClient((tls) => tls.provisionEndpoint(provisionRequest({ caid, endpointId: MAX_TLS_ENDPOINT_ID })))).rejects.toMatchObject({ code: Status.NotFound });
 
     // Updating an unknown EndpointID, or the EndpointID of another fabric, is NotFound
     await expect(withClient((tls) => tls.provisionEndpoint(provisionRequest({ caid, port: 9443, endpointId: MAX_TLS_ENDPOINT_ID })))).rejects.toMatchObject({
