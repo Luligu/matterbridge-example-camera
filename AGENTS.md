@@ -1,4 +1,4 @@
-# Matterbridge Agents Instructions (v.1.0.8)
+# Matterbridge Agents Instructions (v.1.0.9)
 
 ## Style And Formatting
 
@@ -13,6 +13,14 @@
 - Do not modify production code only to make a test pass. If a failing test points to a likely source issue, explain the issue and change behavior only when required by the task.
 - Preserve cross-platform behavior. Changes must work on Windows, macOS, and Linux, especially for paths, shell commands, environment variables, and networking behavior.
 - Maintain compatibility with the supported Node.js versions in this repository: 22.13, 24 and 26.
+
+## Context And Reading
+
+- Read only the files the request needs. Start from the files the user names or the obvious entry point, and widen the search only when the task requires it.
+- Prefer targeted searches (grep / glob) and partial reads (line ranges) over reading whole large files or scanning the whole repository.
+- Do not read generated or vendored content unless the task is about it: `node_modules/`, `dist/`, `build/`, `coverage/`, `temp/`, lockfiles (`package-lock.json`, `bun.lock`), and `*.tsbuildinfo`.
+- Read `.agents/rules/*` files and skills only when the task matches their topic, not up front.
+- For a question or a small change, do not explore unrelated areas, run the full test suite, or summarize the project unasked.
 
 ## Project Architecture
 
@@ -46,4 +54,3 @@ For task-specific guidance, read relevant files in [.agents/rules](./.agents/rul
 The following workflows are available as skills in [.agents/skills](./.agents/skills/), discovered automatically and invocable with `$<name>` (Codex) or `/<name>` (Claude Code, Copilot, Gemini / Antigravity):
 
 - `$verify-agent-context` for verifying which coding agent is running and that it loaded the shared instructions, rules and skills from AGENTS.md and `.agents/`.
-- `$verify-server-endpoint-context` for verifying the log and error messages, the Matterbridge endpoint contracts and the Matter 1.6.1 comments of the servers that `src/rootNode.ts` adds to the Camera Root Node, and the Root Node requirements of the Camera device type.
