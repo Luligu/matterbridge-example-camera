@@ -1,7 +1,7 @@
 # Root Node of a mode: 'server' Camera configured by addRootNodeCamera() (src/rootNode.ts).
 # Passed with --PICS to the TC_TIMESYNC_*, TC_TLSCERT_* and TC_TLSCLIENT_* tests that target the Server Camera.
 
-# Time Synchronization: MatterbridgeTimeSynchronizationServer (src/timeSynchronizationServer.ts)
+# Time Synchronization: MatterbridgeTimeSynchronizationServer (matterbridge/behaviors)
 TIMESYNC.S=1
 TIMESYNC.S.F00=1 # TimeZone
 TIMESYNC.S.F01=1 # NTPClient
@@ -28,8 +28,8 @@ TIMESYNC.S.C05.Rsp=1 # SetDefaultNTP
 TIMESYNC.S.C03.Tx=1 # SetTimeZoneResponse
 TIMESYNC.C=0
 
-# TLS Certificate Management: MatterbridgeTlsCertificateManagementServer (src/tlsCertificateManagementServer.ts)
+# TLS Certificate Management: MatterbridgeTlsCertificateManagementServer (matterbridge/behaviors)
 TLSCERT.S=1
 
-# TLS Client Management: MatterbridgeTlsClientManagementServer (src/tlsClientManagementServer.ts)
+# TLS Client Management: MatterbridgeTlsClientManagementServer (matterbridge/behaviors)
 TLSCLIENT.S=1

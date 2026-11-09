@@ -32,38 +32,36 @@ If you like this project and find it useful, please consider giving it a star on
 
 ## [1.0.1] - Dev branch
 
+### Breaking changes
+
+- [matterbridge]: Require Matterbridge 3.11.3 or later.
+
 ### Changed
 
-- [tls]: Implement the TLS Certificate Management server (0x0801) of the Root Node per Matter 1.6.1: per fabric root certificates (ProvisionRootCertificate, FindRootCertificate, LookupRootCertificate by SHA-256 fingerprint, RemoveRootCertificate) and client certificates (ClientCSR with a P-256 key pair, a PKCS #10 CSR and the nonce signature, ProvisionClientCertificate with up to 10 intermediate certificates, FindClientCertificate, LookupClientCertificate, RemoveClientCertificate). Certificates must be DER encoded X.509 certificates valid at the current time; CAIDs and CCDIDs are unique on the node; the certificates, private keys included, are stored nonvolatile outside the attributes and deleted with their fabric. The attributes list only the CAID / CCDID and the fabric: the payloads are returned by the Find commands.
-- [tls]: Implement the TLS Client Management server (0x0802) of the Root Node per Matter 1.6.1: per fabric TLS endpoints (ProvisionEndpoint, FindEndpoint, RemoveEndpoint) with the RootCertificateNotFound, ClientCertificateNotFound, EndpointAlreadyInstalled, EndpointInUse and InvalidTime cluster status codes. A root or client certificate used by a TLS endpoint cannot be removed (InvalidInState).
-- [tls]: Follow the Matter 1.6.1 processing order of ProvisionRootCertificate (§ 14.4.6.1: InvalidInState before time synchronization, then DynamicConstraintError before AlreadyExists, NotFound and ResourceExhausted), ProvisionClientCertificate (§ 14.4.6.10: AlreadyExists and NotFound before DynamicConstraintError) and ProvisionEndpoint (§ 14.5.7.1: ResourceExhausted or NotFound before EndpointAlreadyInstalled).
+- [package]: Set the automator workflow to dev.
+- [servers]: Use the Time Synchronization and TLS servers from Matterbridge; remove their local implementations and unit tests.
 - [rootNode]: Add the Server Camera, a `mode: 'server'` Camera whose own Root Node gets the Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management servers from `addRootNodeCamera`.
-- [rootNode]: Keep the Power Source that Matterbridge already adds to the Root Node with `--root-power-source` or `MATTERBRIDGE_CHIP_TEST`, instead of failing the plugin start.
-- [tls]: Include the certificate payloads in the ProvisionedRootCertificates and ProvisionedClientCertificates attributes when read over a Large Message capable transport, and keep a null ClientCertificate and empty IntermediateCertificates over MRP (Matter 1.6.1 § 14.4.5.2 and § 14.4.5.4).
-- [timeSync]: Generate TimeZoneStatus when a scheduled TimeZone entry changes the time zone offset or name (Matter 1.6.1 § 11.17.10.3).
-- [timeSync]: Respond to a SetTimeZone list larger than TimeZoneListMaxSize with RESOURCE_EXHAUSTED (Matter 1.6.1 § 11.17.9.3): the TimeZone field constraint moves from the schema, where matter.js answers CONSTRAINT_ERROR before the handler, to the handler.
-- [chip]: Wire the CHIP tests of the Server Camera Root Node (TC_PS_2_3, TC_TIMESYNC, TC_TLSCERT, TC_TLSCLIENT) with `scripts/chip/commission_node.py`, which commissions the node and resets the state left by the previous test, and `scripts/chip/root-node-camera.pics`.
 - [package]: Upgrade package.
 - [package]: Bump `@types/node` to v.26.6.6.
-- [package]: Bump `oxfmt` to v.0.75.0.
-- [package]: Bump `oxlint` to v.1.90.0.
-- [package]: Bump `oxlint-tsgolint` to v.7.0.2005.
-- [agents]: Update `.agents/rules/plugin-frontend.instructions.md`, `.claude/rules/plugin-frontend/plugin-frontend.instructions.md` and `.github/instructions/plugin-frontend/plugin-frontend.instructions.md` to v.1.0.2.
-- [codex]: Update `.codex/config.toml` to v.1.0.6.
+- [package]: Bump `oxfmt` to v.0.77.0.
+- [package]: Bump `oxlint` to v.1.92.0.
+- [package]: Bump `oxlint-tsgolint` to v.7.0.2006.
+- [agents]: Update `.agents/rules/plugin-frontend.instructions.md`, `.claude/rules/plugin-frontend/plugin-frontend.instructions.md` and `.github/instructions/plugin-frontend/plugin-frontend.instructions.md` to v.1.0.3.
+- [codex]: Update `.codex/config.toml` to v.1.0.7.
 - [agents]: Update `.github/commit-message-instructions.md` to v.1.0.1.
-- [vscode]: Update `.vscode/settings.json` to v.1.0.17.
+- [vscode]: Update `.vscode/settings.json` to v.1.0.18.
 - [vscode]: Update `.vscode/tasks.json` to v.1.0.4.
-- [agents]: Update `AGENTS.md` to v.1.0.9.
+- [agents]: Update `AGENTS.md` to v.1.0.12.
 - [config]: Update `CODE_OF_CONDUCT.md` to v.1.0.0.
 - [config]: Update `CONTRIBUTING.md` to v.1.0.1.
 - [scripts]: Update `scripts/downloads.mjs`.
 - [scripts]: Update `scripts/git-sync-dev.mjs`.
 - [scripts]: Update `scripts/prepublish-clean.mjs`.
-- [config]: Add `SHARED-AGENTS.md`.
+- [config]: Update `SHARED-AGENTS.md`.
 - [config]: Add `TOOLCHAIN.md` v.1.0.1.
 - [package]: Bump `@vitest/coverage-v8` to v.5.1.0.
 - [package]: Bump `vitest` to v.5.1.0.
-- [agents]: Update `.agents/README.md` to v.1.0.4.
+- [agents]: Update `.agents/README.md` to v.1.0.6.
 - [workflows]: Update `.github/workflows/build.yml` to v.2.0.8.
 - [workflows]: Update `.github/workflows/codecov.yml` to v.2.0.8.
 - [workflows]: Update `.github/workflows/codeql.yml` to v.2.0.0.
@@ -72,6 +70,11 @@ If you like this project and find it useful, please consider giving it a star on
 - [config]: Update `.oxfmtrc.json` to v.1.2.0.
 - [config]: Update `.oxlintrc.json` to v.1.2.0.
 - [config]: Update `vitest.config.ts` to v.2.0.9.
+- [agents]: Update `.agents/rules/chip-tests.instructions.md`, `.claude/rules/chip-tests/chip-tests.instructions.md` and `.github/instructions/chip-tests/chip-tests.instructions.md` to v.1.0.1.
+- [agents]: Update `.agents/rules/matterbridge.instructions.md`, `.claude/rules/matterbridge/matterbridge.instructions.md` and `.github/instructions/matterbridge/matterbridge.instructions.md` to v.1.0.4.
+- [agents]: Update `.agents/rules/testing.instructions.md`, `.claude/rules/testing/testing.instructions.md` and `.github/instructions/testing/testing.instructions.md` to v.1.0.8.
+- [agents]: Update `.agents/skills/verify-agent-context/SKILL.md`, `.claude/skills/verify-agent-context/SKILL.md` and `.github/skills/verify-agent-context/SKILL.md` to v.1.0.6.
+- [agents]: Update `.claude/settings.json` to v.1.0.11.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
 

@@ -24,12 +24,10 @@
 
 // Matterbridge
 import type { MatterbridgeEndpoint } from 'matterbridge';
-import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
+import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer, MatterbridgeTlsCertificateManagementServer, MatterbridgeTlsClientManagementServer } from 'matterbridge/behaviors';
+import { PowerSourceServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
-
-import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer } from './timeSynchronizationServer.js';
-import { MatterbridgeTlsCertificateManagementServer } from './tlsCertificateManagementServer.js';
-import { MatterbridgeTlsClientManagementServer } from './tlsClientManagementServer.js';
+import { EndpointNumber } from 'matterbridge/matter/types';
 
 /**
  * Configures the Root Node (endpoint 0) of a `mode: 'server'` Camera device's own Matter server node with the
@@ -69,11 +67,11 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
   // Matter 1.6.1 § 16.1.5 and § 2.1.4: PowerSourceCond is mandatory for a Camera, so the Power Source device type is on the Root Node.
   // Matterbridge already adds a Wired Power Source to the Root Node with --root-power-source or MATTERBRIDGE_CHIP_TEST: keep it.
   if (!root.behaviors.supported.powerSource) {
-    root.behaviors.require(MatterbridgePowerSourceServer.with(PowerSource.Feature.Wired), {
+    root.behaviors.require(PowerSourceServer.with(PowerSource.Feature.Wired), {
       status: PowerSource.PowerSourceStatus.Active,
       order: 0,
       description: 'AC Power',
-      endpointList: [],
+      endpointList: [EndpointNumber(0)],
       wiredCurrentType: PowerSource.WiredCurrentType.Ac,
     });
   }
@@ -82,36 +80,42 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
 
   // Matter 1.6.1 § 16.1.5 and § 2.1.6: TimeSyncWithClientCond, TimeSyncWithNTPCCond and TimeSyncWithTZCond are mandatory for a Camera, so the
   // Root Node has Time Synchronization with the TimeSyncClient, NTPClient and TimeZone features, backed by the host clock.
-  root.behaviors.require(MatterbridgeTimeSynchronizationServer, {
-    utcTime: null,
-    granularity: TimeSynchronization.Granularity.NoTimeGranularity,
-    timeSource: TimeSynchronization.TimeSource.None,
-    trustedTimeSource: null,
-    defaultNtp: null,
-    supportsDnsResolve: false,
-    // The epoch-us ValidAt 0 of the first entry is the Matter epoch, kept by matter.js as Unix microseconds.
-    timeZone: [{ offset: 0, validAt: MATTER_EPOCH_US }],
-    dstOffset: [],
-    localTime: null,
-    timeZoneDatabase: TimeSynchronization.TimeZoneDatabase.None,
-    // Matter 1.6.1 § 11.17.8.11: TimeZoneListMaxSize is 1 or 2, the second entry handling a scheduled time zone change.
-    timeZoneListMaxSize: 2,
-    dstOffsetListMaxSize: 2,
-  });
+  if (!root.behaviors.supported.timeSynchronization) {
+    root.behaviors.require(MatterbridgeTimeSynchronizationServer, {
+      utcTime: null,
+      granularity: TimeSynchronization.Granularity.NoTimeGranularity,
+      timeSource: TimeSynchronization.TimeSource.None,
+      trustedTimeSource: null,
+      defaultNtp: null,
+      supportsDnsResolve: false,
+      // The epoch-us ValidAt 0 of the first entry is the Matter epoch, kept by matter.js as Unix microseconds.
+      timeZone: [{ offset: 0, validAt: MATTER_EPOCH_US }],
+      dstOffset: [],
+      localTime: null,
+      timeZoneDatabase: TimeSynchronization.TimeZoneDatabase.None,
+      // Matter 1.6.1 § 11.17.8.11: TimeZoneListMaxSize is 1 or 2, the second entry handling a scheduled time zone change.
+      timeZoneListMaxSize: 2,
+      dstOffsetListMaxSize: 2,
+    });
+  }
 
   // Matter 1.6.1 § 16.1.5 and § 2.1.5: TLSCertificatesCond is mandatory for a Camera, so the Root Node has the TLS Certificate Management server.
-  root.behaviors.require(MatterbridgeTlsCertificateManagementServer, {
-    maxRootCertificates: 5,
-    provisionedRootCertificates: [],
-    maxClientCertificates: 5,
-    provisionedClientCertificates: [],
-  });
+  if (!root.behaviors.supported.tlsCertificateManagement) {
+    root.behaviors.require(MatterbridgeTlsCertificateManagementServer, {
+      maxRootCertificates: 5,
+      provisionedRootCertificates: [],
+      maxClientCertificates: 5,
+      provisionedClientCertificates: [],
+    });
+  }
 
   // Matter 1.6.1 § 16.1.5 and § 2.1.5: TLSClientCond is mandatory for a Camera, so the Root Node has the TLS Client Management server.
-  root.behaviors.require(MatterbridgeTlsClientManagementServer, {
-    maxProvisioned: 5,
-    provisionedEndpoints: [],
-  });
+  if (!root.behaviors.supported.tlsClientManagement) {
+    root.behaviors.require(MatterbridgeTlsClientManagementServer, {
+      maxProvisioned: 5,
+      provisionedEndpoints: [],
+    });
+  }
 
   return device;
 }

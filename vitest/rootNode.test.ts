@@ -10,10 +10,11 @@ const MATTER_PORT = 6007;
 const MATTER_CREATE_ONLY = true;
 
 import type { MatterbridgeEndpoint } from 'matterbridge';
-import { MatterbridgePowerSourceServer } from 'matterbridge/behaviors';
+import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer, MatterbridgeTlsCertificateManagementServer, MatterbridgeTlsClientManagementServer } from 'matterbridge/behaviors';
 import { Camera } from 'matterbridge/devices/camera';
 import { PowerSourceServer, TlsCertificateManagementServer, TlsClientManagementServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
+import { EndpointNumber } from 'matterbridge/matter/types';
 import {
   createServerNode,
   createTestEnvironment,
@@ -29,9 +30,6 @@ import {
 } from 'matterbridge/test-utils/vitest';
 
 import { addRootNodeCamera } from '../src/rootNode.js';
-import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer } from '../src/timeSynchronizationServer.js';
-import { MatterbridgeTlsCertificateManagementServer } from '../src/tlsCertificateManagementServer.js';
-import { MatterbridgeTlsClientManagementServer } from '../src/tlsClientManagementServer.js';
 
 await setupTest(NAME);
 
@@ -92,23 +90,40 @@ describe('addRootNodeCamera', () => {
     ]);
   });
 
+  it.each([
+    ['timeSynchronization', MatterbridgeTimeSynchronizationServer],
+    ['tlsCertificateManagement', MatterbridgeTlsCertificateManagementServer],
+    ['tlsClientManagement', MatterbridgeTlsClientManagementServer],
+  ] as const)('should preserve the existing %s server while adding missing servers', async (id, behavior) => {
+    const require = vi.fn();
+    const device = new Camera('Root Node Existing Server', 'ROOTNODE-EXISTING');
+    device.serverNode = {
+      behaviors: { supported: { powerSource: PowerSourceServer.with(PowerSource.Feature.Wired), [id]: behavior }, require },
+    } as unknown as MatterbridgeEndpoint['serverNode'];
+
+    expect(await addRootNodeCamera(device)).toBe(device);
+    expect(require.mock.calls.map(([type]) => type)).toEqual(
+      [MatterbridgeTimeSynchronizationServer, MatterbridgeTlsCertificateManagementServer, MatterbridgeTlsClientManagementServer].filter((type) => type !== behavior),
+    );
+  });
+
   it('should configure the Root Node of a mode: server Camera device', async () => {
     const device = new Camera('Root Node Camera', 'ROOTNODE-CAMERA');
     device.serverNode = server;
 
     expect(await addRootNodeCamera(device)).toBe(device);
 
-    // KNOWN ISSUE: dynamically requiring MatterbridgePowerSourceServer on an already-installed ServerNode currently
+    // KNOWN ISSUE: dynamically requiring PowerSourceServer on an already-installed ServerNode currently
     // crashes in the installed matter.js version: PowerSourceServer.initialize() synchronously writes to the
     // Descriptor's deviceTypeList, which races the Descriptor's own reactor triggered by the same late-activation
     // and throws `synchronous-transaction-conflict`. Until that's resolved upstream, only check that the behavior
     // was required with the correct options, without forcing full construction.
-    expect(server.behaviors.has(MatterbridgePowerSourceServer.with(PowerSource.Feature.Wired))).toBe(true);
-    expect(server.behaviors.optionsFor(MatterbridgePowerSourceServer)).toEqual({
+    expect(server.behaviors.has(PowerSourceServer.with(PowerSource.Feature.Wired))).toBe(true);
+    expect(server.behaviors.optionsFor(PowerSourceServer)).toEqual({
       status: PowerSource.PowerSourceStatus.Active,
       order: 0,
       description: 'AC Power',
-      endpointList: [],
+      endpointList: [EndpointNumber(0)],
       wiredCurrentType: PowerSource.WiredCurrentType.Ac,
     });
 

@@ -33,14 +33,14 @@ Thanks to [Ludovic BOUÉ](https://github.com/lboue) for his contributions to thi
 
 - `src/module.ts` will create all device types for easy testing;
 - the device types and the WebRTC stack come from matterbridge (`matterbridge/devices/camera`), see the [Matterbridge cameras](https://matterbridge.io/Camera.html) guide;
-- `src/rootNode.ts` adds the Root Node clusters a Camera requires (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management) to a `mode: 'server'` Camera. `src/module.ts` creates the **Server Camera** (`SERVER-CAMERA-001`) as its own Matter node and calls it on that node;
-- `src/timeSynchronizationServer.ts` is the Time Synchronization server used there, with the TimeSyncClient, NtpClient and TimeZone features. It reports the host clock (MillisecondsGranularity) and implements SetTrustedTimeSource, SetDefaultNTP, SetTimeZone and SetDSTOffset with their validation and events; SetUTCTime is refused with TimeNotAccepted since the host clock is kept.
-- `src/tlsCertificateManagementServer.ts` and `src/tlsClientManagementServer.ts` are the TLS Certificate Management and TLS Client Management servers used there, per Matter 1.6.1: per fabric root and client certificates (stored nonvolatile, with the client private keys) and TLS endpoints. The certificate payloads are in the ProvisionedRootCertificates and ProvisionedClientCertificates attributes only when read over a Large Message capable transport (TCP).
+- `src/rootNode.ts` preserves existing Root Node servers and adds the missing Root Node clusters a Camera requires (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management) to a `mode: 'server'` Camera. `src/module.ts` creates the **Server Camera** (`SERVER-CAMERA-001`) as its own Matter node and calls it on that node;
+- `MatterbridgeTimeSynchronizationServer` from `matterbridge/behaviors` is the Time Synchronization server used there, with the TimeSyncClient, NtpClient and TimeZone features. It reports the host clock (MillisecondsGranularity) and implements SetTrustedTimeSource, SetDefaultNTP, SetTimeZone and SetDSTOffset with their validation and events; SetUTCTime is refused with TimeNotAccepted since the host clock is kept.
+- `MatterbridgeTlsCertificateManagementServer` and `MatterbridgeTlsClientManagementServer` from `matterbridge/behaviors` are the TLS Certificate Management and TLS Client Management servers used there, per Matter 1.6.1: per fabric root and client certificates (stored nonvolatile, with the client private keys) and TLS endpoints. The certificate payloads are in the ProvisionedRootCertificates and ProvisionedClientCertificates attributes only when read over a Large Message capable transport (TCP).
 - The Root Node servers of the Server Camera are tested with the CHIP harness (`npm run chip:test:servercamera`, see `chipTests.md`).
 
 ## Requirements
 
-Requires Matterbridge `3.11.0` or later.
+Requires Matterbridge `3.11.3` or later.
 
 Requires [`ffmpeg`](https://ffmpeg.org/) to be installed on the host or in the container. The resolver checks the system command and common installation directories on Linux, macOS, and Windows.
 

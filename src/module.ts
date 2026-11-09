@@ -90,8 +90,8 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     super(matterbridge, log, config);
 
     // Verify that Matterbridge is the correct version
-    if (typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.11.0')) {
-      throw new Error(`This plugin requires Matterbridge version >= "3.11.0". Please update Matterbridge to the latest version in the frontend.`);
+    if (typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.11.3')) {
+      throw new Error(`This plugin requires Matterbridge version >= "3.11.3". Please update Matterbridge to the latest version in the frontend.`);
     }
 
     this.log.info(`Initializing platform ${this.config.name}...`);
