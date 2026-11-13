@@ -25,7 +25,7 @@
 // Matterbridge
 import type { MatterbridgeEndpoint } from 'matterbridge';
 import { MATTER_EPOCH_US, MatterbridgeTimeSynchronizationServer, MatterbridgeTlsCertificateManagementServer, MatterbridgeTlsClientManagementServer } from 'matterbridge/behaviors';
-import { PowerSourceServer } from 'matterbridge/matter/behaviors';
+import { DescriptorServer, PowerSourceServer } from 'matterbridge/matter/behaviors';
 import { PowerSource, TimeSynchronization } from 'matterbridge/matter/clusters';
 import { EndpointNumber } from 'matterbridge/matter/types';
 
@@ -57,7 +57,6 @@ import { EndpointNumber } from 'matterbridge/matter/types';
  * plugin code to configure a `mode: 'server'` device's Root Node, so this helper reaches into the underlying
  * matter.js `ServerNode` directly. It may need to be revisited if Matterbridge core adds first-class support for this.
  */
-// oxlint-disable-next-line typescript/require-await
 export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<MatterbridgeEndpoint> {
   if (!device.serverNode) {
     throw new Error(`addRootNodeCamera requires device.serverNode to be set: register the device with mode: 'server' before calling this helper.`);
@@ -67,6 +66,9 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
   // Matter 1.6.1 § 16.1.5 and § 2.1.4: PowerSourceCond is mandatory for a Camera, so the Power Source device type is on the Root Node.
   // Matterbridge already adds a Wired Power Source to the Root Node with --root-power-source or MATTERBRIDGE_CHIP_TEST: keep it.
   if (!root.behaviors.supported.powerSource) {
+    await root.act((agent) => {
+      agent.get(DescriptorServer).addDeviceTypes('PowerSource');
+    });
     root.behaviors.require(PowerSourceServer.with(PowerSource.Feature.Wired), {
       status: PowerSource.PowerSourceStatus.Active,
       order: 0,
@@ -116,6 +118,6 @@ export async function addRootNodeCamera(device: MatterbridgeEndpoint): Promise<M
       provisionedEndpoints: [],
     });
   }
-
+  // root.lifecycle.online.on(() => Logger.get('Root Server Node').info(root));
   return device;
 }

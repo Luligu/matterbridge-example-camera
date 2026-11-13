@@ -45,13 +45,13 @@ If you like this project and find it useful, please consider giving it a star on
 - [rootNode]: Add the Server Camera, a `mode: 'server'` Camera whose own Root Node gets the Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management servers from `addRootNodeCamera`.
 - [package]: Upgrade package.
 - [package]: Bump `@types/node` to v.26.6.6.
-- [package]: Bump `oxfmt` to v.0.77.0.
-- [package]: Bump `oxlint` to v.1.92.0.
-- [package]: Bump `oxlint-tsgolint` to v.7.0.2006.
+- [package]: Bump `oxfmt` to v.0.78.0.
+- [package]: Bump `oxlint` to v.1.93.0.
+- [package]: Bump `oxlint-tsgolint` to v.7.0.2007.
 - [agents]: Update `.agents/rules/plugin-frontend.instructions.md`, `.claude/rules/plugin-frontend/plugin-frontend.instructions.md` and `.github/instructions/plugin-frontend/plugin-frontend.instructions.md` to v.1.0.3.
-- [codex]: Update `.codex/config.toml` to v.1.0.7.
+- [codex]: Update `.codex/config.toml` to v.1.0.8.
 - [agents]: Update `.github/commit-message-instructions.md` to v.1.0.1.
-- [vscode]: Update `.vscode/settings.json` to v.1.0.18.
+- [vscode]: Update `.vscode/settings.json` to v.1.0.21.
 - [vscode]: Update `.vscode/tasks.json` to v.1.0.4.
 - [agents]: Update `AGENTS.md` to v.1.0.12.
 - [config]: Update `CODE_OF_CONDUCT.md` to v.1.0.0.
@@ -59,7 +59,7 @@ If you like this project and find it useful, please consider giving it a star on
 - [scripts]: Update `scripts/downloads.mjs`.
 - [scripts]: Update `scripts/git-sync-dev.mjs`.
 - [scripts]: Update `scripts/prepublish-clean.mjs`.
-- [config]: Update `SHARED-AGENTS.md`.
+- [config]: Update `SHARED-AGENTS.md` to v.1.0.0.
 - [config]: Add `TOOLCHAIN.md` v.1.0.1.
 - [package]: Bump `@vitest/coverage-v8` to v.5.1.0.
 - [package]: Bump `vitest` to v.5.1.0.
@@ -76,7 +76,17 @@ If you like this project and find it useful, please consider giving it a star on
 - [agents]: Update `.agents/rules/matterbridge.instructions.md`, `.claude/rules/matterbridge/matterbridge.instructions.md` and `.github/instructions/matterbridge/matterbridge.instructions.md` to v.1.0.4.
 - [agents]: Update `.agents/rules/testing.instructions.md`, `.claude/rules/testing/testing.instructions.md` and `.github/instructions/testing/testing.instructions.md` to v.1.0.8.
 - [agents]: Update `.agents/skills/verify-agent-context/SKILL.md`, `.claude/skills/verify-agent-context/SKILL.md` and `.github/skills/verify-agent-context/SKILL.md` to v.1.0.6.
-- [agents]: Update `.claude/settings.json` to v.1.0.11.
+- [agents]: Update `.claude/settings.json` to v.1.0.12.
+- [package]: Bump `node-ansi-logger` to v.3.3.2.
+- [package]: Bump `node-persist-manager` to v.2.1.2.
+- [agents]: Update `.antigravity/settings.json` to v.1.0.6.
+- [codex]: Update `.codex/rules/default.rules` to v.1.0.8.
+- [vscode]: Update `.vscode/extensions.json` to v.1.0.6.
+- [styleguide]: Update `STYLEGUIDE.md` to v.1.1.1.
+- [config]: Update `src/module.ts`.
+- [config]: Update `src/rootNode.ts`.
+- [config]: Update `vitest/module.test.ts`.
+- [config]: Remove `vitest/tlsTestUtils.ts`.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
 

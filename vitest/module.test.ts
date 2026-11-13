@@ -438,26 +438,32 @@ describe('TestPlatform', () => {
     }
   });
 
-  it('should add the Root Node clusters to the Server Camera server node', async () => {
-    const serverCameraPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, { ...config, whiteList: ['Server Camera'] });
-    addMatterbridge(serverCameraPlatform);
-    // The device is not registered: only set its server node, as Matterbridge does in registerDevice() for a mode: 'server' device
-    const registerSpy = vi.spyOn(serverCameraPlatform, 'registerDevice').mockImplementation(async (device) => {
+  it('should add the Root Node clusters to the server-mode devices server nodes', async () => {
+    const serverNodesPlatform = new ExampleMatterbridgeCameraPlatform(matterbridge, log, {
+      ...config,
+      whiteList: ['Server Chime', 'Server Doorbell', 'Server Intercom 1', 'Server Intercom 2', 'Server Camera'],
+    });
+    addMatterbridge(serverNodesPlatform);
+    // The devices are not registered: only set their server node, as Matterbridge does in registerDevice() for a mode: 'server' device
+    const registerSpy = vi.spyOn(serverNodesPlatform, 'registerDevice').mockImplementation(async (device) => {
       device.serverNode = server;
     });
 
     try {
-      await serverCameraPlatform.onStart();
+      await serverNodesPlatform.onStart();
 
-      expect(registerSpy).toHaveBeenCalledTimes(1);
-      const serverCamera = registerSpy.mock.calls[0][0];
-      expect(serverCamera.deviceName).toBe('Server Camera');
-      expect(serverCamera.mode).toBe('server');
-      expect(rootNode.addRootNodeCamera).toHaveBeenCalledTimes(1);
-      expect(rootNode.addRootNodeCamera).toHaveBeenCalledWith(serverCamera);
-      serverCamera.serverNode = undefined;
+      const expectedNames = ['Server Chime', 'Server Doorbell', 'Server Intercom 1', 'Server Intercom 2', 'Server Camera'];
+      expect(registerSpy).toHaveBeenCalledTimes(expectedNames.length);
+      expect(rootNode.addRootNodeCamera).toHaveBeenCalledTimes(expectedNames.length);
+      for (const [index, name] of expectedNames.entries()) {
+        const device = registerSpy.mock.calls[index][0];
+        expect(device.deviceName).toBe(name);
+        expect(device.mode).toBe('server');
+        expect(rootNode.addRootNodeCamera).toHaveBeenNthCalledWith(index + 1, device);
+        device.serverNode = undefined;
+      }
     } finally {
-      await serverCameraPlatform.onShutdown();
+      await serverNodesPlatform.onShutdown();
     }
   });
 

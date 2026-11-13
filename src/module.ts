@@ -243,21 +243,31 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
     serverChime.subscribeAttribute(ChimeCluster, 'enabled', (newValue, oldValue) => {
       this.log.info(`Server Chime enabled attribute changed from ${oldValue} to ${newValue}`);
     });
+    // A separate Matter node (mode: 'server') owns its Root Node, so it can carry the Root Node clusters a Camera requires
+    // (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management), which a bridged Camera cannot.
+    if (serverChime.serverNode) await addRootNodeCamera(serverChime);
 
     const serverDoorbell = new Doorbell('Server Doorbell', 'SERVER-DOORBELL-001', {
       tagList: [getSemtag(CommonNumberTag.One, 'Server Doorbell')],
       mode: 'server',
     });
     await this.addDevice(serverDoorbell);
+    // A separate Matter node (mode: 'server') owns its Root Node, so it can carry the Root Node clusters a Camera requires
+    // (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management), which a bridged Camera cannot.
+    if (serverDoorbell.serverNode) await addRootNodeCamera(serverDoorbell);
 
     // 2 separate Matter node (mode: 'server'), rather than a second bridged endpoint, so Intercom 1 and Intercom 2 can
     // be bound to each other to test two-way calling (see the README's Intercom pairing section).
+
     const serverIntercom1 = new Intercom('Server Intercom 1', 'SERVER-INTERCOM1-001', {
       tagList: [getSemtag(CommonNumberTag.One, 'Server Intercom 1')],
       mode: 'server',
       weriftOfferOptions: { ...this.weriftOfferOptions },
     });
     await this.addDevice(serverIntercom1);
+    // A separate Matter node (mode: 'server') owns its Root Node, so it can carry the Root Node clusters a Camera requires
+    // (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management), which a bridged Camera cannot.
+    if (serverIntercom1.serverNode) await addRootNodeCamera(serverIntercom1);
 
     const serverIntercom2 = new Intercom('Server Intercom 2', 'SERVER-INTERCOM2-001', {
       tagList: [getSemtag(CommonNumberTag.Two, 'Server Intercom 2')],
@@ -265,9 +275,10 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       weriftOfferOptions: { ...this.weriftOfferOptions },
     });
     await this.addDevice(serverIntercom2);
-
     // A separate Matter node (mode: 'server') owns its Root Node, so it can carry the Root Node clusters a Camera requires
     // (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management), which a bridged Camera cannot.
+    if (serverIntercom2.serverNode) await addRootNodeCamera(serverIntercom2);
+
     const serverCamera = new Camera('Server Camera', 'SERVER-CAMERA-001', {
       identifyTime: 5,
       identifyType: Identify.IdentifyType.VisibleIndicator,
@@ -276,7 +287,8 @@ export class ExampleMatterbridgeCameraPlatform extends MatterbridgeDynamicPlatfo
       weriftOfferOptions: { ...this.weriftOfferOptions },
     });
     await this.addDevice(serverCamera);
-    // The server node is created by registerDevice(): it is not set when the device is filtered out by the white or black list.
+    // A separate Matter node (mode: 'server') owns its Root Node, so it can carry the Root Node clusters a Camera requires
+    // (Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management), which a bridged Camera cannot.
     if (serverCamera.serverNode) await addRootNodeCamera(serverCamera);
 
     this.log.info(`Platform ${this.config.name} started successfully`);
