@@ -67,7 +67,6 @@
     "*.schema.json"
   ],
   "automator": {
-    "workflow": "dev",
     "node": true,
     "plugin": true,
     "jest": false,
