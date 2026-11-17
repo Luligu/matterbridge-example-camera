@@ -1,21 +1,21 @@
 ## Chip tests
 
-### Create the container (Linux, macOS, and Windows)
+### Create and start the container (Linux, macOS, and Windows)
 
 Run the `luligu/matterbridge:chip-test` docker image:
 
 - frontend on port 8585
-- plugin mapped to .
+- plugin copied to ~/Matterbridge/
 - container test logs directory mapped on ./temp directory
 
 ```shell
-node scripts/run-chip-tests.mjs --start
+node scripts/run-chip-test.mjs --start --plugin
 ```
 
 ### Run all configured tests inside the container
 
 ```shell
-node scripts/run-chip-tests.mjs
+node scripts/run-chip-test.mjs
 ```
 
 ### Manually run the tests inside the container
@@ -29,7 +29,7 @@ docker exec -it chip-test bash
 In the shell:
 
 ```bash
-# Generic device composition and conformance ✅ (all pass)
+# Generic device composition and conformance
 python3 src/python_testing/TC_DeviceBasicComposition.py
 python3 src/python_testing/TC_DeviceConformance.py
 python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_vendor_id:true
@@ -38,7 +38,5 @@ python3 src/python_testing/TC_DefaultWarnings.py --bool-arg pixit_allow_default_
 ### Stop the container
 
 ```shell
-node scripts/run-chip-tests.mjs --stop
+node scripts/run-chip-test.mjs --stop
 ```
-
-### Known Issues
