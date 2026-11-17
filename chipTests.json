@@ -19,8 +19,7 @@
     },
     {
       "name": "Generic device conformance",
-      "test": "TC_DeviceConformance.py",
-      "args": ["--bool-arg allow_provisional:true"]
+      "test": "TC_DeviceConformance.py"
     },
     {
       "name": "Generic device default warnings",
