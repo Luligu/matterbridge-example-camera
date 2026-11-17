@@ -45,8 +45,8 @@ If you like this project and find it useful, please consider giving it a star on
 - [rootNode]: Add the Server Camera, a `mode: 'server'` Camera whose own Root Node gets the Power Source, Time Synchronization, TLS Certificate Management and TLS Client Management servers from `addRootNodeCamera`.
 - [package]: Upgrade package.
 - [package]: Bump `@types/node` to v.26.6.6.
-- [package]: Bump `oxfmt` to v.0.78.0.
-- [package]: Bump `oxlint` to v.1.93.0.
+- [package]: Bump `oxfmt` to v.0.79.0.
+- [package]: Bump `oxlint` to v.1.94.0.
 - [package]: Bump `oxlint-tsgolint` to v.7.0.2007.
 - [agents]: Update `.agents/rules/plugin-frontend.instructions.md`, `.claude/rules/plugin-frontend/plugin-frontend.instructions.md` and `.github/instructions/plugin-frontend/plugin-frontend.instructions.md` to v.1.0.3.
 - [codex]: Update `.codex/config.toml` to v.1.0.8.
@@ -87,6 +87,9 @@ If you like this project and find it useful, please consider giving it a star on
 - [config]: Update `src/rootNode.ts`.
 - [config]: Update `vitest/module.test.ts`.
 - [config]: Remove `vitest/tlsTestUtils.ts`.
+- [workflows]: Update `.github/workflows/chip-tests.yml` to v.1.0.1.
+- [scripts]: Remove `scripts/run-chip-tests.mjs`.
+- [scripts]: Add `scripts/run-chip-test.mjs`.
 
 <a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
 
